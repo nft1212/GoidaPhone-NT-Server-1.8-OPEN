@@ -10137,7 +10137,7 @@ class SettingsDialog(QDialog):
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", f"Не удалось сгенерировать ключи:\n{e}")
 
-
+    def _tab_specialist(self) -> QWidget:
         """
         п.30 — 'Для специалистов' — настройка relay сервера, продвинутые параметры.
         Этот раздел скрыт от обычных пользователей и предназначен для:
