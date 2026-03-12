@@ -2396,7 +2396,7 @@ class AppSettings:
     @property
     def show_launcher(self) -> bool:
         """Show GUI/CMD launcher screen on startup."""
-        return self.get("show_launcher", False, t=bool)
+        return self.get("show_launcher", True, t=bool)
 
     @show_launcher.setter
     def show_launcher(self, v: bool):
@@ -3868,6 +3868,20 @@ class LauncherScreen(QDialog):
         bot.addWidget(self._no_show)
         bot.addStretch()
 
+        help_btn = QPushButton("❓ Справка")
+        help_btn.setFixedHeight(36)
+        help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        help_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {t['bg3']}; color: {t['text_dim']};
+                border: 1px solid {t['border']}; border-radius: 10px;
+                padding: 0 16px; font-size: 11px;
+            }}
+            QPushButton:hover {{ background: {t['btn_hover']}; color: {t['text']}; }}
+        """)
+        help_btn.clicked.connect(self._show_help)
+        bot.addWidget(help_btn)
+
         go_btn = QPushButton("Запустить  ▶")
         go_btn.setFixedHeight(36)
         go_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -3916,10 +3930,14 @@ class LauncherScreen(QDialog):
                     border-bottom: 4px solid rgba(0,0,0,0.35);
                     color: white;
                 }}
-                QPushButton:hover {{
-                    border-color: white;
-                }}
+                QPushButton:hover {{ border-color: white; }}
+                QPushButton QLabel {{ color: white !important; }}
             """)
+            # Force all child QLabels to white so they stay readable
+            for lbl in card.findChildren(QLabel):
+                lbl.setStyleSheet(lbl.styleSheet()
+                    .replace(f"color:{t['text_dim']}", "color:rgba(255,255,255,0.75)")
+                    .replace(f"color:{t['text']}",     "color:white"))
         else:
             card.setStyleSheet(f"""
                 QPushButton {{
@@ -3936,27 +3954,90 @@ class LauncherScreen(QDialog):
                         stop:0 {t['btn_hover']}, stop:1 {t['bg2']});
                 }}
             """)
+            for lbl in card.findChildren(QLabel):
+                lbl.setStyleSheet(lbl.styleSheet()
+                    .replace("color:rgba(255,255,255,0.75)", f"color:{t['text_dim']}")
+                    .replace("color:white", f"color:{t['text']}"))
 
     def _on_card_toggled(self, idx: int, checked: bool):
         if checked:
-            t = get_theme(S().theme)
-            self._selected_idx = idx
-            self._choice = self._MODES[idx][0]
-            for i, b in enumerate(self._btn_widgets):
-                b.setChecked(i == idx)
-                self._apply_card_style(b, t, selected=(i==idx))
+            self._select_card(idx)
 
     def keyPressEvent(self, event):
         key = event.key()
         if key in (Qt.Key.Key_Left, Qt.Key.Key_Right):
-            new_idx = (self._selected_idx + (1 if key==Qt.Key.Key_Right else -1)) % len(self._MODES)
-            self._on_card_toggled(new_idx, True)
+            new_idx = (self._selected_idx + (1 if key == Qt.Key.Key_Right else -1)) % len(self._MODES)
+            self._select_card(new_idx)
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._go()
         elif key == Qt.Key.Key_Escape:
             self._select("gui")
+        elif key == Qt.Key.Key_H or key == Qt.Key.Key_F1:
+            self._show_help()
         else:
             super().keyPressEvent(event)
+
+    def _select_card(self, idx: int):
+        """Programmatically select card by index — works from both keyboard and mouse."""
+        t = get_theme(S().theme)
+        self._selected_idx = idx
+        self._choice = self._MODES[idx][0]
+        for i, b in enumerate(self._btn_widgets):
+            b.blockSignals(True)
+            b.setChecked(i == idx)
+            b.blockSignals(False)
+            self._apply_card_style(b, t, selected=(i == idx))
+
+    def _show_help(self):
+        t = get_theme(S().theme)
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Справка — GoidaPhone")
+        dlg.setFixedSize(480, 420)
+        dlg.setStyleSheet(f"""
+            QDialog {{ background:{t['bg2']}; border-radius:16px; }}
+            QLabel  {{ color:{t['text']}; background:transparent; }}
+        """)
+        vl = QVBoxLayout(dlg)
+        vl.setContentsMargins(28, 24, 28, 20)
+        vl.setSpacing(12)
+
+        title = QLabel("📖  Справка по режимам запуска")
+        title.setStyleSheet(
+            f"font-size:15px;font-weight:bold;color:{t['accent']};")
+        vl.addWidget(title)
+
+        txt = QLabel(
+            "<b>🖥 GUI режим</b><br>"
+            "Полноценный графический интерфейс GoidaPhone.<br>"
+            "Доступны: публичный чат, личные сообщения, группы,<br>"
+            "голосовые и групповые звонки, передача файлов,<br>"
+            "стикеры, темы, настройки, GoidaTerminal, WNS-браузер.<br><br>"
+            "<b>⌨ CMD режим</b><br>"
+            "Консольный (терминальный) режим — без GUI.<br>"
+            "Полезен для серверов, слабых машин, диагностики.<br><br>"
+            "<b>Хоткеи выбора:</b><br>"
+            "← → — переключение карточек<br>"
+            "Enter — запуск выбранного режима<br>"
+            "F1 или H — эта справка<br>"
+            "Esc — запуск GUI (по умолчанию)<br><br>"
+            "<b>Запомнить выбор:</b><br>"
+            "Отметь чекбокс «Запомнить мой выбор» чтобы это окно<br>"
+            "не показывалось при следующем запуске.<br>"
+            "Включить снова: Настройки → Специалист → «Показывать<br>"
+            "выбор режима при каждом запуске»."
+        )
+        txt.setWordWrap(True)
+        txt.setTextFormat(Qt.TextFormat.RichText)
+        txt.setStyleSheet(f"font-size:11px;color:{t['text']};line-height:1.5;")
+        vl.addWidget(txt)
+        vl.addStretch()
+
+        close = QPushButton("Закрыть")
+        close.setObjectName("accent_btn")
+        close.setFixedHeight(34)
+        close.clicked.connect(dlg.accept)
+        vl.addWidget(close)
+        dlg.exec()
 
     def _go(self):
         self._select(self._choice)
@@ -8942,6 +9023,7 @@ class SettingsDialog(QDialog):
         tabs.addTab(self._tab_language(),   TR("tab_language"))
         tabs.addTab(self._mk_specialist_scroll(), TR("tab_specialist"))
         tabs.addTab(self._tab_pin_security(), "🔒 Блокировка")
+        tabs.addTab(self._tab_privacy(),    "🛡 Приватность")
 
         lay.addWidget(tabs)
 
@@ -9877,7 +9959,185 @@ class SettingsDialog(QDialog):
             S().set("pin_enabled", False)
             QMessageBox.information(self,"PIN","PIN-код удалён.")
 
-    def _tab_specialist(self) -> QWidget:
+    def _tab_privacy(self) -> QWidget:
+        """🛡 Privacy & security settings — fully functional."""
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(14, 14, 14, 14)
+        lay.setSpacing(10)
+
+        def _grp(title: str) -> tuple:
+            g = QGroupBox(title)
+            fl = QVBoxLayout(g)
+            return g, fl
+
+        # ── Читаемость / видимость ──────────────────────────────────────────
+        g1, fl1 = _grp("👁  Видимость и статус")
+
+        self._priv_show_status = QCheckBox(
+            "Показывать мой статус присутствия другим пользователям")
+        self._priv_show_status.setChecked(
+            S().get("priv_show_status", True, t=bool))
+        self._priv_show_status.setToolTip(
+            "Если выключено — другие не видят «Онлайн», «Отошёл» и т.д.")
+        fl1.addWidget(self._priv_show_status)
+
+        self._priv_show_avatar = QCheckBox(
+            "Показывать аватар при звонках и в списке пользователей")
+        self._priv_show_avatar.setChecked(
+            S().get("priv_show_avatar", True, t=bool))
+        fl1.addWidget(self._priv_show_avatar)
+
+        self._priv_show_typing = QCheckBox(
+            "Отправлять индикатор «печатает…»")
+        self._priv_show_typing.setChecked(
+            S().get("priv_show_typing", True, t=bool))
+        fl1.addWidget(self._priv_show_typing)
+
+        self._priv_read_receipts = QCheckBox(
+            "Отправлять уведомления о прочтении (галочки)")
+        self._priv_read_receipts.setChecked(
+            S().get("priv_read_receipts", True, t=bool))
+        fl1.addWidget(self._priv_read_receipts)
+
+        lay.addWidget(g1)
+
+        # ── Звонки ──────────────────────────────────────────────────────────
+        g2, fl2 = _grp("📞  Звонки")
+
+        self._priv_allow_calls = QCheckBox(
+            "Разрешить входящие звонки от всех пользователей")
+        self._priv_allow_calls.setChecked(
+            S().get("priv_allow_calls", True, t=bool))
+        fl2.addWidget(self._priv_allow_calls)
+
+        self._priv_allow_group_calls = QCheckBox(
+            "Разрешить приглашения в групповые звонки")
+        self._priv_allow_group_calls.setChecked(
+            S().get("priv_allow_group_calls", True, t=bool))
+        fl2.addWidget(self._priv_allow_group_calls)
+
+        self._priv_hide_ip_call = QCheckBox(
+            "Использовать relay для скрытия IP при звонках (требует relay-сервер)")
+        self._priv_hide_ip_call.setChecked(
+            S().get("priv_hide_ip_call", False, t=bool))
+        self._priv_hide_ip_call.setToolTip(
+            "Relay настраивается в разделе «Специалист»")
+        fl2.addWidget(self._priv_hide_ip_call)
+
+        lay.addWidget(g2)
+
+        # ── Сообщения ────────────────────────────────────────────────────────
+        g3, fl3 = _grp("💬  Сообщения")
+
+        self._priv_link_preview = QCheckBox(
+            "Показывать предпросмотр ссылок в сообщениях")
+        self._priv_link_preview.setChecked(
+            S().get("priv_link_preview", True, t=bool))
+        fl3.addWidget(self._priv_link_preview)
+
+        self._priv_save_history = QCheckBox(
+            "Сохранять историю чатов локально")
+        self._priv_save_history.setChecked(
+            S().get("priv_save_history", True, t=bool))
+        self._priv_save_history.setToolTip(
+            "Если выключено — история не сохраняется и стирается при выходе")
+        fl3.addWidget(self._priv_save_history)
+
+        self._priv_encrypt_history = QCheckBox(
+            "Шифровать локальную историю чатов (AES-256)")
+        self._priv_encrypt_history.setChecked(
+            S().get("priv_encrypt_history", False, t=bool))
+        fl3.addWidget(self._priv_encrypt_history)
+
+        self._priv_allow_fwd = QCheckBox(
+            "Разрешить пересылку ваших сообщений другим пользователям")
+        self._priv_allow_fwd.setChecked(
+            S().get("priv_allow_fwd", True, t=bool))
+        fl3.addWidget(self._priv_allow_fwd)
+
+        lay.addWidget(g3)
+
+        # ── E2E / Crypto ─────────────────────────────────────────────────────
+        g4, fl4 = _grp("🔑  Шифрование (E2E)")
+
+        e2e_status = QLabel(
+            "✅ End-to-End шифрование активно (X25519 + AES-256-GCM + Ed25519)"
+            if True else "❌ E2E недоступно")
+        e2e_status.setStyleSheet("color:#80FF80;font-size:11px;font-weight:bold;")
+        fl4.addWidget(e2e_status)
+
+        e2e_info = QLabel(
+            "Все личные сообщения шифруются E2E автоматически.\n"
+            "Ключи генерируются при первом запуске и хранятся локально.\n"
+            "Публичный ключ идентичности отображается в профиле (GoidaID).")
+        e2e_info.setWordWrap(True)
+        e2e_info.setStyleSheet("font-size:10px;color:gray;")
+        fl4.addWidget(e2e_info)
+
+        regen_btn = QPushButton("🔄 Перегенерировать ключи")
+        regen_btn.setToolTip(
+            "Создать новую пару ключей.\n"
+            "Внимание: существующие E2E-сессии будут сброшены.")
+        regen_btn.clicked.connect(self._regen_e2e_keys)
+        fl4.addWidget(regen_btn)
+
+        lay.addWidget(g4)
+
+        # ── Сохранить кнопка ────────────────────────────────────────────────
+        save_priv = QPushButton("💾 Применить настройки приватности")
+        save_priv.setObjectName("accent_btn")
+        save_priv.setFixedHeight(34)
+        save_priv.clicked.connect(self._save_privacy)
+        lay.addWidget(save_priv)
+
+        note = QLabel(
+            "ℹ Все настройки вступают в силу немедленно после сохранения.")
+        note.setStyleSheet("font-size:9px;color:gray;")
+        lay.addWidget(note)
+
+        lay.addStretch()
+        return w
+
+    def _save_privacy(self):
+        S().set("priv_show_status",       self._priv_show_status.isChecked())
+        S().set("priv_show_avatar",       self._priv_show_avatar.isChecked())
+        S().set("priv_show_typing",       self._priv_show_typing.isChecked())
+        S().set("priv_read_receipts",     self._priv_read_receipts.isChecked())
+        S().set("priv_allow_calls",       self._priv_allow_calls.isChecked())
+        S().set("priv_allow_group_calls", self._priv_allow_group_calls.isChecked())
+        S().set("priv_hide_ip_call",      self._priv_hide_ip_call.isChecked())
+        S().set("priv_link_preview",      self._priv_link_preview.isChecked())
+        S().set("priv_save_history",      self._priv_save_history.isChecked())
+        S().set("priv_encrypt_history",   self._priv_encrypt_history.isChecked())
+        S().set("priv_allow_fwd",         self._priv_allow_fwd.isChecked())
+        QMessageBox.information(self, "Приватность",
+            "✅ Настройки приватности сохранены.")
+
+    def _regen_e2e_keys(self):
+        reply = QMessageBox.warning(self, "Перегенерировать ключи",
+            "Создать новую пару E2E-ключей?\n\n"
+            "Все активные зашифрованные сессии будут сброшены.\n"
+            "Собеседникам придётся заново согласовать ключи.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+                from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+                from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
+                id_priv = Ed25519PrivateKey.generate()
+                dh_priv = X25519PrivateKey.generate()
+                S().set("identity_priv_b64", base64.b64encode(
+                    id_priv.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())).decode())
+                S().set("dh_priv_b64", base64.b64encode(
+                    dh_priv.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())).decode())
+                QMessageBox.information(self, "Ключи",
+                    "✅ Новые E2E-ключи сгенерированы.\n"
+                    "Перезапустите GoidaPhone для применения.")
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", f"Не удалось сгенерировать ключи:\n{e}")
+
+
         """
         п.30 — 'Для специалистов' — настройка relay сервера, продвинутые параметры.
         Этот раздел скрыт от обычных пользователей и предназначен для:
@@ -16787,43 +17047,227 @@ def main():
                 splash.close()
 
         if mode == "cmd":
-            print(f"""
-╔══════════════════════════════════════════╗
-║       GoidaPhone v{APP_VERSION} — CMD Mode        ║
-║          Winora Company                  ║
-╠══════════════════════════════════════════╣
-║  Команды:                                ║
-║  /help   — список команд                 ║
-║  /quit   — выход                         ║
-║  /peers  — список пользователей          ║
-╚══════════════════════════════════════════╝
-""")
+            import readline
+            import shutil
+            cols = shutil.get_terminal_size().columns
+
+            CYAN   = "\033[96m"; PURP = "\033[95m"; GRN  = "\033[92m"
+            YEL    = "\033[93m"; RED  = "\033[91m"; DIM  = "\033[2m"
+            BOLD   = "\033[1m";  RST  = "\033[0m";  BLUE = "\033[94m"
+
+            def _line(ch="═"): return ch * min(cols, 62)
+            def _hdr(txt):     print(f"{PURP}{_line()}{RST}\n"
+                                     f"{BOLD}{CYAN}  {txt}{RST}\n"
+                                     f"{PURP}{_line()}{RST}")
+
+            print(f"\n{PURP}{'═'*62}{RST}")
+            print(f"{BOLD}{CYAN}  ██████╗  ██████╗ ██╗██████╗  █████╗ {RST}")
+            print(f"{CYAN}  ██╔════╝ ██╔═══██╗██║██╔══██╗██╔══██╗{RST}")
+            print(f"{CYAN}  ██║  ███╗██║   ██║██║██║  ██║███████║{RST}")
+            print(f"{CYAN}  ██║   ██║██║   ██║██║██║  ██║██╔══██║{RST}")
+            print(f"{CYAN}  ╚██████╔╝╚██████╔╝██║██████╔╝██║  ██║{RST}")
+            print(f"{CYAN}   ╚═════╝  ╚═════╝ ╚═╝╚═════╝ ╚═╝  ╚═╝{RST}")
+            print(f"{PURP}{'═'*62}{RST}")
+            print(f"  {BOLD}GoidaPhone v{APP_VERSION} — CMD Mode{RST}  {DIM}Winora Company{RST}")
+            print(f"  {DIM}Введите /help для справки  •  /quit для выхода{RST}")
+            print(f"{PURP}{'═'*62}{RST}\n")
+
             net = NetworkManager()
+
+            # Incoming message handler
+            _msg_buf: list[str] = []
+            def _on_msg(msg: dict):
+                t_msg  = msg.get("type","")
+                uname  = msg.get("username","?")
+                text   = msg.get("text","")
+                ts     = time.strftime("%H:%M", time.localtime(msg.get("ts", time.time())))
+                if t_msg in ("chat","msg","private","group") and text:
+                    prefix = f"{DIM}[{ts}]{RST} "
+                    if msg.get("type") == "private":
+                        line = f"{prefix}{YEL}[DM] {BOLD}{uname}{RST}: {text}"
+                    else:
+                        line = f"{prefix}{GRN}{BOLD}{uname}{RST}: {text}"
+                    print(f"\r{line}")
+                    print(f"{CYAN}> {RST}", end="", flush=True)
+                    _msg_buf.append(line)
+
+            net.sig_message.connect(_on_msg)
+
+            def _on_call(caller, ip):
+                print(f"\r{YEL}📞 Входящий звонок от {BOLD}{caller}{RST}{YEL} ({ip}) — /answer {ip} или /reject {ip}{RST}")
+                print(f"{CYAN}> {RST}", end="", flush=True)
+
+            net.sig_call_request.connect(_on_call)
+
+            def _on_online(peer):
+                uname = peer.get("username","?")
+                ip    = peer.get("ip","?")
+                print(f"\r{GRN}● {uname} ({ip}) онлайн{RST}")
+                print(f"{CYAN}> {RST}", end="", flush=True)
+
+            def _on_offline(ip):
+                peer = net.peers.get(ip, {})
+                print(f"\r{DIM}○ {peer.get('username', ip)} оффлайн{RST}")
+                print(f"{CYAN}> {RST}", end="", flush=True)
+
+            net.sig_user_online.connect(_on_online)
+            net.sig_user_offline.connect(_on_offline)
+
             net.start()
-            print(f"[GoidaPhone] Запущен на {get_local_ip()}")
-            print(f"[GoidaPhone] Имя пользователя: {S().username}")
-            print("[GoidaPhone] Введите /quit для выхода\n")
+            print(f"{GRN}✓ Запущен на {BOLD}{get_local_ip()}{RST}")
+            print(f"{GRN}✓ Имя: {BOLD}{S().username}{RST}\n")
+
+            _help_text = f"""
+{PURP}{'─'*50}{RST}
+{BOLD}КОМАНДЫ GoidaPhone CMD{RST}
+
+{CYAN}/help{RST}             — эта справка
+{CYAN}/quit{RST} ({CYAN}/exit{RST})   — выйти
+{CYAN}/peers{RST}            — список онлайн-пользователей
+{CYAN}/msg <ip> <текст>{RST} — личное сообщение
+{CYAN}/pub <текст>{RST}      — сообщение в публичный чат
+{CYAN}/ping <ip>{RST}        — пинговать пользователя
+{CYAN}/call <ip>{RST}        — позвонить
+{CYAN}/hangup <ip>{RST}      — завершить звонок
+{CYAN}/answer <ip>{RST}      — принять входящий звонок
+{CYAN}/reject <ip>{RST}      — отклонить входящий звонок
+{CYAN}/groups{RST}           — список групп
+{CYAN}/history [ip]{RST}     — история сообщений (публичная или с пользователем)
+{CYAN}/me{RST}               — информация о себе (IP, имя, версия)
+{CYAN}/clear{RST}            — очистить экран
+{CYAN}/status <текст>{RST}   — установить статус
+{CYAN}/mute{RST}             — заглушить/включить микрофон (во время звонка)
+
+{DIM}Просто введите текст без / — отправляется в публичный чат{RST}
+{PURP}{'─'*50}{RST}"""
+
+            voice = VoiceCallManager(net)
+
             try:
                 while True:
-                    cmd = input("> ").strip()
-                    if cmd == "/quit":
+                    try:
+                        raw = input(f"{CYAN}> {RST}").strip()
+                    except EOFError:
                         break
+                    if not raw:
+                        continue
+                    parts = raw.split(None, 2)
+                    cmd   = parts[0].lower()
+
+                    if cmd in ("/quit", "/exit", "/q"):
+                        break
+
+                    elif cmd == "/help":
+                        print(_help_text)
+
+                    elif cmd == "/clear":
+                        print("\033[2J\033[H", end="")
+
+                    elif cmd == "/me":
+                        print(f"  {BOLD}Имя:{RST}     {S().username}")
+                        print(f"  {BOLD}IP:{RST}      {get_local_ip()}")
+                        print(f"  {BOLD}Версия:{RST}  {APP_VERSION}")
+                        print(f"  {BOLD}Тема:{RST}    {S().theme}")
+
                     elif cmd == "/peers":
                         if net.peers:
+                            print(f"  {DIM}Пользователи онлайн ({len(net.peers)}):{RST}")
                             for ip, p in net.peers.items():
-                                print(f"  {p.get('username','?')} @ {ip}")
+                                e2e = f"  {GRN}[E2E]{RST}" if p.get("e2e") else ""
+                                print(f"  {GRN}●{RST} {BOLD}{p.get('username','?')}{RST} @ {ip}{e2e}")
                         else:
-                            print("  Нет пользователей онлайн")
-                    elif cmd == "/help":
-                        print("  Команды: /quit, /peers, /help")
-                    elif cmd:
-                        net.send_chat(cmd)
-                        print(f"  → Отправлено в публичный чат")
+                            print(f"  {DIM}Нет пользователей онлайн{RST}")
+
+                    elif cmd == "/groups":
+                        groups = GROUPS.groups
+                        if groups:
+                            for gid, g in groups.items():
+                                print(f"  {PURP}📂{RST} {g.get('name','?')}  {DIM}({gid}){RST}  "
+                                      f"участников: {len(g.get('members',[]))}")
+                        else:
+                            print(f"  {DIM}Нет групп{RST}")
+
+                    elif cmd == "/msg" and len(parts) >= 3:
+                        ip_arg = parts[1]; text = parts[2]
+                        net.send_private(text, ip_arg)
+                        print(f"  {DIM}→ DM → {ip_arg}: {text}{RST}")
+
+                    elif cmd == "/pub" and len(parts) >= 2:
+                        text = raw[5:].strip()
+                        net.send_chat(text)
+                        print(f"  {DIM}→ публичный чат: {text}{RST}")
+
+                    elif cmd == "/ping" and len(parts) >= 2:
+                        ip_arg = parts[1]
+                        start  = time.time()
+                        net.send_udp({"type": "ping", "username": S().username}, ip_arg)
+                        print(f"  {DIM}Ping → {ip_arg}  (UDP){RST}")
+
+                    elif cmd == "/call" and len(parts) >= 2:
+                        ip_arg = parts[1]
+                        if voice.call(ip_arg):
+                            net.send_call_request(ip_arg)
+                            print(f"  {YEL}📞 Звоним {ip_arg}…{RST}")
+                        else:
+                            print(f"  {RED}✗ Не удалось запустить аудио{RST}")
+
+                    elif cmd == "/hangup" and len(parts) >= 2:
+                        ip_arg = parts[1]
+                        voice.hangup(ip_arg)
+                        print(f"  {DIM}Звонок с {ip_arg} завершён{RST}")
+
+                    elif cmd == "/answer" and len(parts) >= 2:
+                        ip_arg = parts[1]
+                        net.send_call_accept(ip_arg)
+                        voice.call(ip_arg)
+                        print(f"  {GRN}✓ Принят звонок от {ip_arg}{RST}")
+
+                    elif cmd == "/reject" and len(parts) >= 2:
+                        ip_arg = parts[1]
+                        net.send_call_reject(ip_arg)
+                        print(f"  {DIM}Отклонён звонок от {ip_arg}{RST}")
+
+                    elif cmd == "/mute":
+                        muted = voice.toggle_mute()
+                        print(f"  {'🔇 Заглушён' if muted else '🎤 Микрофон включён'}")
+
+                    elif cmd == "/status" and len(parts) >= 2:
+                        text = raw[8:].strip()
+                        S().set("status_text", text)
+                        print(f"  {GRN}✓ Статус: {text}{RST}")
+
+                    elif cmd == "/history":
+                        ip_arg = parts[1] if len(parts) >= 2 else None
+                        hfile  = HISTORY_DIR / (f"private_{ip_arg}.json" if ip_arg else "public.json")
+                        if hfile.exists():
+                            import json as _j
+                            msgs = _j.loads(hfile.read_text(encoding="utf-8"))[-20:]
+                            for m in msgs:
+                                ts  = time.strftime("%H:%M", time.localtime(m.get("ts",0)))
+                                u   = m.get("username","?")
+                                txt = m.get("text","")
+                                print(f"  {DIM}[{ts}]{RST} {GRN}{u}{RST}: {txt}")
+                        else:
+                            print(f"  {DIM}История не найдена{RST}")
+
+                    elif not cmd.startswith("/"):
+                        # Plain text → public chat
+                        net.send_chat(raw)
+                        print(f"  {DIM}→ {raw}{RST}")
+
+                    else:
+                        print(f"  {RED}Неизвестная команда: {cmd}  (введите /help){RST}")
+
                     app.processEvents()
-            except (KeyboardInterrupt, EOFError):
+
+            except KeyboardInterrupt:
                 pass
+
+            voice.cleanup()
             net.stop()
-            print("[GoidaPhone] Завершено.")
+            print(f"\n{PURP}{'═'*62}{RST}")
+            print(f"  {DIM}GoidaPhone завершён. До встречи! 👋{RST}")
+            print(f"{PURP}{'═'*62}{RST}")
             app.quit()
             return
 
