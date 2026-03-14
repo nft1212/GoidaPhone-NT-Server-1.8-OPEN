@@ -53,7 +53,7 @@ The following diagram illustrates the internal structure, class inheritance, and
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git](https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git) # copy the repo
+   git clone https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git # copy the repo
 
 2. **dependencies and startup**
    ```bash
