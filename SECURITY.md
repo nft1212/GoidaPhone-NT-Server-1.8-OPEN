@@ -12,3 +12,4 @@
 | NT Server 1.8   | ✅                |
 
 
+also you can visit our`s telegram channel - https://t.me/WinoraCompany (RU) 
