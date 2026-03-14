@@ -49,7 +49,7 @@ The following diagram illustrates the internal structure, class inheritance, and
 
 ---
 
-## 💻 Quick Setup
+## 💻 Plug & Play
 
 1. **Clone the repository:**
    ```bash
