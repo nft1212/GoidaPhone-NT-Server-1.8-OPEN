@@ -55,8 +55,10 @@ The following diagram illustrates the internal structure, class inheritance, and
    ```bash
    git clone [https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git](https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git) # copy the repo
 
+2. **dependencies and startup**
+   ```bash
    pip install -r requirements.txt # dependencies
-
+   
    python gdf.py
 
    
