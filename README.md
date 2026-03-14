@@ -35,3 +35,28 @@
 * **Cryptography:** Implemented using standard libraries to ensure maximum portability.
 
 ---
+
+## 🗺 System Architecture (Class Diagram)
+The following diagram illustrates the internal structure, class inheritance, and module relationships of the GoidaPhone engine, automatically generated from the source code.
+
+<p align="center">
+  <a href="classes_GoidaPhone.png">
+    <img src="classes_GoidaPhone.png" alt="GoidaPhone Visual Structure" width="100%">
+  </a>
+</p>
+
+*Click the image to view it in full resolution.*
+
+---
+
+## 💻 Quick Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git](https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git) # copy the repo
+
+   pip install -r requirements.txt # dependencies
+
+   python gdf.py
+
+   
