@@ -1,27 +1,37 @@
-# GoidaPhone v1.8 (NT Server Edition)
+# 📞 GoidaPhone v1.8 `NT Server Edition`
 
-A performance-oriented LAN/VPN messenger built with Python and PyQt6. Designed with a focus on security, low-latency communication, and a distinctive legacy corporate aesthetic.
-
-> !!! IN DEVELOPMENT !!!
+![Status](https://img.shields.io/badge/Status-In_Development-orange?style=for-the-badge&logo=git)
+![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)
+![UI](https://img.shields.io/badge/Interface-PyQt6-green?style=for-the-badge&logo=qt)
+![Platform](https://img.shields.io/badge/Platform-Linux_|_Windows-lightgrey?style=for-the-badge&logo=gentoo)
 
 ---
 
-## 📖 Project Overview
-GoidaPhone is a cross-platform communication suite designed for local networks and VPN environments. It aims to provide a robust alternative to modern Electron-based messengers by utilizing a native-feeling UI and an optimized Python backend.
+### 🚀 Project Overview
+**GoidaPhone** is a high-performance communication suite specifically engineered for operation within local networks (LAN) and VPN tunnels. The project aims to provide a lightweight, secure alternative to modern Electron-based messengers by utilizing a native-feeling UI and a highly optimized Python backend.
 
-The project currently consists of over 17,000 lines of code, covering everything from custom networking protocols to encrypted data storage.
+> [!IMPORTANT]
+> This project is currently under active development. Some features may be experimental or in the testing phase.
 
-## 🏗 Key Features (Current State)
-* **Hybrid Networking:** Optimized TCP for messaging and UDP-based streams for voice data.
-* **Security:** End-to-end encryption using AES-256-CBC (standard library implementation for maximum portability).
-* **Integrated Media:** Features the "Mewa 1-2-3" built-in media engine for handling assets within the app.
-* **Legacy UI:** A highly customized interface designed to integrate seamlessly with KDE Plasma 6 while maintaining a classic NT-inspired look.
-* **Resilience:** Built-in crash handling via the "GoidaDeathScreen" system for detailed debugging.
+---
 
-## 🛠 Tech Stack
-- **Language:** Python 3.10+
-- **GUI:** PyQt6 (Qt 6.x)
-- **Audio:** WebRTC VAD (Voice Activity Detection)
-- **Platforms:** Primarily developed on **Gentoo Linux**, compatible with modern Linux distros and Windows.
+## 🏗 Key Features
 
+| Feature | Description |
+| :--- | :--- |
+| **Hybrid Networking** | Optimized stack: TCP for reliable messaging and UDP streams for low-latency VoIP. |
+| **Advanced Security** | End-to-End Encryption (E2EE) using **AES-256-CBC** with PBKDF2 key derivation. |
+| **Media Engine** | Integrated **Mewa 1-2-3** stack for seamless media processing and playback. |
+| **Legacy UI/UX** | Deep integration with **KDE Plasma 6** featuring a visual style inspired by classic NT Server systems. |
+| **System Resilience** | Custom **GoidaDeathScreen** handler for detailed diagnostics during system crashes. |
 
+---
+
+## 🛠 Technical Stack
+
+* **Core Engine:** Python 3.10+ (over 19,000 lines of code)
+* **Frontend UI:** PyQt6 (Qt 6.x) with custom corporate-retro styling.
+* **Audio Processing:** WebRTC VAD (Voice Activity Detection) for silence suppression.
+* **Cryptography:** Implemented using standard libraries to ensure maximum portability.
+
+---
