@@ -2,19 +2,12 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
-
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.75xx   | :x: |
+| 0.1   | :x: |
+| 1.0 | :x: |
+| 1.7543 | :x: |
+| 1.7544 | :x: |
 | NT Server 1.8   | ✅                |
 
 
-## Reporting a Vulnerability
-
-Use this section to tell people how to report a vulnerability.
-
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
