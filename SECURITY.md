@@ -8,7 +8,7 @@ currently being supported with security updates.
 | Version | Supported          |
 | ------- | ------------------ |
 | 1.75xx   | :x: |
-| 5.0.x   | ✅                |
+| NT Server 1.8   | ✅                |
 
 
 ## Reporting a Vulnerability
