@@ -56,6 +56,8 @@ The following diagram illustrates the internal structure, class inheritance, and
  **dependencies and startup (Windows/Linux(GNU)**
    ```bash
    #WINDOWS
+   # 0. https://www.python.org/downloads/
+   
    # 1. Clone the repository
     git clone https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git
 
