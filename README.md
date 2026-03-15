@@ -49,16 +49,69 @@ The following diagram illustrates the internal structure, class inheritance, and
 
 ---
 
+
+
 ## 💻 Plug & Play
 
-1. **Clone the repository:**
+ **dependencies and startup (Windows/Linux(GNU)**
    ```bash
-   git clone https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git # copy the repo
+   #WINDOWS
+   # 1. Clone the repository
+    git clone https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git
 
-2. **dependencies and startup**
-   ```bash
-   pip install -r requirements.txt # dependencies
-   
-   python gdf.py
+    # 2. Navigate to project folder
+    cd GoidaPhone-NT-Server-1.8-OPEN
 
-   
+    # 3. Create virtual environment (to keep system clean)
+    python -m venv venv
+
+    #  4. Activate virtual environment
+    venv\Scripts\activate
+
+    # 5. Install dependencies (Windows-specific)
+    pip install -r requirements-windows.txt
+
+    # 6. Launch GoidaPhone!
+    python gdf.py
+
+  #!!!-------------------!!!
+  #!!!---------END-------!!!
+  #!!!-------------------!!!
+  
+  #LINUX(GNU)
+  # 1. Clone the repository
+git clone https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git
+
+# 2. Navigate to project folder
+cd GoidaPhone-NT-Server-1.8-OPEN
+
+# 3. Create virtual environment (to keep system clean)
+python3 -m venv venv
+
+# 4. Activate virtual environment
+source venv/bin/activate
+
+# 5. Install system dependencies (choose your distribution)
+
+#!!!!CHOOSE WHAT DO YOU NEED!!!! #(Gentoo/Ubuntu/Debian/Fedora/Arch)
+# For Gentoo Linux:
+#sudo emerge --ask dev-python/pip dev-vcs/git media-libs/portaudio
+
+# For Ubuntu/Debian:
+# sudo apt update && sudo apt install portaudio19-dev python3-pip git -y
+
+# For Fedora:
+# sudo dnf install portaudio-devel python3-pip git
+
+# For Arch Linux:
+# sudo pacman -S portaudio python-pip git
+
+# 6. Install Python dependencies (Linux-specific)
+pip install -r requirements-linux.txt
+
+# 7. Launch GoidaPhone!
+python gdf.py
+
+#!!!-------------------!!!
+#!!!---------END-------!!!
+#!!!-------------------!!!
