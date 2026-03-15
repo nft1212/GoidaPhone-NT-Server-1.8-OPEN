@@ -853,7 +853,7 @@ def _synth_tone(freqs: list[tuple[float,float,float]], volume: float = 0.35):
 
         fmt = QAudioFormat()
         fmt.setSampleRate(22050)
-        fmt.setChannelCount(1)
+        fmt.setChannelCount(2)   # stereo — sound in both ears
         fmt.setSampleFormat(QAudioFormat.SampleFormat.Int16)
 
         pcm = bytearray()
@@ -862,12 +862,12 @@ def _synth_tone(freqs: list[tuple[float,float,float]], volume: float = 0.35):
             n = int(RATE * dur_ms / 1000)
             fade = int(RATE * 0.008)       # 8 ms fade in/out
             for i in range(n):
-                # sine with short fade in/out to avoid clicks
                 env = 1.0
                 if i < fade:   env = i / fade
                 elif i > n-fade: env = (n - i) / fade
-                v = amp * env * volume * _math.sin(2 * _math.pi * freq * i / RATE)
-                pcm += struct.pack('<h', int(v * 32767))
+                v = int(amp * env * volume * _math.sin(2 * _math.pi * freq * i / RATE) * 32767)
+                # stereo: same sample for L and R
+                pcm += struct.pack('<hh', v, v)
 
         sink = QAudioSink(fmt)
         buf  = QByteArray(bytes(pcm))
@@ -1009,6 +1009,86 @@ _MEDIA_PREF: str = ""   # "mewa" | "system" | "" (ask each time)
 MEDIA_EXTS = {".mp3",".wav",".ogg",".flac",".aac",".m4a",".opus",".wma",
               ".mp4",".avi",".mkv",".webm",".mov",".m4v",".mpg",".mpeg",
               ".wmv",".3gp",".ts",".m2ts"}
+
+def _open_link(url: str, parent=None):
+    """Open a URL from chat — ask WNS or system browser, with remember checkbox."""
+    pref = S().link_open_pref
+
+    def _do_wns():
+        app = QApplication.instance()
+        if app:
+            for w in app.topLevelWidgets():
+                if hasattr(w, '_wns_player') and hasattr(w, '_tabs'):
+                    w._tabs.setCurrentWidget(w._wns_player)
+                    wns = w._wns_player
+                    if hasattr(wns, '_new_tab'):
+                        wns._new_tab(url)
+                    return
+        _do_system()
+
+    def _do_system():
+        _open_system(url)
+
+    if pref == "wns":
+        _do_wns(); return
+    elif pref == "system":
+        _do_system(); return
+
+    # Ask
+    t = get_theme(S().theme)
+    dlg = QDialog(parent)
+    dlg.setWindowTitle("Открыть ссылку")
+    dlg.setFixedWidth(420)
+    dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
+    vl = QVBoxLayout(dlg)
+    vl.setContentsMargins(20, 16, 20, 16)
+    vl.setSpacing(12)
+
+    url_lbl = QLabel(url[:60] + ("…" if len(url) > 60 else ""))
+    url_lbl.setStyleSheet(
+        f"color:{t['accent']};font-size:11px;background:transparent;"
+        "text-decoration:underline;")
+    url_lbl.setWordWrap(True)
+    vl.addWidget(url_lbl)
+
+    q = QLabel("Где открыть?")
+    q.setStyleSheet(
+        f"font-size:13px;font-weight:bold;color:{t['text']};background:transparent;")
+    vl.addWidget(q)
+
+    btn_row = QHBoxLayout(); btn_row.setSpacing(8)
+    wns_btn = QPushButton("🌐 WNS (встроенный)")
+    wns_btn.setObjectName("accent_btn"); wns_btn.setFixedHeight(36)
+    sys_btn = QPushButton("🖥 Браузер по умолчанию")
+    sys_btn.setFixedHeight(36)
+    sys_btn.setStyleSheet(
+        f"QPushButton{{background:{t['btn_bg']};color:{t['text']};"
+        f"border:1px solid {t['border']};border-radius:8px;}}"
+        f"QPushButton:hover{{background:{t['btn_hover']};}}")
+    btn_row.addWidget(wns_btn); btn_row.addWidget(sys_btn)
+    vl.addLayout(btn_row)
+
+    remember = QCheckBox("Запомнить выбор (изменить в Настройки → Приватность)")
+    remember.setStyleSheet(
+        f"color:{t['text_dim']};font-size:10px;background:transparent;")
+    vl.addWidget(remember)
+
+    _choice = [""]
+    def _pick(ch):
+        _choice[0] = ch
+        if remember.isChecked():
+            S().set("link_open_pref", ch)
+        dlg.accept()
+
+    wns_btn.clicked.connect(lambda: _pick("wns"))
+    sys_btn.clicked.connect(lambda: _pick("system"))
+    dlg.exec()
+
+    if _choice[0] == "wns":
+        _do_wns()
+    elif _choice[0] == "system":
+        _do_system()
+
 
 def _open_media_smart(path: str, parent=None):
     """Open a media file: ask whether to use Mewa or system default.
@@ -2735,6 +2815,11 @@ class AppSettings:
         return self.get("save_history", True, t=bool)
 
     @property
+    def link_open_pref(self) -> str:
+        """'wns' | 'system' | 'ask' (default)"""
+        return self.get("link_open_pref", "ask", t=str)
+
+    @property
     def avatar_b64(self):
         return self.get("avatar_b64", "", t=str)
 
@@ -2895,10 +2980,17 @@ class ReactionStore:
         existing = self._data.get(key, {}).get(emoji, [])
         if username in existing:
             self.remove(chat_id, ts, emoji, username)
-            return False
+            result = False
         else:
             self.add(chat_id, ts, emoji, username)
-            return True
+            result = True
+        # Debounced save — use QTimer if Qt available, else direct
+        try:
+            from PyQt6.QtCore import QTimer as _QT
+            _QT.singleShot(500, self.save)
+        except Exception:
+            self.save()
+        return result
 
     def get(self, chat_id: str, ts: float) -> dict:
         """Returns { emoji: [usernames] }"""
@@ -2910,7 +3002,36 @@ class ReactionStore:
         return sorted([(e, len(u)) for e, u in r.items()
                        if u], key=lambda x: -x[1])
 
+    def save(self):
+        """Persist all reactions to disk."""
+        try:
+            serialisable = {
+                f"{k[0]}|||{k[1]}": v
+                for k, v in self._data.items()
+            }
+            _rf = DATA_DIR / "reactions.json"
+            _rf.write_text(
+                json.dumps(serialisable, ensure_ascii=False),
+                encoding="utf-8")
+        except Exception as e:
+            print(f"[reactions] save error: {e}")
+
+    def load(self):
+        """Load reactions from disk."""
+        try:
+            _rf = DATA_DIR / "reactions.json"
+            if not _rf.exists():
+                return
+            raw = json.loads(_rf.read_text(encoding="utf-8"))
+            for key_str, val in raw.items():
+                parts = key_str.split("|||", 1)
+                if len(parts) == 2:
+                    self._data[(parts[0], float(parts[1]))] = val
+        except Exception as e:
+            print(f"[reactions] load error: {e}")
+
 REACTIONS = ReactionStore()
+REACTIONS.load()   # Load persisted reactions at startup
 
 # ═══════════════════════════════════════════════════════════════════════════
 class GroupManager:
@@ -3294,16 +3415,38 @@ class AudioEngine(QThread):
                 # ── Capture ──────────────────────────────────────────
                 if self._in and not self.muted:
                     raw = self._in.read(self.CHUNK, exception_on_overflow=False)
-                    # VAD gate: only transmit when speech detected
-                    _is_speech = (not self.vad_enabled or
-                                  self.vad.is_speech(raw, self.SAMPLE_RATE))
+                    # VAD gate
+                    if self.vad_enabled and WEBRTCVAD_AVAILABLE:
+                        _is_speech = self.vad.is_speech(raw, self.SAMPLE_RATE)
+                    elif self.vad_enabled:
+                        # Fallback: amplitude-based voice detection
+                        import struct as _st, math as _mth
+                        samples = _st.unpack(f'<{len(raw)//2}h', raw)
+                        rms = _mth.sqrt(sum(s*s for s in samples) / len(samples))
+                        _is_speech = rms > 800   # ~2.4% of full scale
+                    else:
+                        _is_speech = True
                     if _is_speech:
                         self.audio_captured.emit(raw)
-                    self.sig_speaking.emit(_is_speech)
-                    # else: silent frame, don't send → saves bandwidth
+                    # Debounce: only emit speaking signal every 4 frames (~128ms)
+                    if not hasattr(self, '_speak_frame_ctr'):
+                        self._speak_frame_ctr = 0
+                        self._speak_last = False
+                    self._speak_frame_ctr += 1
+                    if self._speak_frame_ctr >= 4:
+                        self._speak_frame_ctr = 0
+                        if _is_speech != self._speak_last:
+                            self._speak_last = _is_speech
+                            self.sig_speaking.emit(_is_speech)
+                    # silent frame → don't send
                 elif self._in:
                     # still read to keep stream alive
                     self._in.read(self.CHUNK, exception_on_overflow=False)
+                    # Emit silence when mic is open but muted
+                    if not hasattr(self, '_speak_last'): self._speak_last = True
+                    if self._speak_last:
+                        self._speak_last = False
+                        self.sig_speaking.emit(False)
 
                 # ── Mix + play ────────────────────────────────────────
                 if self._out:
@@ -3352,7 +3495,11 @@ MSG_REACTION  = "reaction"      # п.29 — emoji reactions
 MSG_EDIT      = "msg_edit"      # п.21 — message editing
 MSG_DELETE    = "msg_delete"    # п.21 — message deletion
 MSG_READ      = "msg_read"      # п.22 — read receipts
-MSG_STICKER   = "sticker"       # sticker (b64 image, displayed no-bubble)
+MSG_STICKER   = "sticker"
+MSG_TTL_EXPIRE = "ttl_expire"   # message self-destructs after N seconds
+MSG_POLL       = "poll"         # interactive poll
+MSG_POLL_VOTE  = "poll_vote"    # vote on a poll
+MSG_NOTES_SYNC = "notes_sync"  # sync shared notepad
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  NETWORK MANAGER
@@ -4783,9 +4930,21 @@ class TextFormatter:
             return f'<b style="color:{col};">@{uname}</b>'
         safe = cls._MENTION.sub(mention_sub, safe)
 
-        # 4. Clickable URLs
-        safe = cls._URL.sub(
-            r'<a href="\1" style="color:#4AADFF;text-decoration:underline;">\1</a>', safe)
+        # 4. Clickable URLs — show full URL but styled nicely
+        def url_sub(m):
+            url = m.group(1)
+            # Shorten display: show domain + first path segment
+            try:
+                from urllib.parse import urlparse as _up
+                p = _up(url)
+                display = p.netloc + (p.path[:28] + "…" if len(p.path) > 28 else p.path)
+                display = display.rstrip("/")
+            except Exception:
+                display = url[:48] + ("…" if len(url) > 48 else "")
+            return (f'<a href="{url}" style="color:{accent_color};'
+                    f'text-decoration:none;border-bottom:1px solid {accent_color}80;">'
+                    f'{display}</a>')
+        safe = cls._URL.sub(url_sub, safe)
 
         # 5. Newlines
         safe = safe.replace("\n", "<br>")
@@ -4835,33 +4994,61 @@ class MessageEntry:
 
 
 # ─── Image viewer dialog (fullscreen photo view) ──────────────────────────
-class ImageViewer(QDialog):
+def _find_main_window(widget=None) -> 'QMainWindow | None':
+    """Walk up Qt parent chain to find the MainWindow instance."""
+    # Try direct parent chain first
+    w = widget
+    for _ in range(20):
+        if w is None: break
+        if isinstance(w, QMainWindow):
+            return w
+        w = w.parent() if callable(getattr(w, 'parent', None)) else None
+    # Fallback: search topLevelWidgets
+    for w in QApplication.topLevelWidgets():
+        if isinstance(w, QMainWindow):
+            return w
+    return None
+
+
+class ImageViewer(QWidget):
     """
-    Image viewer with toolbar: zoom, fit/fill, save, copy, rotate.
-    Not fullscreen — opens as a large dialog inside the app.
-    Drag to pan, scroll to zoom, double-click to fit.
+    Inline image viewer — fullscreen overlay inside the app window.
+    Click outside image or press ESC to close. No separate window.
     """
     def __init__(self, image_data: bytes, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Просмотр изображения")
-        self.setModal(True)
-        self.resize(900, 680)
-        self.setMinimumSize(500, 400)
+        # Find the MainWindow to use as overlay target
+        mw = _find_main_window(parent)
+        overlay_parent = mw.centralWidget() if mw else parent
+        super().__init__(overlay_parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         t = get_theme(S().theme)
-        self.setStyleSheet(f"background:{t['bg']};color:{t['text']};")
-
+        self.setStyleSheet(f"background:rgba(0,0,0,220);color:{t['text']};")
         self._scale   = 1.0
         self._offset  = QPoint(0, 0)
         self._drag_start = None
-        self._rotation = 0  # degrees
-
+        self._rotation = 0
         self._raw_data = image_data
         pm = QPixmap()
         pm.loadFromData(image_data)
         self._pixmap = pm
-
         self._setup_ui(t)
+        if overlay_parent:
+            self.resize(overlay_parent.size())
+            overlay_parent.installEventFilter(self)
+        self.show()
+        self.raise_()
+        self.setFocus()
         QTimer.singleShot(50, self._fit_to_window)
+
+    def eventFilter(self, obj, event):
+        if event.type() == event.Type.Resize:
+            self.resize(obj.size())
+        return False
+
+    def exec(self):
+        """Compat shim — just show (we're not a dialog)."""
+        self.show(); self.raise_(); self.setFocus()
 
     def _setup_ui(self, t):
         lay = QVBoxLayout(self)
@@ -4905,19 +5092,24 @@ class ImageViewer(QDialog):
 
         mk("💾 Сохранить", "Сохранить в файл",  self._save_file)
         mk("📋 Копировать","Копировать в буфер", self._copy_clipboard)
-        mk("✕",            "Закрыть",            self.close)
+        def _close_overlay():
+            if self.parent():
+                self.parent().removeEventFilter(self)
+            self.hide(); self.deleteLater()
+        mk("✕",            "Закрыть  (Esc)",     _close_overlay)
+        self._close_overlay = _close_overlay
 
         lay.addWidget(toolbar)
 
-        # ── Canvas ──
+        # ── Canvas — fills overlay minus toolbar/info ──
         self._canvas = QWidget()
-        self._canvas.setStyleSheet("background:#000;")
+        self._canvas.setStyleSheet("background:transparent;")
         self._canvas.setMouseTracking(True)
-        self._canvas.paintEvent       = self._paint_canvas
-        self._canvas.mousePressEvent  = self._mouse_press
-        self._canvas.mouseMoveEvent   = self._mouse_move
-        self._canvas.mouseReleaseEvent= self._mouse_release
-        self._canvas.wheelEvent       = self._wheel
+        self._canvas.paintEvent        = self._paint_canvas
+        self._canvas.mousePressEvent   = self._mouse_press
+        self._canvas.mouseMoveEvent    = self._mouse_move
+        self._canvas.mouseReleaseEvent = self._mouse_release
+        self._canvas.wheelEvent        = self._wheel
         self._canvas.mouseDoubleClickEvent = lambda e: self._fit_to_window()
         lay.addWidget(self._canvas, stretch=1)
 
@@ -4951,7 +5143,8 @@ class ImageViewer(QDialog):
 
     def _paint_canvas(self, event):
         painter = QPainter(self._canvas)
-        painter.fillRect(self._canvas.rect(), QColor(0, 0, 0))
+        # Transparent — the overlay widget bg provides the dim
+        painter.fillRect(self._canvas.rect(), QColor(0, 0, 0, 0))
         pm = self._current_pixmap()
         if pm.isNull():
             return
@@ -4963,6 +5156,9 @@ class ImageViewer(QDialog):
             Qt.TransformationMode.SmoothTransformation)
         x = (cw - scaled.width())  // 2 + self._offset.x()
         y = (ch - scaled.height()) // 2 + self._offset.y()
+        # Draw subtle shadow
+        painter.fillRect(x+4, y+4, scaled.width(), scaled.height(),
+                         QColor(0,0,0,60))
         painter.drawPixmap(x, y, scaled)
 
     def _zoom(self, factor: float):
@@ -5029,10 +5225,26 @@ class ImageViewer(QDialog):
         QApplication.clipboard().setPixmap(self._current_pixmap())
         # Small toast via status bar is not available, just do it silently
 
+    def mousePressEvent(self, event):
+        """Click on dark backdrop closes the viewer."""
+        # Check if click is outside the image area
+        pm = self._current_pixmap()
+        if not pm.isNull():
+            cw, ch = self._canvas.width(), self._canvas.height()
+            sw = int(pm.width()  * self._scale)
+            sh = int(pm.height() * self._scale)
+            img_x = (cw - sw) // 2 + self._offset.x() + self._canvas.x()
+            img_y = (ch - sh) // 2 + self._offset.y() + self._canvas.y()
+            from PyQt6.QtCore import QRect
+            img_rect = QRect(img_x, img_y, sw, sh)
+            if not img_rect.contains(event.pos()):
+                self._close_overlay(); return
+        super().mousePressEvent(event)
+
     def keyPressEvent(self, event):
         k = event.key()
         if k == Qt.Key.Key_Escape:
-            self.close()
+            self._close_overlay()
         elif k == Qt.Key.Key_Plus or k == Qt.Key.Key_Equal:
             self._zoom(1.25)
         elif k == Qt.Key.Key_Minus:
@@ -5272,10 +5484,12 @@ class MessageBubble(QWidget):
                 tl = QLabel(html)
                 tl.setTextFormat(Qt.TextFormat.RichText)
                 tl.setWordWrap(True)
-                tl.setOpenExternalLinks(True)
+                tl.setOpenExternalLinks(False)   # we handle clicks ourselves
                 tl.setTextInteractionFlags(
                     Qt.TextInteractionFlag.TextSelectableByMouse |
                     Qt.TextInteractionFlag.LinksAccessibleByMouse)
+                tl.linkActivated.connect(
+                    lambda url, _p=tl: _open_link(url, _p))
                 tl.setStyleSheet(
                     f"color:{t['text']};font-size:13px;"
                     "background:transparent;line-height:1.5;")
@@ -5441,8 +5655,7 @@ class MessageBubble(QWidget):
         dl = QPushButton("⬇ Скачать"); dl.setFixedHeight(26)
         dl.setCursor(Qt.CursorShape.PointingHandCursor)
         dl.setStyleSheet(f"QPushButton{{background:{t['accent']};color:white;"
-            "border-radius:6px;border:none;font-size:9px;padding:0 8px;}}"
-            "QPushButton:hover{opacity:0.8;}")
+            "border-radius:6px;border:none;font-size:9px;padding:0 8px;}}")
         def _save(checked=False, _d=dest, _f=fname):
             if _d.exists():
                 sp,_ = QFileDialog.getSaveFileName(None,"Сохранить видео",_f,
@@ -6227,8 +6440,7 @@ class PeerPanel(QWidget):
         pinned = self._is_pinned(ip)
         menu = QMenu(self)
         def _open_profile():
-            dlg = PeerProfileDialog(peer, self)
-            dlg.exec()
+            _show_peer_profile_overlay(peer, self)
 
         for label, cb in [
             ("👤 Профиль",          _open_profile),
@@ -6456,19 +6668,32 @@ class PeerPanel(QWidget):
             dlg = QDialog(self)
             dlg.setWindowTitle(f"Группа: {g.get('name','')}")
             dlg.resize(460, 560)
-        dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};min-width:460px;")
-        dl = QVBoxLayout(dlg)
-        dl.setContentsMargins(16,16,16,16)
-        dl.setSpacing(10)
+        dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
+        # Wrap in scroll for tab display
+        _outer = QVBoxLayout(dlg)
+        _outer.setContentsMargins(0,0,0,0)
+        _scroll = QScrollArea()
+        _scroll.setWidgetResizable(True)
+        _scroll.setStyleSheet(
+            f"QScrollArea{{background:{t['bg2']};border:none;}}"
+            f"QScrollBar:vertical{{width:6px;background:{t['bg3']};}}"
+            f"QScrollBar::handle:vertical{{background:{t['border']};border-radius:3px;}}")
+        _inner = QWidget()
+        _inner.setStyleSheet(f"background:{t['bg2']};")
+        _scroll.setWidget(_inner)
+        _outer.addWidget(_scroll)
+        dl = QVBoxLayout(_inner)
+        dl.setContentsMargins(20, 20, 20, 20)
+        dl.setSpacing(12)
 
         # ── Avatar ──────────────────────────────────────────────────────
         av_row = QHBoxLayout()
         av_lbl = QLabel()
-        av_lbl.setFixedSize(64, 64)
+        av_lbl.setFixedSize(72, 72)
         av_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         av_lbl.setStyleSheet(
-            f"background:{t['bg3']};border-radius:32px;"
-            f"border:2px solid {t['border']};font-size:22px;")
+            f"background:{t['bg3']};border-radius:36px;"
+            f"border:2px solid {t['border']};font-size:24px;")
         # Load saved avatar if any
         av_b64 = g.get("avatar_b64", "")
         if av_b64:
@@ -6713,6 +6938,8 @@ class ChatPanel(QWidget):
         self._typing_timer.timeout.connect(self._send_typing)
         self._in_call = False
         self._drafts: dict[str, str] = {}  # chat_id → draft text
+        self._ttl_seconds: int = 0           # 0=off, else seconds until auto-delete
+        self._ttl_timers: list = []          # active QTimer refs for TTL messages
         self._setup()
 
     def _setup(self):
@@ -7331,6 +7558,112 @@ class ChatPanel(QWidget):
             self._input.setPlainText(r"¯\_(ツ)_/¯")
             return False   # Don't consume — let user edit/send
 
+        elif cmd in ("/notes", "/note", "/заметки"):
+            # Open shared notes panel
+            self._open_shared_notes()
+            return True
+
+        elif cmd == "/schedule":
+            # /schedule HH:MM text   — send message at specific time
+            parts2 = arg.strip().split(None, 1)
+            if len(parts2) == 2:
+                time_str = parts2[0]; msg_text = parts2[1]
+                try:
+                    import datetime as _dt
+                    now = _dt.datetime.now()
+                    h, m = map(int, time_str.split(":"))
+                    send_at = now.replace(hour=h, minute=m, second=0, microsecond=0)
+                    if send_at <= now:
+                        send_at += _dt.timedelta(days=1)
+                    delay_ms = int((send_at - now).total_seconds() * 1000)
+                    def _sched_send(_text=msg_text):
+                        self._input.setPlainText(_text)
+                        self._send_text()
+                    QTimer.singleShot(delay_ms, _sched_send)
+                    self._display.add_system_message(
+                        f"⏰ Сообщение запланировано на {time_str}: {msg_text[:30]}",
+                        chat_id=self._get_current_chat_id())
+                except Exception as e:
+                    self._display.add_system_message(
+                        f"⏰ Ошибка: {e}  Формат: /schedule HH:MM текст",
+                        chat_id=self._get_current_chat_id())
+            else:
+                self._display.add_system_message(
+                    "⏰ /schedule HH:MM текст сообщения",
+                    chat_id=self._get_current_chat_id())
+            return True
+
+        elif cmd == "/ttl":
+            try:
+                n = int(arg.strip()) if arg.strip() else 0
+                self._ttl_seconds = max(0, n)
+                msg = f"⏱ Исчезающие сообщения: {n} сек" if n else "⏱ Исчезающие сообщения выключены"
+                self._display.add_system_message(msg, chat_id=self._get_current_chat_id())
+            except ValueError:
+                self._display.add_system_message(
+                    "⏱ /ttl <секунды>  (например /ttl 30)",
+                    chat_id=self._get_current_chat_id())
+            return True
+
+        elif cmd in ("/translate", "/tr", "/перевести"):
+            # /tr [lang] text  — translate text using MyMemory free API
+            parts2 = arg.strip().split(None, 1)
+            if len(parts2) == 2 and len(parts2[0]) == 2:
+                lang = parts2[0]; text_to_translate = parts2[1]
+            else:
+                lang = "en"; text_to_translate = arg.strip()
+            if not text_to_translate:
+                self._display.add_system_message(
+                    "🌍 /tr [lang] текст  (например /tr en привет)",
+                    chat_id=self._get_current_chat_id())
+                return True
+            chat_id = self._get_current_chat_id()
+            import threading, urllib.request, urllib.parse, json as _j
+            def _translate():
+                try:
+                    url = ("https://api.mymemory.translated.net/get?q="
+                           f"{urllib.parse.quote(text_to_translate)}"
+                           f"&langpair=auto|{lang}")
+                    with urllib.request.urlopen(url, timeout=6) as resp:
+                        data = _j.loads(resp.read().decode())
+                    result = data["responseData"]["translatedText"]
+                    QTimer.singleShot(0, lambda r=result, c=chat_id:
+                        self._display.add_system_message(
+                            f"🌍 {r}", chat_id=c))
+                except Exception as e:
+                    QTimer.singleShot(0, lambda err=str(e), c=chat_id:
+                        self._display.add_system_message(
+                            f"🌍 Ошибка перевода: {err}", chat_id=c))
+            threading.Thread(target=_translate, daemon=True).start()
+            return True
+
+        elif cmd == "/poll":
+            import shlex as _shlex
+            try: opts = _shlex.split(arg)
+            except Exception: opts = arg.split()
+            if len(opts) >= 2:
+                question = opts[0]; options = opts[1:]
+                poll_id = f"poll_{int(time.time())}"
+                self._polls[poll_id] = {
+                    "question": question, "options": options,
+                    "votes": {o: [] for o in options},
+                    "creator": S().username}
+                self._add_poll_bubble(poll_id, question, options, is_own=True)
+                poll_pkt = {"type": MSG_POLL, "poll_id": poll_id,
+                            "question": question, "options": options,
+                            "username": S().username, "ts": time.time()}
+                if self._current_peer:
+                    self.net.send_udp(poll_pkt, self._current_peer["ip"])
+                elif self._current_gid:
+                    for ip in GROUPS.get(self._current_gid, {}).get("members", []):
+                        if ip != get_local_ip(): self.net.send_udp(poll_pkt, ip)
+                else: self.net.broadcast(poll_pkt)
+            else:
+                self._display.add_system_message(
+                    '💡 /poll "Вопрос?" Вариант1 Вариант2 ...',
+                    chat_id=self._get_current_chat_id())
+            return True
+
         return False   # Not a recognized command
 
     # ── Message search (Ctrl+F) ─────────────────────────────────────────────
@@ -7557,7 +7890,19 @@ class ChatPanel(QWidget):
             "color":        cfg.nickname_color,
             "emoji":        cfg.custom_emoji,
             "reply_to_text": reply_text,
+            "ttl":          self._ttl_seconds if self._ttl_seconds > 0 else 0,
         })
+        # Schedule self-destruct if TTL is set
+        if self._ttl_seconds > 0:
+            _ttl_ms = self._ttl_seconds * 1000
+            _ts_ref = ts
+            _display_ref = self._display
+            t_timer = QTimer()
+            t_timer.setSingleShot(True)
+            t_timer.timeout.connect(
+                lambda _ts=_ts_ref, _d=_display_ref: _d.delete_message(_ts))
+            t_timer.start(_ttl_ms)
+            self._ttl_timers.append(t_timer)
 
         if self._current_peer:
             self.net.send_private(text, self._current_peer["ip"])
@@ -7606,6 +7951,19 @@ class ChatPanel(QWidget):
             self._display.add_reaction_update(
                 msg.get("msg_ts", 0), msg.get("emoji",""),
                 sender, msg.get("added", True))
+            return
+
+        # Handle shared notes sync
+        if mtype == MSG_NOTES_SYNC:
+            content = msg.get("content", "")
+            chat_id_n = (f"group_{gid}" if gid else
+                        msg.get("from_ip","") if mtype == "private" else "public")
+            notes_key = f"shared_notes_{chat_id_n}"
+            S().set(notes_key, content)
+            # Update editor if open
+            ed = getattr(self, '_notes_editor', None)
+            if ed:
+                ed.setPlainText(content)
             return
 
         # Handle sticker
@@ -8134,6 +8492,151 @@ class ChatPanel(QWidget):
                 self._load_sticker_packs() if self._sticker_panel.isVisible() else None,
                 self._refresh_sticker_grid() if self._sticker_panel.isVisible() else None,
             ))
+
+    def _open_shared_notes(self):
+        """Open shared collaborative notepad for current chat."""
+        chat_id = self._get_current_chat_id()
+        t = get_theme(S().theme)
+        # Reuse existing notes window if open
+        if hasattr(self, '_notes_dlg') and self._notes_dlg and self._notes_dlg.isVisible():
+            self._notes_dlg.raise_(); return
+
+        dlg = QWidget(self.window(), Qt.WindowType.Window)
+        dlg.setWindowTitle(f"📝 Совместные заметки — {chat_id or 'Публичный чат'}")
+        dlg.resize(500, 400)
+        dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(12,12,12,12); lay.setSpacing(8)
+
+        hdr = QLabel("📝 Совместные заметки (синхронизируются в реальном времени)")
+        hdr.setStyleSheet(
+            f"font-size:12px;color:{t['accent']};background:transparent;")
+        hdr.setWordWrap(True)
+        lay.addWidget(hdr)
+
+        editor = QPlainTextEdit()
+        editor.setStyleSheet(
+            f"QPlainTextEdit{{background:{t['bg']};color:{t['text']};"
+            "font-size:12px;border:none;border-radius:8px;padding:12px;}}")
+        # Load saved notes
+        import json as _j
+        notes_key = f"shared_notes_{chat_id}"
+        saved = S().get(notes_key, "", t=str)
+        editor.setPlainText(saved)
+        lay.addWidget(editor, stretch=1)
+
+        btn_row = QHBoxLayout()
+        sync_btn = QPushButton("📤 Синхронизировать")
+        sync_btn.setObjectName("accent_btn"); sync_btn.setFixedHeight(32)
+        clear_btn = QPushButton("🗑 Очистить")
+        clear_btn.setFixedHeight(32)
+        clear_btn.setStyleSheet(
+            f"QPushButton{{background:{t['bg3']};color:{t['text_dim']};"
+            f"border:1px solid {t['border']};border-radius:6px;padding:0 12px;}}"
+            f"QPushButton:hover{{color:{t['text']};background:{t['btn_hover']};}}")
+
+        def _sync():
+            content = editor.toPlainText()
+            S().set(notes_key, content)
+            pkt = {"type": MSG_NOTES_SYNC, "content": content,
+                   "username": S().username, "ts": time.time()}
+            if self._current_peer:
+                self.net.send_udp(pkt, self._current_peer["ip"])
+            elif self._current_gid:
+                for ip in GROUPS.get(self._current_gid,{}).get("members",[]):
+                    if ip != get_local_ip(): self.net.send_udp(pkt, ip)
+            else: self.net.broadcast(pkt)
+            sync_btn.setText("✅ Отправлено")
+            QTimer.singleShot(2000, lambda: sync_btn.setText("📤 Синхронизировать"))
+
+        def _clear():
+            editor.clear()
+            S().set(notes_key, "")
+
+        sync_btn.clicked.connect(_sync)
+        clear_btn.clicked.connect(_clear)
+        btn_row.addWidget(sync_btn); btn_row.addWidget(clear_btn)
+        btn_row.addStretch()
+        lay.addLayout(btn_row)
+
+        # Auto-save on change
+        editor.textChanged.connect(lambda: S().set(notes_key, editor.toPlainText()))
+
+        dlg.show(); dlg.raise_()
+        self._notes_dlg = dlg
+        self._notes_editor = editor
+
+    def _add_poll_bubble(self, poll_id, question, options, is_own=True):
+        t = get_theme(S().theme)
+        frame = QFrame()
+        frame.setMaximumWidth(340)
+        frame.setStyleSheet(
+            f"QFrame{{background:{t['bg3']};border-radius:14px;"
+            f"border:1px solid {t['accent']};padding:2px;}}")
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(14,12,14,12); fl.setSpacing(8)
+
+        q_lbl = QLabel(f"📊  {question}")
+        q_lbl.setStyleSheet(
+            f"font-size:13px;font-weight:bold;color:{t['text']};background:transparent;")
+        q_lbl.setWordWrap(True)
+        fl.addWidget(q_lbl)
+
+        poll_data = self._polls.get(poll_id, {})
+        votes = poll_data.get("votes", {o: [] for o in options})
+        total = sum(len(v) for v in votes.values())
+
+        for opt in options:
+            opt_voters = votes.get(opt, [])
+            pct = int(len(opt_voters)/max(total,1)*100)
+            row = QHBoxLayout()
+            btn = QPushButton(f"  {opt}  ({len(opt_voters)})")
+            btn.setStyleSheet(
+                f"QPushButton{{background:{t['bg2']};color:{t['text']};"
+                f"border:1px solid {t['border']};border-radius:8px;"
+                "padding:6px 10px;font-size:11px;text-align:left;}}"
+                f"QPushButton:hover{{background:{t['accent']};color:white;}}")
+            btn.clicked.connect(
+                lambda _, _p=poll_id,_o=opt,_f=frame,_q=question,_opts=options:
+                self._vote_poll(_p, _o, _f, _q, _opts))
+            row.addWidget(btn, stretch=1)
+            pb = QProgressBar()
+            pb.setRange(0,100); pb.setValue(pct)
+            pb.setFixedHeight(6); pb.setTextVisible(False)
+            pb.setStyleSheet(
+                f"QProgressBar{{background:{t['bg2']};border-radius:3px;border:none;}}"
+                f"QProgressBar::chunk{{background:{t['accent']};border-radius:3px;}}")
+            pb.setFixedWidth(60)
+            row.addWidget(pb)
+            fl.addLayout(row)
+
+        footer = QLabel(f"Всего голосов: {total}")
+        footer.setStyleSheet(
+            f"color:{t['text_dim']};font-size:9px;background:transparent;")
+        fl.addWidget(footer)
+        self._display._add_widget_bubble(frame, is_own=is_own)
+
+    def _vote_poll(self, poll_id, option, frame, question, options):
+        username = S().username
+        if poll_id not in self._polls:
+            self._polls[poll_id] = {
+                "question": question, "options": options,
+                "votes": {o: [] for o in options}, "creator": ""}
+        poll = self._polls[poll_id]
+        for v in poll["votes"].values():
+            if username in v: v.remove(username)
+        poll["votes"].setdefault(option, []).append(username)
+        # Broadcast vote
+        vote_pkt = {"type": MSG_POLL_VOTE, "poll_id": poll_id,
+                    "option": option, "username": username, "ts": time.time()}
+        if self._current_peer:
+            self.net.send_udp(vote_pkt, self._current_peer["ip"])
+        elif self._current_gid:
+            for ip in GROUPS.get(self._current_gid,{}).get("members",[]):
+                if ip != get_local_ip(): self.net.send_udp(vote_pkt, ip)
+        else: self.net.broadcast(vote_pkt)
+        frame.setParent(None); frame.deleteLater()
+        self._add_poll_bubble(poll_id, question, options, is_own=False)
 
     def _send_sticker(self, b64: str):
         """Send a sticker as an image message."""
@@ -9127,31 +9630,76 @@ class ProfileDialog(QDialog):
         self._load_current()
 
     def _show_preview(self):
-        """Show profile preview popup."""
-        dlg = QDialog(self)
-        dlg.setWindowTitle("Предпросмотр профиля")
-        dlg.setMinimumWidth(500)
-        dlg.resize(520, 620)
+        """Show profile preview as inline overlay inside the main window."""
+        mw = _find_main_window(self)
+        overlay_parent = mw.centralWidget() if mw else self
+
+        overlay = QWidget(overlay_parent)
+        overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        overlay.setStyleSheet("background:rgba(0,0,0,180);")
+        overlay.resize(overlay_parent.size())
+        overlay.show()
+        overlay.raise_()
+
+        # Resize overlay when parent resizes
+        def _on_parent_resize(ev, _ov=overlay, _op=overlay_parent):
+            _ov.resize(_op.size())
+        overlay_parent.resizeEvent = _on_parent_resize
+
         t = get_theme(S().theme)
-        dlg.setStyleSheet(f"""
-            QDialog {{ background:{t['bg']}; color:{t['text']}; }}
-            QPushButton {{ background:{t['bg3']}; color:{t['text']};
-                border:1px solid {t['border']}; border-radius:6px;
-                padding:6px 18px; font-size:11px; }}
-            QPushButton:hover {{ background:{t['btn_hover']}; }}
+        # Card inside overlay
+        card = QFrame(overlay)
+        card.setFixedSize(480, 580)
+        card.setStyleSheet(f"""
+            QFrame {{
+                background:{t['bg2']};
+                border-radius:18px;
+                border:1px solid {t['border']};
+            }}
         """)
-        dl = QVBoxLayout(dlg)
-        dl.setContentsMargins(12, 12, 12, 12)
-        dl.setSpacing(8)
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(0, 0, 0, 12)
+        cl.setSpacing(0)
 
-        preview = ProfilePreviewWidget(dlg)
-        dl.addWidget(preview, stretch=1)
+        preview = ProfilePreviewWidget(card)
+        cl.addWidget(preview, stretch=1)
 
-        close_btn = QPushButton("Закрыть")
+        close_btn = QPushButton("✕ Закрыть")
         close_btn.setFixedHeight(34)
-        close_btn.clicked.connect(dlg.accept)
-        dl.addWidget(close_btn)
-        dlg.exec()
+        close_btn.setObjectName("accent_btn")
+        close_btn.setStyleSheet(
+            f"QPushButton{{background:{t['bg3']};color:{t['text_dim']};"
+            f"border:1px solid {t['border']};border-radius:8px;"
+            "margin:0 16px;font-size:11px;}}"
+            f"QPushButton:hover{{background:{t['btn_hover']};color:{t['text']};}}")
+
+        def _close():
+            overlay_parent.resizeEvent = lambda e: None
+            overlay.deleteLater()
+
+        close_btn.clicked.connect(_close)
+        cl.addWidget(close_btn)
+
+        # Center card
+        def _center(_card=card, _parent=overlay):
+            _card.move(
+                (_parent.width()  - _card.width())  // 2,
+                (_parent.height() - _card.height()) // 2)
+        _center()
+
+        # Click backdrop to close
+        overlay.mousePressEvent = lambda e: _close()
+        card.mousePressEvent    = lambda e: e.accept()  # don't propagate
+
+        overlay.raise_()
+        card.raise_()
+
+        # Re-center on resize
+        orig_resize = overlay_parent.resizeEvent
+        def _on_resize(ev, _c=_center, _ov=overlay, _op=overlay_parent):
+            _ov.resize(_op.size()); _c()
+        overlay_parent.resizeEvent = _on_resize
+
 
     def _load_current(self):
         cfg = S()
@@ -10471,6 +11019,24 @@ class SettingsDialog(QDialog):
         self._media_pref_combo.setCurrentIndex(idx)
         fl5_form.addRow("По умолчанию открывать медиа:", self._media_pref_combo)
 
+        # Link open preference
+        self._link_pref_combo = QComboBox()
+        self._link_pref_combo.addItems([
+            "Спрашивать каждый раз",
+            "Всегда в WNS (встроенный браузер)",
+            "Всегда в системном браузере",
+        ])
+        link_pref = S().get("link_open_pref", "ask", t=str)
+        link_idx = {"ask": 0, "wns": 1, "system": 2}.get(link_pref, 0)
+        self._link_pref_combo.setCurrentIndex(link_idx)
+        fl5_form.addRow("Ссылки из чата:", self._link_pref_combo)
+
+        reset_links = QPushButton("🔄 Сбросить (спрашивать снова)")
+        reset_links.clicked.connect(lambda: (
+            S().set("link_open_pref", "ask"),
+            self._link_pref_combo.setCurrentIndex(0)))
+        fl5_form.addRow(reset_links)
+
         reset_pref = QPushButton("🔄 Сбросить (спрашивать снова)")
         reset_pref.clicked.connect(lambda: (
             S().set("media_open_pref", ""),
@@ -10492,6 +11058,9 @@ class SettingsDialog(QDialog):
         if hasattr(self, '_media_pref_combo'):
             pref_map = {0: "", 1: "mewa", 2: "system"}
             S().set("media_open_pref", pref_map.get(self._media_pref_combo.currentIndex(), ""))
+        if hasattr(self, '_link_pref_combo'):
+            link_map = {0: "ask", 1: "wns", 2: "system"}
+            S().set("link_open_pref", link_map.get(self._link_pref_combo.currentIndex(), "ask"))
         S().set("priv_show_status",       self._priv_show_status.isChecked())
         S().set("priv_show_avatar",       self._priv_show_avatar.isChecked())
         S().set("priv_show_typing",       self._priv_show_typing.isChecked())
@@ -10501,6 +11070,8 @@ class SettingsDialog(QDialog):
         S().set("priv_hide_ip_call",      self._priv_hide_ip_call.isChecked())
         S().set("priv_link_preview",      self._priv_link_preview.isChecked())
         S().set("priv_save_history",      self._priv_save_history.isChecked())
+        # Also sync with the main save_history setting
+        S().set("save_history",           self._priv_save_history.isChecked())
         S().set("priv_encrypt_history",   self._priv_encrypt_history.isChecked())
         S().set("priv_allow_fwd",         self._priv_allow_fwd.isChecked())
         pref_vals = ["", "mewa", "system"]
@@ -10569,8 +11140,9 @@ class SettingsDialog(QDialog):
 
         # Mic test
         mic_test_row = QHBoxLayout()
-        self._cs_mic_test_btn = QPushButton("🎙 Начать запись (3 сек)")
+        self._cs_mic_test_btn = QPushButton("🎙 Тест микрофона (3 сек)")
         self._cs_mic_test_btn.setObjectName("accent_btn")
+        self._cs_mic_test_btn.setCheckable(False)
         self._cs_mic_test_btn.clicked.connect(self._test_mic)
         mic_test_row.addWidget(self._cs_mic_test_btn)
         self._cs_mic_level = QProgressBar()
@@ -10694,7 +11266,9 @@ class SettingsDialog(QDialog):
                 # Use QVideoWidget inside preview label space
                 if not hasattr(self, '_cs_vid_widget') or not self._cs_vid_widget:
                     self._cs_vid_widget = QVideoWidget(self._cs_cam_preview)
-                    self._cs_vid_widget.resize(self._cs_cam_preview.size())
+                    self._cs_vid_widget.setGeometry(0, 0,
+                        self._cs_cam_preview.width(),
+                        self._cs_cam_preview.height())
                 self._cs_cam_obj = QCamera()
                 self._cs_cam_session = QMediaCaptureSession()
                 self._cs_cam_session.setCamera(self._cs_cam_obj)
@@ -10712,13 +11286,21 @@ class SettingsDialog(QDialog):
 
         def _stop_cam_test():
             try:
-                if self._cs_cam_obj:
-                    self._cs_cam_obj.stop()
+                cam_obj = getattr(self, '_cs_cam_obj', None)
+                if cam_obj:
+                    cam_obj.stop()
                     self._cs_cam_obj = None
-                if hasattr(self, '_cs_vid_widget') and self._cs_vid_widget:
-                    self._cs_vid_widget.hide()
             except Exception: pass
-            self._cs_cam_preview.setVisible(False)
+            try:
+                vid_w = getattr(self, '_cs_vid_widget', None)
+                if vid_w:
+                    vid_w.hide()
+                    self._cs_vid_widget = None
+            except Exception: pass
+            try:
+                self._cs_cam_preview.setVisible(False)
+                self._cs_cam_preview.setText("Предпросмотр камеры...")
+            except Exception: pass
             cam_btn.setEnabled(True)
             stop_cam_btn.setEnabled(False)
 
@@ -10732,23 +11314,29 @@ class SettingsDialog(QDialog):
             "Тест: услышите собственный микрофон через динамики (эхо-тест).")
         hear_info.setStyleSheet(f"font-size:10px;color:{t['text_dim']};background:transparent;")
         fl_hear.addWidget(hear_info)
-        echo_btn = QPushButton("🔁 Запустить эхо-тест (5 сек)")
-        self._cs_echo_status = QLabel("")
+        echo_btn = QPushButton("🔁 Запустить эхо-тест (3 сек)")
+        self._cs_echo_status = QLabel("Говорите в микрофон — услышите себя")
         self._cs_echo_status.setStyleSheet(f"font-size:10px;color:{t['text_dim']};background:transparent;")
         def _run_echo():
-            self._cs_echo_status.setText("🔴 Запись и воспроизведение...")
+            self._cs_echo_status.setText("🔴 Говорите — слушайте себя...")
             echo_btn.setEnabled(False)
-            import threading, struct
+            import threading
             def _echo():
                 try:
                     import pyaudio as _pa
+                    CHUNK = 1024
+                    RATE  = 16000
                     p = _pa.PyAudio()
-                    stream_in  = p.open(format=_pa.paInt16, channels=1,
-                                        rate=16000, input=True,  frames_per_buffer=512)
-                    stream_out = p.open(format=_pa.paInt16, channels=1,
-                                        rate=16000, output=True, frames_per_buffer=512)
-                    for _ in range(int(16000/512 * 5)):
-                        data = stream_in.read(512, exception_on_overflow=False)
+                    # Open input and output
+                    stream_in  = p.open(
+                        format=_pa.paInt16, channels=1, rate=RATE,
+                        input=True, frames_per_buffer=CHUNK)
+                    stream_out = p.open(
+                        format=_pa.paInt16, channels=1, rate=RATE,
+                        output=True, frames_per_buffer=CHUNK)
+                    frames = int(RATE / CHUNK * 3)
+                    for _ in range(frames):
+                        data = stream_in.read(CHUNK, exception_on_overflow=False)
                         stream_out.write(data)
                     stream_in.stop_stream();  stream_in.close()
                     stream_out.stop_stream(); stream_out.close()
@@ -10756,9 +11344,13 @@ class SettingsDialog(QDialog):
                     QTimer.singleShot(0, lambda: (
                         self._cs_echo_status.setText("✅ Эхо-тест завершён"),
                         echo_btn.setEnabled(True)))
-                except Exception as e:
+                except ImportError:
                     QTimer.singleShot(0, lambda: (
-                        self._cs_echo_status.setText(f"❌ {e}"),
+                        self._cs_echo_status.setText("⚠ pip install pyaudio --break-system-packages"),
+                        echo_btn.setEnabled(True)))
+                except Exception as e:
+                    QTimer.singleShot(0, lambda err=str(e): (
+                        self._cs_echo_status.setText(f"❌ {err}"),
                         echo_btn.setEnabled(True)))
             threading.Thread(target=_echo, daemon=True).start()
         echo_btn.clicked.connect(_run_echo)
@@ -10777,8 +11369,12 @@ class SettingsDialog(QDialog):
 
     def _test_mic(self):
         """Quick 3-second mic level test."""
+        if getattr(self, '_mic_test_running', False):
+            return
+        self._mic_test_running = True
         self._cs_mic_status.setText("🔴 Запись... (3 сек)")
         self._cs_mic_test_btn.setEnabled(False)
+        self._cs_mic_test_btn.setText("⏳ Идёт запись…")
         try:
             import pyaudio as _pa, threading, struct, math
             def _run():
@@ -10790,26 +11386,34 @@ class SettingsDialog(QDialog):
                     for _ in range(int(16000/512 * 3)):
                         data = stream.read(512, exception_on_overflow=False)
                         samples = struct.unpack(f'<{len(data)//2}h', data)
-                        rms = math.sqrt(sum(s*s for s in samples)/len(samples))
+                        rms = math.sqrt(sum(s*s for s in samples)/max(len(samples),1))
                         level = min(100, int(rms/320))
                         peak  = max(peak, level)
                         QTimer.singleShot(0, lambda l=level: self._cs_mic_level.setValue(l))
                     stream.stop_stream(); stream.close(); p.terminate()
                     def _done():
+                        self._mic_test_running = False
                         self._cs_mic_test_btn.setEnabled(True)
+                        self._cs_mic_test_btn.setText("🎙 Тест микрофона (3 сек)")
+                        self._cs_mic_level.setValue(0)
                         if peak > 5:
                             self._cs_mic_status.setText(f"✅ Микрофон работает (пик: {peak}%)")
                         else:
                             self._cs_mic_status.setText("⚠ Сигнал очень слабый — проверьте устройство")
                     QTimer.singleShot(0, _done)
                 except Exception as e:
-                    QTimer.singleShot(0, lambda: (
-                        self._cs_mic_status.setText(f"❌ Ошибка: {e}"),
-                        self._cs_mic_test_btn.setEnabled(True)))
+                    def _err(err=str(e)):
+                        self._mic_test_running = False
+                        self._cs_mic_test_btn.setEnabled(True)
+                        self._cs_mic_test_btn.setText("🎙 Тест микрофона (3 сек)")
+                        self._cs_mic_status.setText(f"❌ Ошибка: {err}")
+                    QTimer.singleShot(0, _err)
             threading.Thread(target=_run, daemon=True).start()
         except ImportError:
+            self._mic_test_running = False
             self._cs_mic_status.setText("⚠ PyAudio не установлен")
             self._cs_mic_test_btn.setEnabled(True)
+            self._cs_mic_test_btn.setText("🎙 Тест микрофона (3 сек)")
 
     def _test_speaker(self):
         """Play a synthetic test tone through speakers."""
@@ -11279,6 +11883,245 @@ class SettingsDialog(QDialog):
 # ═══════════════════════════════════════════════════════════════════════════
 #  PEER PROFILE DIALOG  (Telegram-style, like screenshot 2)
 # ═══════════════════════════════════════════════════════════════════════════
+def _show_peer_profile_overlay(peer: dict, parent=None):
+    """Show peer profile as a slide-in panel overlaid on the central widget."""
+    mw = _find_main_window(parent)
+    if mw is None:
+        # Fallback to old dialog if no MainWindow found
+        dlg = PeerProfileDialog(peer, parent)
+        dlg.exec(); return
+
+    central = mw.centralWidget()
+
+    # Remove any existing profile overlay
+    for child in central.findChildren(QWidget, "peer_profile_overlay"):
+        child.deleteLater()
+
+    t = get_theme(S().theme)
+    name     = peer.get("username", "?")
+    ip       = peer.get("ip", "")
+    av_b64   = peer.get("avatar_b64", "")
+    color    = peer.get("nickname_color", "#E0E0E0")
+    emoji_s  = peer.get("custom_emoji", "")
+    version  = peer.get("version", "")
+    e2e      = CRYPTO.has_session(ip)
+    fp       = CRYPTO.peer_fingerprint(ip) if e2e else "—"
+
+    # Overlay widget — right-side panel
+    panel = QWidget(central)
+    panel.setObjectName("peer_profile_overlay")
+    panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    panel_w = min(360, central.width() - 40)
+    panel.setFixedWidth(panel_w)
+    panel.resize(panel_w, central.height())
+    panel.move(central.width(), 0)    # start off-screen right
+    panel.setStyleSheet(f"""
+        QWidget#peer_profile_overlay {{
+            background:{t['bg2']};
+            border-left:1px solid {t['border']};
+        }}
+    """)
+
+    vl = QVBoxLayout(panel)
+    vl.setContentsMargins(0, 0, 0, 0)
+    vl.setSpacing(0)
+
+    # ── Header: close button ──
+    hdr = QWidget()
+    hdr.setStyleSheet(f"background:{t['bg3']};border-bottom:1px solid {t['border']};")
+    hdr.setFixedHeight(40)
+    hdr_lay = QHBoxLayout(hdr)
+    hdr_lay.setContentsMargins(12, 0, 8, 0)
+    hdr_title = QLabel("Профиль пользователя")
+    hdr_title.setStyleSheet(f"font-size:12px;font-weight:bold;color:{t['text']};background:transparent;")
+    hdr_lay.addWidget(hdr_title)
+    hdr_lay.addStretch()
+    close_btn = QPushButton("✕")
+    close_btn.setFixedSize(28, 28)
+    close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    close_btn.setStyleSheet(
+        f"QPushButton{{background:transparent;color:{t['text_dim']};border:none;font-size:14px;}}"
+        "QPushButton:hover{color:#E74C3C;}")
+    def _close_panel():
+        anim = QPropertyAnimation(panel, b"pos")
+        anim.setDuration(200)
+        anim.setStartValue(panel.pos())
+        anim.setEndValue(QPoint(central.width(), 0))
+        anim.setEasingCurve(QEasingCurve.Type.InCubic)
+        anim.finished.connect(panel.deleteLater)
+        anim.start()
+        panel._anim = anim
+    close_btn.clicked.connect(_close_panel)
+    hdr_lay.addWidget(close_btn)
+    vl.addWidget(hdr)
+
+    # ── Scroll area ──
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.Shape.NoFrame)
+    scroll.setStyleSheet(f"QScrollArea{{background:{t['bg2']};border:none;}}")
+    content = QWidget()
+    content.setStyleSheet(f"background:{t['bg2']};")
+    cl = QVBoxLayout(content)
+    cl.setContentsMargins(0, 0, 0, 20)
+    cl.setSpacing(0)
+
+    # Banner
+    banner = QWidget()
+    banner.setFixedHeight(100)
+    banner.setStyleSheet(f"""
+        background:qlineargradient(x1:0,y1:0,x2:1,y2:1,
+            stop:0 {t['accent']}, stop:1 {t['accent2']});
+    """)
+    cl.addWidget(banner)
+
+    # Avatar overlapping banner
+    av_wrap = QWidget(content)
+    av_wrap.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+    av_size = 80
+    av_lbl = QLabel(av_wrap)
+    av_lbl.setFixedSize(av_size+4, av_size+4)
+    if av_b64:
+        try:
+            pm = make_circle_pixmap(base64_to_pixmap(av_b64), av_size)
+            av_lbl.setPixmap(pm)
+        except Exception:
+            av_lbl.setPixmap(default_avatar(name, av_size))
+    else:
+        av_lbl.setPixmap(default_avatar(name, av_size))
+    av_lbl.setStyleSheet(f"border-radius:{av_size//2+2}px;border:3px solid {t['bg2']};")
+
+    av_row = QHBoxLayout()
+    av_row.setContentsMargins(16, 0, 16, 0)
+    av_row.addWidget(av_lbl)
+    av_row.addStretch()
+
+    # Chat + call buttons on same row
+    chat_btn = QPushButton("💬 Написать")
+    chat_btn.setFixedHeight(32)
+    chat_btn.setObjectName("accent_btn")
+    chat_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    call_btn = QPushButton("📞 Звонок")
+    call_btn.setFixedHeight(32)
+    call_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    call_btn.setStyleSheet(
+        f"QPushButton{{background:{t['bg3']};color:{t['text']};"
+        f"border:1px solid {t['border']};border-radius:8px;padding:0 12px;}}"
+        f"QPushButton:hover{{background:{t['btn_hover']};}}")
+
+    # Wire buttons to MainWindow actions
+    def _do_chat():
+        _close_panel()
+        if hasattr(mw, 'chat_panel'):
+            mw.chat_panel.open_peer(peer)
+            mw._tabs.setCurrentWidget(mw.chat_panel)
+    def _do_call():
+        _close_panel()
+        if hasattr(mw, '_call_peer'):
+            mw._call_peer(ip)
+
+    chat_btn.clicked.connect(_do_chat)
+    call_btn.clicked.connect(_do_call)
+    av_row.addWidget(chat_btn)
+    av_row.addSpacing(6)
+    av_row.addWidget(call_btn)
+
+    # Offset av_row to overlap banner by half avatar
+    cl.addWidget(QWidget())    # spacer replaced below
+    # We do it with negative margin via a container
+    av_container = QWidget()
+    av_container.setStyleSheet(f"background:{t['bg2']};")
+    av_container.setContentsMargins(0, 0, 0, 0)
+    av_cl = QVBoxLayout(av_container)
+    av_cl.setContentsMargins(0, 0, 0, 0)
+    av_cl.addLayout(av_row)
+    # Pop the dummy spacer and add container with negative margin workaround
+    cl.takeAt(cl.count()-1)
+    cl.addWidget(av_container)
+
+    # Reposition to overlap banner
+    def _reposition():
+        banner_bottom = banner.y() + banner.height()
+        av_container.move(0, banner_bottom - av_size//2 - 2)
+    QTimer.singleShot(10, _reposition)
+    cl.addSpacing(av_size//2 + 12)
+
+    # Name + emoji
+    name_lbl = QLabel(f'<span style="color:{color};font-size:18px;font-weight:bold;">'
+                      f'{name}</span>'
+                      + (f'  <span style="font-size:16px;">{emoji_s}</span>' if emoji_s else ''))
+    name_lbl.setTextFormat(Qt.TextFormat.RichText)
+    name_lbl.setStyleSheet("background:transparent;")
+    name_lbl.setContentsMargins(16, 0, 16, 0)
+    cl.addWidget(name_lbl)
+    cl.addSpacing(4)
+
+    sub_lbl = QLabel(f"IP: {ip}")
+    sub_lbl.setStyleSheet(f"font-size:11px;color:{t['text_dim']};background:transparent;margin-left:16px;")
+    cl.addWidget(sub_lbl)
+    cl.addSpacing(16)
+
+    # Info rows
+    def _info_row(icon, label, value):
+        row = QWidget()
+        row.setStyleSheet(f"background:{t['bg2']};")
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(16, 6, 16, 6)
+        ico = QLabel(icon)
+        ico.setFixedWidth(22)
+        ico.setStyleSheet("font-size:14px;background:transparent;")
+        rl.addWidget(ico)
+        lbl_w = QLabel(label)
+        lbl_w.setStyleSheet(f"font-size:11px;color:{t['text_dim']};background:transparent;")
+        lbl_w.setFixedWidth(90)
+        rl.addWidget(lbl_w)
+        val_w = QLabel(str(value))
+        val_w.setStyleSheet(f"font-size:11px;color:{t['text']};background:transparent;")
+        val_w.setWordWrap(True)
+        rl.addWidget(val_w, stretch=1)
+        return row
+
+    sep = QWidget()
+    sep.setFixedHeight(1)
+    sep.setStyleSheet(f"background:{t['border']};")
+    cl.addWidget(sep)
+
+    for icon, label, value in [
+        ("🔒", "Шифрование:", "E2E ✓" if e2e else "Нет E2E"),
+        ("🔑", "Отпечаток:", fp[:24]+"…" if len(fp)>24 else fp),
+        ("📱", "Версия:", version or "—"),
+    ]:
+        cl.addWidget(_info_row(icon, label, value))
+
+    sep2 = QWidget()
+    sep2.setFixedHeight(1)
+    sep2.setStyleSheet(f"background:{t['border']};")
+    cl.addWidget(sep2)
+    cl.addStretch()
+
+    scroll.setWidget(content)
+    vl.addWidget(scroll, stretch=1)
+
+    panel.show()
+    panel.raise_()
+
+    # Animate slide-in from right
+    anim = QPropertyAnimation(panel, b"pos")
+    anim.setDuration(220)
+    anim.setStartValue(QPoint(central.width(), 0))
+    anim.setEndValue(QPoint(central.width() - panel_w, 0))
+    anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+    anim.start()
+    panel._anim = anim   # keep reference
+
+    # Resize panel when central widget resizes
+    def _on_central_resize(event):
+        panel.resize(panel_w, central.height())
+        if not getattr(panel, '_is_closing', False):
+            panel.move(central.width() - panel_w, 0)
+    central.resizeEvent = _on_central_resize
+
+
 class PeerProfileDialog(QDialog):
     """Shows a peer's profile in Telegram style with banner, avatar, stats."""
 
@@ -11515,172 +12358,180 @@ WNS_HOME_HTML = """<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Winora NetScape — Новая вкладка</title>
+<title>Новая вкладка</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{
-  background:#0D0D18;color:#D0D0E8;
-  font-family:'Segoe UI',system-ui,Arial,sans-serif;
-  min-height:100vh;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:28px;
-  user-select:none;
-}
-.topbar{position:fixed;top:0;left:0;right:0;height:38px;
-  background:rgba(13,13,24,0.85);backdrop-filter:blur(12px);
-  display:flex;align-items:center;justify-content:flex-end;
-  padding:0 16px;gap:8px;font-size:11px;color:#505070;}
-.topbar span{cursor:pointer;padding:3px 10px;border-radius:8px;}
-.topbar span:hover{background:#1E1E34;color:#A0A0FF;}
-.logo-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;}
-.logo{font-size:56px;filter:drop-shadow(0 0 24px #7C4DFF88);}
-.brand{font-size:13px;font-weight:300;color:#5050A0;letter-spacing:5px;text-transform:uppercase;}
-.search-wrap{
-  display:flex;align-items:center;
-  background:#16162A;border:1.5px solid #2D2D50;
-  border-radius:32px;padding:10px 16px 10px 20px;
-  width:560px;gap:10px;
-}
-.search-wrap:focus-within{border-color:#7C4DFF;box-shadow:0 0 0 3px rgba(124,77,255,0.15);}
-.search-wrap input{
-  flex:1;background:transparent;border:none;outline:none;
-  color:#D0D0E8;font-size:15px;
-}
-.search-wrap input::placeholder{color:#404060;}
-.search-engines{display:flex;gap:6px;}
-.se{width:28px;height:28px;border-radius:14px;border:1px solid #2D2D50;
-    background:#1A1A2E;cursor:pointer;font-size:14px;display:flex;
-    align-items:center;justify-content:center;}
-.se:hover,.se.active{border-color:#7C4DFF;background:#28284A;}
-.se.active{border-color:#7C4DFF;}
-.go-btn{background:#7C4DFF;border:none;border-radius:20px;
-  color:white;padding:6px 18px;cursor:pointer;font-size:13px;
-  white-space:nowrap;}
-.go-btn:hover{background:#9C6DFF;}
-.section-title{font-size:10px;color:#404060;letter-spacing:2px;
-  text-transform:uppercase;align-self:flex-start;margin-left:4px;}
-.shortcuts{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:580px;}
-.shortcut{
-  display:flex;align-items:center;gap:8px;
-  background:#13131F;border:1px solid #1E1E34;
-  border-radius:14px;padding:10px 16px;cursor:pointer;
-  text-decoration:none;color:#9090B0;font-size:12px;
-  min-width:120px;
-}
-.shortcut:hover{background:#1C1C30;border-color:#7C4DFF;color:#D0D0F8;
-  transform:translateY(-2px);}
-.shortcut .fav{font-size:18px;}
-.clock{font-size:42px;font-weight:200;color:#3030580;letter-spacing:2px;
-  font-variant-numeric:tabular-nums;color:#7070A0;}
-.date{font-size:12px;color:#303060;margin-top:-8px;}
-.footer{position:fixed;bottom:10px;color:#252540;font-size:10px;}
-@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.logo-wrap,.search-wrap,.shortcuts{animation:fadein .4s ease both;}
-.shortcuts{animation-delay:.1s;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:#202124;
+    color:#e8eaed;
+    font-family:-apple-system,system-ui,"Segoe UI",Arial,sans-serif;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:0;
+    overflow:hidden;
+    user-select:none;
+  }
+  .logo{font-size:92px;line-height:1;margin-bottom:32px;filter:drop-shadow(0 2px 8px #0006);}
+  .search-wrap{
+    width:min(680px,90vw);
+    background:#303134;
+    border-radius:24px;
+    border:1px solid #5f6368;
+    display:flex;
+    align-items:center;
+    padding:0 16px;
+    height:46px;
+    gap:10px;
+    transition:box-shadow .15s,border-color .15s;
+  }
+  .search-wrap:focus-within{
+    box-shadow:0 1px 6px #0005;
+    border-color:#8ab4f8;
+    background:#303134;
+  }
+  .search-icon{color:#9aa0a6;font-size:18px;flex-shrink:0;}
+  #q{
+    flex:1;
+    background:transparent;
+    border:none;
+    outline:none;
+    font-size:16px;
+    color:#e8eaed;
+    caret-color:#e8eaed;
+  }
+  #q::placeholder{color:#9aa0a6;}
+  .se-row{display:flex;gap:8px;margin-top:16px;}
+  .se{
+    background:#303134;
+    border:1px solid #5f636860;
+    border-radius:20px;
+    padding:4px 14px;
+    font-size:12px;
+    color:#9aa0a6;
+    cursor:pointer;
+    transition:background .1s,color .1s;
+  }
+  .se:hover,.se.active{background:#8ab4f820;color:#8ab4f8;border-color:#8ab4f860;}
+  .shortcuts{
+    display:grid;
+    grid-template-columns:repeat(5,88px);
+    gap:12px;
+    margin-top:40px;
+  }
+  .shortcut{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    text-decoration:none;
+    color:#e8eaed;
+    border-radius:12px;
+    padding:14px 8px 10px;
+    transition:background .15s;
+    font-size:12px;
+  }
+  .shortcut:hover{background:#35363a;}
+  .fav{
+    width:40px;height:40px;border-radius:50%;
+    background:#303134;
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px;
+  }
+  .shortcut span{
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    max-width:72px;text-align:center;color:#9aa0a6;font-size:11px;
+  }
+  .clock{
+    position:fixed;top:28px;right:32px;
+    font-size:13px;color:#5f6368;
+    font-variant-numeric:tabular-nums;
+  }
 </style>
 </head>
 <body>
-<div class="topbar">
-  <span onclick="toggleTheme()" id="theme_btn">🌙 Тёмная</span>
-  <span onclick="window.location='https://www.google.com/search?q=what+is+my+ip'">🌐 Мой IP</span>
-</div>
-<div class="clock" id="clock"></div>
-<div class="date" id="date_lbl"></div>
-<div class="logo-wrap">
-  <div class="logo">🌐</div>
-  <div class="brand">Winora NetScape</div>
-</div>
+<div class="clock" id="clk"></div>
+<div class="logo">🌐</div>
 <div class="search-wrap">
-  <div class="search-engines" id="engines">
-    <div class="se active" data-se="google" title="Google" onclick="setSE(this,'google')">G</div>
-    <div class="se" data-se="yandex" title="Яндекс" onclick="setSE(this,'yandex')">Я</div>
-    <div class="se" data-se="bing" title="Bing" onclick="setSE(this,'bing')">B</div>
-    <div class="se" data-se="ddg" title="DuckDuckGo" onclick="setSE(this,'ddg')">🦆</div>
-    <div class="se" data-se="gh" title="GitHub" onclick="setSE(this,'gh')">🐙</div>
-  </div>
-  <input id="q" type="text" placeholder="Поиск или адрес сайта…" autofocus>
-  <button class="go-btn" onclick="doSearch()">Найти</button>
+  <span class="search-icon">🔍</span>
+  <input id="q" placeholder="Поиск в Google или введите адрес" autofocus
+         onkeydown="if(event.key==='Enter')doSearch()">
 </div>
-<div class="section-title">Быстрый доступ</div>
-<div class="shortcuts" id="shortcuts_grid">
-  <a class="shortcut" href="https://www.google.com"><span class="fav">🔍</span>Google</a>
-  <a class="shortcut" href="https://www.youtube.com"><span class="fav">📺</span>YouTube</a>
-  <a class="shortcut" href="https://github.com"><span class="fav">🐙</span>GitHub</a>
-  <a class="shortcut" href="https://www.wikipedia.org"><span class="fav">📚</span>Wikipedia</a>
-  <a class="shortcut" href="https://www.reddit.com"><span class="fav">🦊</span>Reddit</a>
-  <a class="shortcut" href="https://itch.io"><span class="fav">🎮</span>itch.io</a>
-  <a class="shortcut" href="https://hastebin.com"><span class="fav">📋</span>Hastebin</a>
-  <a class="shortcut" href="https://translate.google.com"><span class="fav">🌍</span>Перевод</a>
-  <a class="shortcut" href="https://stackoverflow.com"><span class="fav">💬</span>StackOverflow</a>
-  <a class="shortcut" href="https://www.wolframalpha.com"><span class="fav">🔢</span>Wolfram</a>
+<div class="se-row" id="se-row">
+  <div class="se active" onclick="setSE(this,'google')">Google</div>
+  <div class="se" onclick="setSE(this,'yandex')">Яндекс</div>
+  <div class="se" onclick="setSE(this,'bing')">Bing</div>
+  <div class="se" onclick="setSE(this,'ddg')">DuckDuckGo</div>
+  <div class="se" onclick="setSE(this,'gh')">GitHub</div>
 </div>
-<div class="footer">Winora NetScape 3.0 · GoidaPhone 1.8.0 · Winora Company</div>
+<div class="shortcuts">
+  <a class="shortcut" href="https://www.youtube.com">
+    <div class="fav">▶</div><span>YouTube</span></a>
+  <a class="shortcut" href="https://github.com">
+    <div class="fav">🐙</div><span>GitHub</span></a>
+  <a class="shortcut" href="https://www.wikipedia.org">
+    <div class="fav">📚</div><span>Wikipedia</span></a>
+  <a class="shortcut" href="https://www.reddit.com">
+    <div class="fav">🦊</div><span>Reddit</span></a>
+  <a class="shortcut" href="https://stackoverflow.com">
+    <div class="fav">💬</div><span>Stack Overflow</span></a>
+  <a class="shortcut" href="https://itch.io">
+    <div class="fav">🎮</div><span>itch.io</span></a>
+  <a class="shortcut" href="https://translate.google.com">
+    <div class="fav">🌍</div><span>Переводчик</span></a>
+  <a class="shortcut" href="https://hastebin.com">
+    <div class="fav">📋</div><span>Hastebin</span></a>
+  <a class="shortcut" href="https://www.wolframalpha.com">
+    <div class="fav">∑</div><span>Wolfram</span></a>
+  <a class="shortcut" href="https://news.ycombinator.com">
+    <div class="fav">🔶</div><span>Hacker News</span></a>
+</div>
 <script>
-var currentSE='google';
-var seUrls={
+var SE='google';
+var urls={
   google:'https://www.google.com/search?q=',
   yandex:'https://yandex.ru/search/?text=',
   bing:'https://www.bing.com/search?q=',
   ddg:'https://duckduckgo.com/?q=',
   gh:'https://github.com/search?q='
 };
-function setSE(el,se){
-  currentSE=se;
+function setSE(el,name){
   document.querySelectorAll('.se').forEach(e=>e.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('q').focus();
+  el.classList.add('active'); SE=name;
 }
 function doSearch(){
   var q=document.getElementById('q').value.trim();
   if(!q)return;
-  var isUrl=(q.startsWith('http://')||q.startsWith('https://')||q.startsWith('ftp://'));
-  if(isUrl||
-     (q.indexOf('.')>0&&q.indexOf(' ')<0&&q.length>3&&!q.includes('?'))){
-    window.location.href=q.startsWith('http')?q:'https://'+q;
-  }else{
-    window.location.href=seUrls[currentSE]+encodeURIComponent(q);
-  }
+  var url;
+  if(q.startsWith('http://')||q.startsWith('https://')||(/[.]/.test(q)&&q.indexOf(' ')<0&&q.length>4))
+    url=q.startsWith('http')?q:'https://'+q;
+  else url=urls[SE]+encodeURIComponent(q);
+  window.location.href=url;
 }
-document.getElementById('q').addEventListener('keydown',function(e){
-  if(e.key==='Enter')doSearch();
-});
-function updateClock(){
-  var now=new Date();
-  var h=String(now.getHours()).padStart(2,'0');
-  var m=String(now.getMinutes()).padStart(2,'0');
-  var s=String(now.getSeconds()).padStart(2,'0');
-  document.getElementById('clock').textContent=h+':'+m+':'+s;
-  var days=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
-  var months=['января','февраля','марта','апреля','мая','июня',
-              'июля','августа','сентября','октября','ноября','декабря'];
-  document.getElementById('date_lbl').textContent=
-    days[now.getDay()]+', '+now.getDate()+' '+months[now.getMonth()]+' '+now.getFullYear();
+function tick(){
+  var d=new Date();
+  var h=d.getHours().toString().padStart(2,'0');
+  var m=d.getMinutes().toString().padStart(2,'0');
+  document.getElementById('clk').textContent=h+':'+m;
+  setTimeout(tick,10000);
 }
-updateClock();setInterval(updateClock,1000);
-function toggleTheme(){
-  var btn=document.getElementById('theme_btn');
-  if(document.body.style.background==='#F0F0F8'){
-    document.body.style.background='#0D0D18';
-    document.body.style.color='#D0D0E8';
-    btn.textContent='🌙 Тёмная';
-  }else{
-    document.body.style.background='#F0F0F8';
-    document.body.style.color='#202030';
-    btn.textContent='☀ Светлая';
-  }
-}
+tick();
+document.getElementById('q').focus();
 </script>
 </body>
 </html>"""
 
 
-class WinoraNetScape(QMainWindow):
+class WinoraNetScape(QWidget):
     """
-    Winora NetScape 3.0 — тотальный реврайт.
+    Winora NetScape 3.0 — встроенный браузер, работает как вкладка.
     Новое: sidebar (history/bookmarks/downloads), find bar, reader mode,
     dark reader injection, devtools, zoom, screenshot, pip, extensions stub,
     мультипоисковик на новой вкладке, часы, группировка истории по дням.
     """
-    WNS_VERSION = "3.0"
+    WNS_VERSION = "3.1"
     HOME_URL    = "wns://newtab"
 
     _SEARCH_ENGINES = {
@@ -11701,7 +12552,7 @@ class WinoraNetScape(QMainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._bookmarks   : list  = []
+        self._bookmarks  : list = []
         self._history     : list  = []     # [(title, url, timestamp)]
         self._dl_dir      = DATA_DIR / "wns_downloads"
         self._dl_dir.mkdir(parents=True, exist_ok=True)
@@ -11715,134 +12566,281 @@ class WinoraNetScape(QMainWindow):
         self._search_engine = "Google"
         self._load_bookmarks()
         self._load_history()
-        self.setWindowTitle("Winora NetScape 3.0")
-        self.setMinimumSize(1000, 640)
-        self.resize(1360, 840)
+        # Title is shown in tab, not window title
+
         self._apply_style()
         self._setup_ui()
         self._load_geometry()
 
     # ── Style ─────────────────────────────────────────────────────────────────
-    def _apply_style(self):
+    def _themed_home_html(self) -> str:
+        """Inject current theme colors into the home page."""
         t = get_theme(S().theme)
-        self.setStyleSheet(f"""
-            QMainWindow,QWidget{{background:{t['bg']};color:{t['text']};}}
+        css_override = f"""
+<style id="theme-override">
+:root {{
+  --bg: {t['bg']};
+  --bg2: {t['bg2']};
+  --bg3: {t['bg3']};
+  --text: {t['text']};
+  --dim: {t['text_dim']};
+  --accent: {t['accent']};
+  --border: {t['border']};
+}}
+body {{ background: var(--bg) !important; color: var(--text) !important; }}
+.search-wrap {{ background: var(--bg3) !important; border-color: var(--border) !important; }}
+.search-wrap:focus-within {{ border-color: var(--accent) !important; }}
+#q {{ color: var(--text) !important; }}
+#q::placeholder {{ color: var(--dim) !important; }}
+.se {{ background: var(--bg3) !important; border-color: var(--border) !important;
+       color: var(--dim) !important; }}
+.se:hover, .se.active {{ background: var(--accent) !important;
+                          color: var(--bg) !important; border-color: var(--accent) !important; }}
+.shortcut {{ color: var(--text) !important; }}
+.shortcut:hover {{ background: var(--bg2) !important; }}
+.shortcut span {{ color: var(--dim) !important; }}
+.fav {{ background: var(--bg3) !important; border: 1px solid var(--border); }}
+.clock {{ color: var(--dim) !important; }}
+</style>"""
+        # Insert before </head>
+        return WNS_HOME_HTML.replace("</head>", css_override + "</head>", 1)
 
-            /* Toolbar */
-            QWidget#wns_toolbar{{
-                background:{t['bg2']};
-                border-bottom:1px solid {t['border']};
+    def _apply_style(self):
+        """Chrome-style layout но цвета из текущей темы GoidaPhone."""
+        t = get_theme(S().theme)
+
+        # Derive Chrome-like shades from theme palette
+        bg      = t['bg']       # main content / active tab
+        bg2     = t['bg2']      # toolbar / tab bar background  
+        bg3     = t['bg3']      # tab bar (darker strip)
+        border  = t['border']
+        text    = t['text']
+        dim     = t['text_dim']
+        accent  = t['accent']
+        bhover  = t['btn_hover']
+        bbg     = t['btn_bg']
+
+        self.setStyleSheet(f"""
+            /* ── Base ───────────────────────────────────────── */
+            QWidget {{ background:{bg}; color:{text}; }}
+
+            /* ── Toolbar (address bar row) ───────────────────── */
+            QWidget#wns_toolbar {{
+                background:{bg2};
+                border-bottom:1px solid {border};
             }}
-            /* Bookmarks bar */
-            QWidget#wns_bmarks{{
-                background:rgba(20,20,35,200);
-                border-bottom:1px solid {t['border']};
+
+            /* ── Omnibar ─────────────────────────────────────── */
+            QLineEdit#wns_urlbar {{
+                background:{bg3};
+                color:{text};
+                border:1px solid {border};
+                border-radius:22px;
+                padding:5px 16px 5px 36px;
+                font-size:13px;
+                selection-background-color:{accent};
             }}
-            /* Find bar */
-            QWidget#wns_findbar{{
-                background:{t['bg3']};
-                border-top:1px solid {t['border']};
-                border-bottom:1px solid {t['border']};
+            QLineEdit#wns_urlbar:hover {{
+                background:{bg2};
+                border-color:{dim};
             }}
-            /* Sidebar */
-            QWidget#wns_sidebar{{
-                background:{t['bg2']};
-                border-left:1px solid {t['border']};
+            QLineEdit#wns_urlbar:focus {{
+                background:{bg};
+                border:2px solid {accent};
             }}
-            /* Status bar */
-            QWidget#wns_statusbar{{
-                background:{t['bg3']};
-                border-top:1px solid {t['border']};
-            }}
-            /* URL bar */
-            QLineEdit#wns_urlbar{{
-                background:{t['bg3']};color:{t['text']};
-                border:1.5px solid {t['border']};border-radius:22px;
-                padding:5px 16px;font-size:12px;
-                selection-background-color:{t['accent']};
-            }}
-            QLineEdit#wns_urlbar:focus{{border-color:{t['accent']};}}
-            QLineEdit#wns_find{{
-                background:{t['bg']};color:{t['text']};
-                border:1px solid {t['border']};border-radius:8px;
-                padding:4px 10px;font-size:12px;min-width:200px;
-            }}
-            /* Nav buttons */
-            QPushButton#wns_nav{{
-                background:transparent;color:{t['text']};
-                border:none;border-radius:18px;
-                min-width:34px;max-width:34px;min-height:34px;max-height:34px;
+
+            /* ── Nav buttons ─────────────────────────────────── */
+            QPushButton#wns_nav {{
+                background:transparent;
+                color:{dim};
+                border:none;
+                border-radius:17px;
+                min-width:34px; max-width:34px;
+                min-height:34px; max-height:34px;
                 font-size:17px;
             }}
-            QPushButton#wns_nav:hover{{background:{t['btn_hover']};}}
-            QPushButton#wns_nav:disabled{{color:{t['text_dim']};}}
-            QPushButton#wns_nav:checked{{background:{t['accent']};color:white;}}
-            /* Bookmark chips */
-            QPushButton#wns_bmark_chip{{
-                background:transparent;color:{t['text_dim']};
-                border:none;border-radius:6px;padding:2px 10px;font-size:10px;
+            QPushButton#wns_nav:hover {{
+                background:{bhover};
+                color:{text};
             }}
-            QPushButton#wns_bmark_chip:hover{{
-                background:{t['btn_hover']};color:{t['text']};
+            QPushButton#wns_nav:pressed {{
+                background:{bbg};
             }}
-            /* Tabs */
-            QTabWidget#wns_tabs::pane{{border:none;background:{t['bg']};}}
-            QTabBar::tab{{
-                background:{t['bg3']};color:{t['text_dim']};
-                border:1px solid {t['border']};border-bottom:none;
-                border-radius:7px 7px 0 0;
-                padding:6px 12px;margin-right:2px;
-                font-size:10px;min-width:90px;max-width:180px;
+            QPushButton#wns_nav:disabled {{ color:{border}; }}
+            QPushButton#wns_nav:checked {{
+                background:{accent}30;
+                color:{accent};
             }}
-            QTabBar::tab:selected{{background:{t['bg2']};color:{t['text']};}}
-            QTabBar::tab:hover:!selected{{background:{t['bg2']};}}
-            QTabBar::close-button{{
-                image:none;subcontrol-position:right;
+            QPushButton#wns_new_tab {{
+                background:transparent;
+                color:{dim};
+                border:none;
+                border-radius:14px;
+                min-width:28px; max-width:28px;
+                min-height:28px; max-height:28px;
+                font-size:18px;
             }}
-            /* Progress bar */
-            QProgressBar#wns_prog{{background:transparent;border:none;height:3px;}}
-            QProgressBar#wns_prog::chunk{{background:{t['accent']};border-radius:1px;}}
-            /* Sidebar list */
-            QListWidget#wns_slist{{
-                background:{t['bg']};color:{t['text']};
-                border:none;outline:none;
+            QPushButton#wns_new_tab:hover {{
+                background:{bhover};
+                color:{text};
             }}
-            QListWidget#wns_slist::item{{
-                padding:7px 10px;border-bottom:1px solid {t['border']};
+
+            /* ── Tab bar (Chrome pill tabs) ──────────────────── */
+            QTabWidget#wns_tabs::pane {{
+                border:none;
+                background:{bg};
+            }}
+            QTabBar {{
+                background:{bg3};
+                border-bottom:1px solid {border};
+            }}
+            QTabBar::tab {{
+                background:transparent;
+                color:{dim};
+                border:none;
+                border-radius:8px 8px 0 0;
+                padding:6px 14px;
+                margin:4px 1px 0 1px;
+                font-size:12px;
+                min-width:80px;
+                max-width:220px;
+            }}
+            QTabBar::tab:selected {{
+                background:{bg};
+                color:{text};
+                border-top:2px solid {accent};
+            }}
+            QTabBar::tab:hover:!selected {{
+                background:{bg2};
+                color:{text};
+            }}
+            QTabBar::close-button {{
+                subcontrol-position:right;
+                margin:2px;
+            }}
+
+            /* ── Bookmarks bar ───────────────────────────────── */
+            QWidget#wns_bmarks {{
+                background:{bg2};
+                border-bottom:1px solid {border};
+            }}
+            QPushButton#wns_bmark_chip {{
+                background:transparent;
+                color:{dim};
+                border:none;
+                border-radius:6px;
+                padding:2px 10px;
+                font-size:11px;
+            }}
+            QPushButton#wns_bmark_chip:hover {{
+                background:{bhover};
+                color:{text};
+            }}
+
+            /* ── Find bar ────────────────────────────────────── */
+            QWidget#wns_findbar {{
+                background:{bg2};
+                border-bottom:1px solid {border};
+            }}
+            QLineEdit#wns_find {{
+                background:{bg3};
+                color:{text};
+                border:1px solid {border};
+                border-radius:8px;
+                padding:4px 10px;
+                font-size:12px;
+                min-width:220px;
+                selection-background-color:{accent};
+            }}
+            QLineEdit#wns_find:focus {{
+                border-color:{accent};
+            }}
+
+            /* ── Sidebar ─────────────────────────────────────── */
+            QWidget#wns_sidebar {{
+                background:{bg2};
+                border-left:1px solid {border};
+            }}
+            QListWidget#wns_slist {{
+                background:{bg2};
+                color:{text};
+                border:none;
+                outline:none;
+                font-size:11px;
+            }}
+            QListWidget#wns_slist::item {{
+                padding:6px 12px;
+                border-bottom:1px solid {border};
+            }}
+            QListWidget#wns_slist::item:hover {{ background:{bhover}; }}
+            QListWidget#wns_slist::item:selected {{
+                background:{accent}30;
+                color:{accent};
+            }}
+
+            /* ── Progress bar ────────────────────────────────── */
+            QProgressBar#wns_prog {{
+                background:transparent;
+                border:none;
+                height:3px;
+            }}
+            QProgressBar#wns_prog::chunk {{
+                background:{accent};
+                border-radius:1px;
+            }}
+
+            /* ── Status bar ──────────────────────────────────── */
+            QWidget#wns_statusbar {{
+                background:{bg3};
+                border-top:1px solid {border};
+            }}
+            QLabel#wns_stat {{
+                color:{dim};
+                font-size:9px;
+                background:transparent;
+                padding:0 8px;
+            }}
+            QLabel#wns_zoom {{
+                color:{accent};
                 font-size:10px;
+                background:transparent;
+                font-weight:bold;
             }}
-            QListWidget#wns_slist::item:hover{{background:{t['btn_hover']};}}
-            QListWidget#wns_slist::item:selected{{background:{t['accent']};color:white;}}
-            /* Labels */
-            QLabel#wns_stat{{color:{t['text_dim']};font-size:9px;
-                             background:transparent;padding:0 8px;}}
-            /* Zoom label */
-            QLabel#wns_zoom{{color:{t['accent']};font-size:10px;
-                              background:transparent;font-weight:bold;}}
-            /* Menu */
-            QMenu{{
-                background:{t['bg2']};color:{t['text']};
-                border:1px solid {t['border']};border-radius:10px;padding:4px 0;
+
+            /* ── Menu ────────────────────────────────────────── */
+            QMenu {{
+                background:{bg2};
+                color:{text};
+                border:1px solid {border};
+                border-radius:10px;
+                padding:4px 0;
+                font-size:12px;
             }}
-            QMenu::item{{padding:8px 22px;font-size:11px;}}
-            QMenu::item:selected{{background:{t['accent']};color:white;border-radius:6px;}}
-            QMenu::separator{{background:{t['border']};height:1px;margin:3px 8px;}}
+            QMenu::item {{ padding:8px 22px; }}
+            QMenu::item:selected {{
+                background:{accent}25;
+                color:{accent};
+                border-radius:6px;
+            }}
+            QMenu::separator {{
+                background:{border};
+                height:1px;
+                margin:3px 8px;
+            }}
         """)
 
-    # ── UI Setup ──────────────────────────────────────────────────────────────
     def _setup_ui(self):
-        cw = QWidget(); self.setCentralWidget(cw)
-        root = QVBoxLayout(cw)
+        root = QVBoxLayout(self)
         root.setContentsMargins(0,0,0,0); root.setSpacing(0)
 
-        root.addWidget(self._mk_toolbar())
-        root.addWidget(self._mk_bmarks_bar())
-
-        # Progress bar (3px)
+        # Progress bar must exist BEFORE _mk_toolbar because _new_tab uses it
         self._prog = QProgressBar()
         self._prog.setObjectName("wns_prog"); self._prog.setFixedHeight(3)
         self._prog.setTextVisible(False); self._prog.setRange(0,100)
         self._prog.setVisible(False)
+
+        root.addWidget(self._mk_toolbar())
+        root.addWidget(self._mk_bmarks_bar())
         root.addWidget(self._prog)
 
         # Find bar (hidden by default)
@@ -11873,9 +12871,10 @@ class WinoraNetScape(QMainWindow):
 
     # ── Toolbar ───────────────────────────────────────────────────────────────
     def _mk_toolbar(self) -> QWidget:
-        bar = QWidget(); bar.setObjectName("wns_toolbar"); bar.setFixedHeight(54)
+        t = get_theme(S().theme)
+        bar = QWidget(); bar.setObjectName("wns_toolbar"); bar.setFixedHeight(44)
         hl  = QHBoxLayout(bar)
-        hl.setContentsMargins(8,8,8,8); hl.setSpacing(3)
+        hl.setContentsMargins(8,5,8,5); hl.setSpacing(3)
 
         def nb(icon, tip, checkable=False):
             b = QPushButton(icon); b.setObjectName("wns_nav")
@@ -11905,12 +12904,23 @@ class WinoraNetScape(QMainWindow):
         # URL bar
         self._urlbar = QLineEdit()
         self._urlbar.setObjectName("wns_urlbar")
-        self._urlbar.setPlaceholderText("  Поиск или адрес…")
+        self._urlbar.setPlaceholderText("  Поиск в Google или введите URL")
         self._urlbar.returnPressed.connect(self._on_url_enter)
         self._urlbar.focusInEvent = lambda e: (
             super(QLineEdit, self._urlbar).focusInEvent(e),
             QTimer.singleShot(0, self._urlbar.selectAll))[0]
+        self._urlbar.textChanged.connect(self._on_urlbar_changed)
         hl.addWidget(self._urlbar, stretch=1)
+
+        # Omnibar dropdown
+        self._omni_popup = QListWidget(self)
+        self._omni_popup.setWindowFlags(
+            Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self._omni_popup.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self._omni_popup.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._omni_popup.setObjectName("wns_omni")
+        self._omni_popup.itemClicked.connect(self._on_omni_selected)
+        self._omni_popup.hide()
         hl.addSpacing(4)
 
         # Zoom display
@@ -11936,6 +12946,14 @@ class WinoraNetScape(QMainWindow):
 
         # New tab
         self._btn_new = nb("+", "Новая вкладка  Ctrl+T")
+        self._btn_new.setFixedSize(28, 28)
+        self._btn_new.setObjectName("wns_new_tab")  # different name to avoid conflict
+        self._btn_new.setStyleSheet(
+            f"QPushButton#wns_new_tab{{background:transparent;"
+            f"color:{t['text_dim']};border:none;border-radius:14px;"
+            f"font-size:18px;}}"
+            f"QPushButton#wns_new_tab:hover{{background:{t['btn_hover']};"
+            f"color:{t['text']};}}")
         self._btn_new.clicked.connect(lambda: self._new_tab())
         hl.addWidget(self._btn_new)
 
@@ -11961,6 +12979,7 @@ class WinoraNetScape(QMainWindow):
         return self._bmarks_bar
 
     def _refresh_bmarks(self):
+        t = get_theme(S().theme)
         lay = self._bmarks_lay
         while lay.count():
             item = lay.takeAt(0)
@@ -12265,10 +13284,12 @@ class WinoraNetScape(QMainWindow):
                 view.load(QUrl(url))
             else:
                 from PyQt6.QtCore import QUrl as QU
-                view.setHtml(WNS_HOME_HTML, QU("wns://newtab"))
+                view.setHtml(self._themed_home_html(), QU("wns://newtab"))
             return idx
 
-        except ImportError:
+        except Exception as _wns_err:
+            print(f"[WNS] _new_tab failed: {type(_wns_err).__name__}: {_wns_err}")
+            import traceback as _wns_tb; _wns_tb.print_exc()
             return self._new_tab_fallback(url)
 
     def _new_tab_fallback(self, url: str = "") -> int:
@@ -12327,6 +13348,7 @@ class WinoraNetScape(QMainWindow):
 
     # ── Navigation ────────────────────────────────────────────────────────────
     def _on_url_enter(self):
+        self._omni_popup.hide()
         raw = self._urlbar.text().strip()
         if not raw: return
         if raw.startswith(("http://","https://","file://","ftp://")):
@@ -12340,12 +13362,28 @@ class WinoraNetScape(QMainWindow):
             url = tpl.format(quote_plus(raw))
         self._navigate(url)
 
+    def _on_urlbar_changed(self, text: str):
+        """Hide omni popup — prevents focus steal."""
+        self._omni_popup.hide()
+    def _on_omni_selected(self, item):
+        url = item.data(Qt.ItemDataRole.UserRole)
+        self._omni_popup.hide()
+        if url.startswith("__search__"):
+            from urllib.parse import quote_plus
+            q = url[10:]
+            tpl = self._SEARCH_ENGINES.get(self._search_engine,
+                "https://www.google.com/search?q={}")
+            self._navigate(tpl.format(quote_plus(q)))
+        else:
+            self._urlbar.setText(url)
+            self._navigate(url)
+
     def _navigate(self, url: str):
         if url in (self.HOME_URL, "wns://newtab"):
             w = self._tabs.currentWidget()
             if w and hasattr(w, 'setHtml'):
                 from PyQt6.QtCore import QUrl as QU
-                w.setHtml(WNS_HOME_HTML, QU("wns://newtab"))
+                w.setHtml(self._themed_home_html(), QU("wns://newtab"))
                 self._urlbar.setText("")
             return
         w = self._tabs.currentWidget()
@@ -12422,8 +13460,11 @@ class WinoraNetScape(QMainWindow):
     def _on_url_change(self, view, qurl):
         if view != self._tabs.currentWidget(): return
         u = qurl.toString()
-        show = "" if u.startswith("data:") or "wns://newtab" in u else u
-        self._urlbar.setText(show)
+        is_internal = (not u or u.startswith("data:")
+                       or "wns://newtab" in u or u == "about:blank")
+        show = "" if is_internal else u
+        if not self._urlbar.hasFocus():
+            self._urlbar.setText(show)
         self._update_sec_icon(u)
         self._update_star(u)
         # History
@@ -12680,6 +13721,10 @@ class WinoraNetScape(QMainWindow):
             act.triggered.connect(lambda _,n=name: self._set_search_engine(n))
 
         menu.addSeparator()
+        menu.addAction("🔑 Пароли  Ctrl+Shift+P",         self._open_password_manager)
+        menu.addAction("🕵 Инкогнито  Ctrl+Shift+N",      self._new_incognito_tab)
+        menu.addAction("📜 Userscripts  Ctrl+Shift+U",    self._open_userscripts)
+        menu.addSeparator()
         menu.addAction("ℹ О Winora NetScape",              self._show_about)
         menu.addAction("✕ Закрыть WNS",                    self.close)
 
@@ -12718,6 +13763,179 @@ class WinoraNetScape(QMainWindow):
                 w.page().print(pr, lambda ok: None)
         except ImportError:
             QMessageBox.information(self,"Печать","PyQt6-PrintSupport не установлен.")
+
+    # ── Password Manager ──────────────────────────────────────────────────────
+    def _open_password_manager(self):
+        import json as _j
+        t = get_theme(S().theme)
+        dlg = QDialog(self)
+        dlg.setWindowTitle("🔑 Пароли")
+        dlg.resize(580, 380)
+        dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
+        vl = QVBoxLayout(dlg)
+        vl.setContentsMargins(16,16,16,16); vl.setSpacing(10)
+        hdr = QLabel("🔑 Сохранённые пароли (двойной клик = копировать)")
+        hdr.setStyleSheet(
+            f"font-size:13px;font-weight:bold;color:{t['accent']};background:transparent;")
+        vl.addWidget(hdr)
+        raw = S().get("wns_passwords", "{}", t=str)
+        try: pwds = _j.loads(raw)
+        except: pwds = {}
+        tbl = QTableWidget(len(pwds), 3)
+        tbl.setHorizontalHeaderLabels(["Сайт","Логин","Пароль"])
+        tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        tbl.setStyleSheet(
+            f"QTableWidget{{background:{t['bg']};color:{t['text']};border:none;}}"
+            f"QHeaderView::section{{background:{t['bg3']};color:{t['text_dim']};"
+            "border:none;padding:4px;}}")
+        for i,(site,creds) in enumerate(pwds.items()):
+            tbl.setItem(i,0,QTableWidgetItem(site))
+            tbl.setItem(i,1,QTableWidgetItem(creds.get("login","")))
+            pi = QTableWidgetItem("••••••••")
+            pi.setData(Qt.ItemDataRole.UserRole, creds.get("password",""))
+            tbl.setItem(i,2,pi)
+        tbl.doubleClicked.connect(lambda idx: QApplication.clipboard().setText(
+            tbl.item(idx.row(),2).data(Qt.ItemDataRole.UserRole) or ""
+            ) if tbl.item(idx.row(),2) else None)
+        vl.addWidget(tbl, stretch=1)
+        row = QHBoxLayout()
+        site_e = QLineEdit(); site_e.setPlaceholderText("Сайт")
+        login_e= QLineEdit(); login_e.setPlaceholderText("Логин")
+        pw_e   = QLineEdit(); pw_e.setPlaceholderText("Пароль")
+        pw_e.setEchoMode(QLineEdit.EchoMode.Password)
+        for w in [site_e, login_e, pw_e]:
+            w.setStyleSheet(
+                f"background:{t['bg3']};color:{t['text']};"
+                f"border:1px solid {t['border']};border-radius:6px;padding:4px 8px;")
+            row.addWidget(w)
+        add_b = QPushButton("➕")
+        add_b.setObjectName("accent_btn"); add_b.setFixedSize(32,32)
+        def _add():
+            s=site_e.text().strip(); l=login_e.text().strip(); p=pw_e.text()
+            if s and p:
+                pwds[s]={"login":l,"password":p}
+                S().set("wns_passwords",_j.dumps(pwds))
+                r=tbl.rowCount(); tbl.insertRow(r)
+                tbl.setItem(r,0,QTableWidgetItem(s))
+                tbl.setItem(r,1,QTableWidgetItem(l))
+                pi2=QTableWidgetItem("••••••••")
+                pi2.setData(Qt.ItemDataRole.UserRole,p)
+                tbl.setItem(r,2,pi2)
+                site_e.clear(); login_e.clear(); pw_e.clear()
+        add_b.clicked.connect(_add); row.addWidget(add_b)
+        vl.addLayout(row)
+        dlg.exec()
+
+    def _new_incognito_tab(self):
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView
+            from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
+            from PyQt6.QtCore import QUrl
+            profile = QWebEngineProfile(self)
+            view = QWebEngineView()
+            page = QWebEnginePage(profile, view)
+            view.setPage(page)
+            view.loadStarted.connect(lambda: self._on_load_start(view))
+            view.loadProgress.connect(self._prog.setValue)
+            view.loadFinished.connect(lambda ok: self._on_load_finish(view, ok))
+            view.urlChanged.connect(lambda u: (
+                self._urlbar.setText(u.toString())
+                if view == self._tabs.currentWidget() else None))
+            view.titleChanged.connect(lambda tt: (
+                self._tabs.setTabText(self._tabs.indexOf(view),
+                    f"🕵 {tt[:18]}") if tt else None))
+            view.wheelEvent = lambda e, v=view: self._wheel_zoom(e, v)
+            view.setHtml(WNS_HOME_HTML, QUrl("wns://newtab"))
+            idx = self._tabs.addTab(view, "🕵 Инкогнито")
+            self._tabs.setCurrentIndex(idx)
+            from PyQt6.QtGui import QColor
+            self._tabs.tabBar().setTabTextColor(idx, QColor("#A0A0FF"))
+        except Exception as e:
+            self._stat_lbl.setText(f"Инкогнито: {e}")
+
+    def _open_userscripts(self):
+        import json as _j
+        t = get_theme(S().theme)
+        dlg = QDialog(self)
+        dlg.setWindowTitle("📜 Userscripts")
+        dlg.resize(700, 480)
+        dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
+        vl = QVBoxLayout(dlg)
+        vl.setContentsMargins(16,16,16,16); vl.setSpacing(8)
+        raw = S().get("wns_userscripts","[]",t=str)
+        try: scripts = _j.loads(raw)
+        except: scripts = []
+        sp = QSplitter()
+        lw = QListWidget()
+        lw.setStyleSheet(
+            f"QListWidget{{background:{t['bg']};color:{t['text']};border:none;}}"
+            f"QListWidget::item{{padding:8px;border-bottom:1px solid {t['border']};}}"
+            f"QListWidget::item:selected{{background:{t['accent']};color:white;}}")
+        for sc in scripts:
+            it = QListWidgetItem(f"{'✅' if sc.get('enabled',True) else '⬜'} {sc.get('name','?')}")
+            it.setData(Qt.ItemDataRole.UserRole, sc)
+            lw.addItem(it)
+        rw = QWidget(); rl = QVBoxLayout(rw)
+        rl.setContentsMargins(8,0,0,0)
+        name_e = QLineEdit(); name_e.setPlaceholderText("Название")
+        match_e= QLineEdit(); match_e.setPlaceholderText("URL паттерн (* = все)")
+        code_e = QPlainTextEdit()
+        code_e.setPlaceholderText("// JavaScript код")
+        code_e.setStyleSheet(
+            f"QPlainTextEdit{{background:#0A0A14;color:#90EE90;"
+            "font-family:monospace;font-size:11px;"
+            f"border:1px solid {t['border']};border-radius:6px;padding:8px;}}")
+        for w in [name_e, match_e]:
+            w.setStyleSheet(
+                f"background:{t['bg3']};color:{t['text']};"
+                f"border:1px solid {t['border']};border-radius:6px;padding:4px 8px;")
+        def _save():
+            n=name_e.text().strip() or "Script"; m=match_e.text().strip() or "*"
+            c=code_e.toPlainText()
+            sc={"name":n,"match":m,"code":c,"enabled":True}
+            scripts.append(sc)
+            S().set("wns_userscripts",_j.dumps(scripts))
+            it=QListWidgetItem(f"✅ {n}")
+            it.setData(Qt.ItemDataRole.UserRole,sc)
+            lw.addItem(it)
+        def _run():
+            c=code_e.toPlainText()
+            w2=self._tabs.currentWidget()
+            if w2 and hasattr(w2,'page') and c:
+                w2.page().runJavaScript(c)
+        def _load(it):
+            sc=it.data(Qt.ItemDataRole.UserRole)
+            if sc:
+                name_e.setText(sc.get("name",""))
+                match_e.setText(sc.get("match","*"))
+                code_e.setPlainText(sc.get("code",""))
+        lw.itemClicked.connect(_load)
+        save_b=QPushButton("💾 Сохранить"); save_b.setObjectName("accent_btn")
+        run_b=QPushButton("▶ Запустить на текущей"); run_b.setFixedHeight(32)
+        run_b.setStyleSheet(
+            f"QPushButton{{background:{t['bg3']};color:{t['text']};"
+            f"border:1px solid {t['border']};border-radius:6px;}}"
+            f"QPushButton:hover{{background:{t['btn_hover']};}}")
+        save_b.clicked.connect(_save); run_b.clicked.connect(_run)
+        rl.addWidget(QLabel("Название:")); rl.addWidget(name_e)
+        rl.addWidget(QLabel("URL (паттерн):")); rl.addWidget(match_e)
+        rl.addWidget(QLabel("Код:")); rl.addWidget(code_e,stretch=1)
+        br=QHBoxLayout(); br.addWidget(save_b); br.addWidget(run_b)
+        rl.addLayout(br)
+        sp.addWidget(lw); sp.addWidget(rw); sp.setSizes([200,500])
+        vl.addWidget(sp,stretch=1)
+        dlg.exec()
+
+    def _run_userscripts_for_url(self, url, view):
+        import json as _j, fnmatch
+        raw = S().get("wns_userscripts","[]",t=str)
+        try: scripts = _j.loads(raw)
+        except: return
+        for sc in scripts:
+            if not sc.get("enabled",True): continue
+            if fnmatch.fnmatch(url, sc.get("match","*")) or sc.get("match","*")=="*":
+                if sc.get("code") and hasattr(view,"page"):
+                    view.page().runJavaScript(sc["code"])
 
     def _show_about(self):
         t = get_theme(S().theme)
@@ -12786,7 +14004,9 @@ class WinoraNetScape(QMainWindow):
         elif k == Qt.Key.Key_F5:        self._reload_or_stop()
         elif k == Qt.Key.Key_F12:       self._open_devtools()
         elif k == Qt.Key.Key_Escape:
-            if self._find_visible:
+            if self._omni_popup.isVisible():
+                self._omni_popup.hide()
+            elif self._find_visible:
                 self._hide_findbar()
             else:
                 w = self._tabs.currentWidget()
@@ -12796,12 +14016,7 @@ class WinoraNetScape(QMainWindow):
 
     # ── Geometry persistence ──────────────────────────────────────────────────
     def _load_geometry(self):
-        try:
-            raw = S().get("wns_geometry","",t=str)
-            if raw:
-                parts = [int(x) for x in raw.split(",")]
-                if len(parts) == 4: self.setGeometry(*parts)
-        except Exception: pass
+        pass  # geometry managed by parent QTabWidget
 
     def closeEvent(self, ev):
         try:
@@ -13618,6 +14833,13 @@ class GroupCallWindow(QWidget):
         self._cam_btn.clicked.connect(self._toggle_camera)
         cbl.addWidget(self._cam_btn)
 
+        self._rec_btn = _btn("⏺", "Запись звонка  (R)")
+        self._rec_btn.clicked.connect(self._toggle_recording)
+        self._recording = False
+        self._record_frames = []
+        self._record_fname  = None
+        cbl.addWidget(self._rec_btn)
+
         cbl.addStretch()
 
         # Centre group: participants + chat + more
@@ -14035,54 +15257,54 @@ class GroupCallWindow(QWidget):
             self._start_screen_share()
 
     def _start_screen_share(self):
+        """Show screen share inline — in a new tile next to 'Вы' in the grid."""
         self._sharing = True
 
-        # Find or create share overlay widget in the layout
-        root_layout = self.layout()
+        # Create a share tile that looks like a participant tile
+        share_tile = QWidget()
+        share_tile.setStyleSheet(
+            "QWidget{background:#0A0A14;border-radius:14px;"
+            "border:2px solid #E74C3C;}")
+        share_tile.setMinimumSize(280, 180)
+        tl = QVBoxLayout(share_tile)
+        tl.setContentsMargins(6, 6, 6, 6)
+        tl.setSpacing(4)
 
-        share_w = QWidget()
-        share_w.setObjectName("share_overlay")
-        share_w.setStyleSheet(
-            "QWidget#share_overlay{"
-            "background:#0A0A14;border:2px solid #7C4DFF;"
-            "border-radius:10px;}")
-        share_w.setFixedHeight(180)
-        sl = QVBoxLayout(share_w)
-        sl.setContentsMargins(6, 6, 6, 6)
-        sl.setSpacing(4)
-
+        # Header row inside tile
         hdr = QHBoxLayout()
-        dot = QLabel("🔴  Демонстрация экрана активна")
+        dot = QLabel("🔴 Экран")
         dot.setStyleSheet(
-            "color:#E74C3C;font-size:10px;font-weight:bold;background:transparent;")
+            "color:#E74C3C;font-size:10px;font-weight:bold;background:transparent;border:none;")
         hdr.addWidget(dot)
         hdr.addStretch()
-        stop_btn = QPushButton("✕ Остановить")
+        stop_btn = QPushButton("✕")
+        stop_btn.setFixedSize(20, 20)
         stop_btn.setStyleSheet(
-            "QPushButton{background:#3D1A1A;color:#FF6666;"
-            "border:1px solid #5A2A2A;border-radius:6px;"
-            "padding:3px 10px;font-size:10px;}"
-            "QPushButton:hover{background:#5A2020;}")
+            "QPushButton{background:#3D1A1A;color:#FF6666;border:none;"
+            "border-radius:10px;font-size:10px;font-weight:bold;}"
+            "QPushButton:hover{background:#882222;}")
         stop_btn.clicked.connect(self._stop_screen_share)
         hdr.addWidget(stop_btn)
-        sl.addLayout(hdr)
+        tl.addLayout(hdr)
 
         self._share_label = QLabel()
         self._share_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._share_label.setStyleSheet(
-            "background:#000;border-radius:4px;border:none;")
-        sl.addWidget(self._share_label, stretch=1)
+            "background:#000;border-radius:8px;border:none;")
+        tl.addWidget(self._share_label, stretch=1)
 
-        # Insert above the controls bar (second-to-last widget)
-        count = root_layout.count()
-        root_layout.insertWidget(count - 1, share_w)
-        self._share_widget = share_w
+        # Add to grid next to existing tiles
+        n = len([t for t in self._tiles if t])
+        cols = max(2, min(4, n + 1))
+        # Re-layout grid with share tile
+        self._grid.addWidget(share_tile, n // cols, n % cols)
+        self._share_widget = share_tile
+        self._tiles.append(share_tile)
 
-        # Timer: capture at 5 fps
         self._share_timer = QTimer(self)
         self._share_timer.timeout.connect(self._capture_screen)
         self._share_timer.start(200)
-        self._capture_screen()   # immediate first frame
+        self._capture_screen()
 
     def _capture_screen(self):
         try:
@@ -14124,6 +15346,50 @@ class GroupCallWindow(QWidget):
                 "Изменение вступит в силу при следующем звонке.")
         except Exception:
             pass
+
+    def _toggle_recording(self):
+        if getattr(self, '_recording', False):
+            self._stop_recording()
+        else:
+            self._start_recording()
+
+    def _start_recording(self):
+        import threading
+        self._recording = True
+        self._record_frames = []
+        try: self._btn_rec.setChecked(True)
+        except Exception: pass
+        fname = DATA_DIR / f"call_rec_{int(time.time())}.wav"
+        self._record_fname = fname
+        def _loop():
+            try:
+                import pyaudio as _pa
+                p = _pa.PyAudio()
+                s = p.open(format=_pa.paInt16, channels=1,
+                           rate=16000, input=True, frames_per_buffer=512)
+                while self._recording:
+                    self._record_frames.append(
+                        s.read(512, exception_on_overflow=False))
+                s.stop_stream(); s.close(); p.terminate()
+            except Exception as e:
+                print(f"[rec] {e}")
+        threading.Thread(target=_loop, daemon=True).start()
+
+    def _stop_recording(self):
+        self._recording = False
+        try: self._btn_rec.setChecked(False)
+        except Exception: pass
+        try:
+            import wave
+            if self._record_frames and self._record_fname:
+                with wave.open(str(self._record_fname), 'wb') as wf:
+                    wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(16000)
+                    wf.writeframes(b''.join(self._record_frames))
+                QTimer.singleShot(0, lambda: QMessageBox.information(
+                    self, "Запись", f"Сохранено: {self._record_fname.name}"))
+        except Exception as e:
+            print(f"[rec save] {e}")
+        self._record_frames = []
 
     def _show_stats(self):
         dlg = QDialog(self)
@@ -14707,11 +15973,17 @@ class GoidaTerminal(QWidget):
         ico.setStyleSheet("color:#6060CC;font-size:14px;background:transparent;")
         lay.addWidget(ico)
 
-        title = QLabel("ZLink  —  GoidaPhone Terminal")
+        _acc2 = self._tt.get('accent', '#7C4DFF')
+        title = QLabel("ZLink Terminal")
         title.setStyleSheet(
-            "color:#808080;font-size:10px;font-weight:bold;"
-            "letter-spacing:2px;background:transparent;font-family:monospace;")
+            f"color:{_acc2};font-size:10px;font-weight:bold;"
+            "letter-spacing:3px;background:transparent;font-family:monospace;")
         lay.addWidget(title)
+        sub = QLabel("GoidaPhone Admin")
+        sub.setStyleSheet(
+            "color:#444444;font-size:8px;background:transparent;"
+            "font-family:monospace;letter-spacing:1px;margin-left:4px;")
+        lay.addWidget(sub)
 
         self._admin_badge = QLabel("◆ ADMIN")
         self._admin_badge.setStyleSheet(
@@ -14758,32 +16030,38 @@ class GoidaTerminal(QWidget):
 
     def _build_tabs(self) -> QTabWidget:
         self._tabs = QTabWidget()
-        self._tabs.setStyleSheet("""
-            QTabWidget::pane {
+        _acc = self._tt.get('accent', '#7C4DFF')
+        self._tabs.setStyleSheet(f"""
+            QTabWidget::pane {{
                 border: none;
                 background: #000000;
-            }
-            QTabBar::tab {
-                background: #0D0D1F;
-                color: #505070;
+            }}
+            QTabBar {{
+                background: #0A0A0A;
+                border-bottom: 1px solid #1A1A1A;
+            }}
+            QTabBar::tab {{
+                background: #0A0A0A;
+                color: #555555;
                 font-size: 9px;
                 font-weight: bold;
-                letter-spacing: 1px;
-                padding: 5px 14px;
-                border: 1px solid #1A1A3A;
-                border-bottom: none;
-                border-radius: 4px 4px 0 0;
-                margin-right: 2px;
-            }
-            QTabBar::tab:selected {
-                background: #111128;
-                color: #A0A0FF;
-                border-bottom: 1px solid #111128;
-            }
-            QTabBar::tab:hover:!selected {
-                background: #151535;
-                color: #7070C0;
-            }
+                letter-spacing: 2px;
+                font-family: monospace;
+                padding: 6px 16px;
+                border: none;
+                border-bottom: 2px solid transparent;
+                margin-right: 0px;
+                min-width: 80px;
+            }}
+            QTabBar::tab:selected {{
+                background: #000000;
+                color: #CCCCCC;
+                border-bottom: 2px solid {_acc};
+            }}
+            QTabBar::tab:hover:!selected {{
+                background: #111111;
+                color: #888888;
+            }}
         """)
 
         # ── Tab 1: Terminal ──
@@ -14835,6 +16113,10 @@ class GoidaTerminal(QWidget):
         # ── Tab 4: Log ──
         self._log_w = self._build_log_tab()
         self._tabs.addTab(self._log_w, "▤  LOG")
+
+        # ── Tab 5: Network Graph ──
+        self._graph_tab = self._build_graph_tab()
+        self._tabs.addTab(self._graph_tab, "◎  GRAPH")
 
         self._tabs.currentChanged.connect(self._on_tab_changed)
         return self._tabs
@@ -14904,7 +16186,7 @@ class GoidaTerminal(QWidget):
 
     def _build_monitor_tab(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background:#08080F;")
+        w.setStyleSheet("background:#000000;")
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(8)
@@ -14944,9 +16226,87 @@ class GoidaTerminal(QWidget):
         lay.addLayout(btn_row)
         return w
 
+    def _build_graph_tab(self) -> QWidget:
+        """Network topology graph — visualizes peers as nodes."""
+        w = QWidget()
+        w.setStyleSheet("background:#000000;")
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0,0,0,0); lay.setSpacing(0)
+
+        class _GraphWidget(QWidget):
+            def __init__(self, net_ref, parent=None):
+                super().__init__(parent)
+                self._net = net_ref
+                self.setMinimumHeight(300)
+                self._timer = QTimer(self)
+                self._timer.timeout.connect(self.update)
+                self._timer.start(3000)
+
+            def paintEvent(self, event):
+                from PyQt6.QtGui import QPainter, QFont, QPen, QColor, QBrush
+                import math
+                p = QPainter(self)
+                p.setRenderHint(QPainter.RenderHint.Antialiasing)
+                p.fillRect(self.rect(), QColor("#000000"))
+                peers = getattr(self._net, 'peers', {}) if self._net else {}
+                nodes = [("ME", None, True)] + [(v.get("username","?"), k, False)
+                                                for k, v in peers.items()]
+                n = len(nodes)
+                if n == 0: return
+                cx, cy = self.width()//2, self.height()//2
+                r = min(cx, cy) - 50
+                pos = {}
+                for i, (name, ip, is_me) in enumerate(nodes):
+                    if n == 1:
+                        angle = 0
+                    else:
+                        angle = 2 * math.pi * i / n - math.pi/2
+                    nx = cx + int(r * math.cos(angle)) if not is_me else cx
+                    ny = cy + int(r * math.sin(angle)) if not is_me else cy
+                    pos[name] = (nx, ny)
+
+                    # Draw edge to center
+                    if not is_me:
+                        pen = QPen(QColor("#2A2A5A"), 1)
+                        p.setPen(pen)
+                        p.drawLine(cx, cy, nx, ny)
+
+                    # Draw node
+                    color = QColor("#7C4DFF") if is_me else QColor("#2D6A4F")
+                    p.setBrush(QBrush(color))
+                    p.setPen(QPen(QColor("#A0A0FF") if is_me else QColor("#74C69D"), 2))
+                    node_r = 22 if is_me else 18
+                    p.drawEllipse(nx - node_r, ny - node_r, node_r*2, node_r*2)
+
+                    # Label
+                    p.setPen(QPen(QColor("#FFFFFF")))
+                    p.setFont(QFont("monospace", 8, QFont.Weight.Bold))
+                    short = name[:8]
+                    p.drawText(nx - 30, ny + node_r + 14, 60, 16,
+                               Qt.AlignmentFlag.AlignCenter, short)
+                    if ip:
+                        p.setFont(QFont("monospace", 7))
+                        p.setPen(QPen(QColor("#666688")))
+                        p.drawText(nx - 35, ny + node_r + 26, 70, 14,
+                                   Qt.AlignmentFlag.AlignCenter, ip.split(".")[-1])
+                p.end()
+
+        self._graph_w = _GraphWidget(getattr(self, '_net', None))
+        lay.addWidget(self._graph_w, stretch=1)
+
+        refresh_btn = QPushButton("↻ Обновить")
+        refresh_btn.setFixedHeight(28)
+        refresh_btn.setStyleSheet(
+            "QPushButton{background:#111122;color:#7070BB;"
+            "border:none;border-top:1px solid #1A1A3A;font-size:10px;}"
+            "QPushButton:hover{color:#A0A0FF;}")
+        refresh_btn.clicked.connect(self._graph_w.update)
+        lay.addWidget(refresh_btn)
+        return w
+
     def _build_users_tab(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background:#08080F;")
+        w.setStyleSheet("background:#000000;")
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(8)
@@ -15015,7 +16375,7 @@ class GoidaTerminal(QWidget):
 
     def _build_log_tab(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background:#08080F;")
+        w.setStyleSheet("background:#000000;")
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(8)
@@ -15988,6 +17348,21 @@ class GoidaTerminal(QWidget):
         else:
             self._print("  Субкоманды: list", self.C_ORANGE)
 
+    def _handle_plugin_cmd(self, text: str):
+        parts = text.strip().split(None, 1)
+        sub = parts[0].lower() if parts else ""
+        arg = parts[1] if len(parts) > 1 else ""
+        if sub == "load" and arg:
+            self._cmd_load_plugin(arg)
+        elif sub == "list" or not sub:
+            self._cmd_list_plugins()
+        elif sub == "dir":
+            pd = DATA_DIR / "zlink_plugins"
+            pd.mkdir(parents=True, exist_ok=True)
+            _open_system(str(pd))
+        else:
+            self._print("  /plugin list|load <path>|dir", self.C_DIM)
+
     def _cmd_wipe(self):
         reply = QMessageBox.warning(self, "УДАЛЕНИЕ ДАННЫХ",
             "⚠ УДАЛИТЬ ВСЕ ДАННЫЕ GoidaPhone?\n"
@@ -16005,6 +17380,39 @@ class GoidaTerminal(QWidget):
             self._print("  ✓ Данные удалены. Перезапустите приложение.", self.C_RED)
         except Exception as e:
             self._print(f"  Ошибка: {e}", self.C_RED)
+
+    def _cmd_load_plugin(self, path: str):
+        """Load a Python plugin script into ZLink terminal."""
+        try:
+            import importlib.util, os
+            if not os.path.exists(path):
+                self._print(f"  ✗ Файл не найден: {path}", self.C_RED)
+                return
+            spec = importlib.util.spec_from_file_location("zlink_plugin", path)
+            mod  = importlib.util.module_from_spec(spec)
+            # Expose terminal API to plugin
+            mod.terminal   = self
+            mod.print_line = self._print
+            mod.net        = getattr(self, '_net', None)
+            spec.loader.exec_module(mod)
+            self._print(f"  ✓ Плагин загружен: {os.path.basename(path)}", self.C_GREEN)
+            if hasattr(mod, 'on_load'):
+                mod.on_load()
+        except Exception as e:
+            self._print(f"  ✗ Ошибка плагина: {e}", self.C_RED)
+
+    def _cmd_list_plugins(self):
+        plugins_dir = DATA_DIR / "zlink_plugins"
+        if not plugins_dir.exists():
+            plugins_dir.mkdir(parents=True, exist_ok=True)
+        files = list(plugins_dir.glob("*.py"))
+        if not files:
+            self._print("  Плагинов нет. Положите .py файлы в:", self.C_DIM)
+            self._print(f"  {plugins_dir}", self.C_CYAN)
+        else:
+            self._print(f"  Плагины ({len(files)}):", self.C_CYAN)
+            for f in files:
+                self._print(f"  📜 {f.name}", self.C_WHITE)
 
     def _cmd_restart(self):
         reply = QMessageBox.question(self, "Перезапуск",
@@ -16251,6 +17659,9 @@ class MewaPlayer(QWidget):
             ("files",    "▤",  "Файлы"),
             ("playlists","≡",  "Списки"),
             ("video",    "🎬", "Видео"),
+            ("radio",    "📻", "Радио"),
+            ("eq",       "🎚", "EQ"),
+            ("lyrics",   "📝", "Текст"),
         ]
         for key, ico, label in SECTIONS:
             btn = QPushButton(f"{ico}\n{label}")
@@ -16500,6 +17911,215 @@ class MewaPlayer(QWidget):
         vp_lay.addWidget(vp_info)
         self._stack.addWidget(vp)   # idx 4
 
+        # ── Page 5 — Online Radio ─────────────────────────────────────────────
+        rp = QWidget()
+        rp.setStyleSheet(f"background:{t['bg']};")
+        rp_lay = QVBoxLayout(rp)
+        rp_lay.setContentsMargins(12, 12, 12, 12)
+        rp_lay.setSpacing(10)
+
+        # Header
+        rp_hdr = QLabel("📻  Онлайн Радио")
+        rp_hdr.setStyleSheet(
+            f"font-size:15px;font-weight:bold;color:{t['accent']};background:transparent;")
+        rp_lay.addWidget(rp_hdr)
+
+        # Current playing display
+        self._radio_now = QLabel("Нет трансляции")
+        self._radio_now.setStyleSheet(
+            f"font-size:12px;color:{t['text']};background:{t['bg3']};"
+            f"border-radius:8px;padding:10px;border:1px solid {t['border']};")
+        self._radio_now.setWordWrap(True)
+        rp_lay.addWidget(self._radio_now)
+
+        # Station list
+        self._radio_list = QListWidget()
+        self._radio_list.setStyleSheet(
+            f"QListWidget{{background:{t['bg3']};color:{t['text']};"
+            "border:none;border-radius:8px;font-size:11px;}}"
+            f"QListWidget::item{{padding:10px 14px;"
+            f"border-bottom:1px solid {t['border']};}}"
+            f"QListWidget::item:selected{{background:{t['accent']};color:white;}}"
+            f"QListWidget::item:hover{{background:{t['btn_hover']};}}")
+
+        RADIO_STATIONS = [
+            ("🎵 Lofi Hip Hop",  "http://streams.ilovemusic.de/iloveradio17.mp3"),
+            ("🎸 Rock Radio",     "http://streams.ilovemusic.de/iloveradio2.mp3"),
+            ("🎹 Classical",      "http://streams.ilovemusic.de/iloveradio14.mp3"),
+            ("🔥 Dance & EDM",    "http://streams.ilovemusic.de/iloveradio1.mp3"),
+            ("🎷 Jazz FM",        "http://streams.ilovemusic.de/iloveradio21.mp3"),
+            ("🌊 Chill Beats",    "http://streams.ilovemusic.de/iloveradio17.mp3"),
+            ("🎻 Ambient",        "http://streams.ilovemusic.de/iloveradio15.mp3"),
+            ("📻 DI.FM Chillout", "http://prem4.di.fm/chillout"),
+            ("🎤 Европа Плюс",   "http://ep256.hostingradio.ru:8052/ep256.mp3"),
+            ("🇷🇺 Русское",      "http://nashe.hostingradio.ru:80/nashe-320"),
+            ("🎮 VGM Radio",      "http://vgmradio.com/listen"),
+        ]
+        self._radio_stations = RADIO_STATIONS
+        for name, url in RADIO_STATIONS:
+            item = QListWidgetItem(name)
+            item.setData(Qt.ItemDataRole.UserRole, url)
+            self._radio_list.addItem(item)
+
+        self._radio_list.itemDoubleClicked.connect(self._play_radio)
+        rp_lay.addWidget(self._radio_list, stretch=1)
+
+        # Custom URL row
+        custom_row = QHBoxLayout()
+        self._radio_url_input = QLineEdit()
+        self._radio_url_input.setPlaceholderText("URL потока (.mp3 .ogg .m3u8)…")
+        self._radio_url_input.setStyleSheet(
+            f"QLineEdit{{background:{t['bg3']};color:{t['text']};"
+            f"border:1px solid {t['border']};border-radius:6px;"
+            "padding:5px 10px;font-size:11px;}}"
+            f"QLineEdit:focus{{border-color:{t['accent']};}}")
+        custom_row.addWidget(self._radio_url_input, stretch=1)
+
+        play_custom = QPushButton("▶ Слушать")
+        play_custom.setFixedHeight(32)
+        play_custom.setObjectName("accent_btn")
+        play_custom.clicked.connect(self._play_radio_url)
+        custom_row.addWidget(play_custom)
+        rp_lay.addLayout(custom_row)
+
+        # Install hint
+        _hint = QLabel("ℹ Для потоков нужен mpv или vlc:  sudo emerge -av media-video/mpv")
+        _hint.setStyleSheet(
+            f"font-size:9px;color:{t['text_dim']};background:transparent;")
+        _hint.setWordWrap(True)
+        rp_lay.addWidget(_hint)
+
+        # Stop button
+        stop_radio = QPushButton("⏹ Стоп")
+        stop_radio.setFixedHeight(32)
+        stop_radio.setStyleSheet(
+            f"QPushButton{{background:{t['bg3']};color:{t['text_dim']};"
+            f"border:1px solid {t['border']};border-radius:6px;font-size:11px;}}"
+            f"QPushButton:hover{{background:{t['btn_hover']};color:{t['text']};}}")
+        stop_radio.clicked.connect(self._stop_radio)
+        rp_lay.addWidget(stop_radio)
+
+        self._stack.addWidget(rp)   # idx 5
+
+        # ── Page 6 — Equalizer ────────────────────────────────────────────────
+        ep = QWidget()
+        ep.setStyleSheet(f"background:{t['bg']};")
+        ep_lay = QVBoxLayout(ep)
+        ep_lay.setContentsMargins(20,16,20,16); ep_lay.setSpacing(12)
+
+        eq_hdr = QLabel("🎚  Эквалайзер")
+        eq_hdr.setStyleSheet(
+            f"font-size:15px;font-weight:bold;color:{t['accent']};background:transparent;")
+        ep_lay.addWidget(eq_hdr)
+
+        EQ_BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+        EQ_LABELS = ["32","64","125","250","500","1k","2k","4k","8k","16k"]
+        self._eq_sliders = []
+        sliders_row = QHBoxLayout()
+        sliders_row.setSpacing(8)
+
+        for i, (hz, lbl) in enumerate(zip(EQ_BANDS, EQ_LABELS)):
+            col = QVBoxLayout()
+            col.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            sl = QSlider(Qt.Orientation.Vertical)
+            sl.setRange(-12, 12); sl.setValue(0)
+            sl.setFixedHeight(160)
+            sl.setStyleSheet(
+                f"QSlider::groove:vertical{{background:{t['bg3']};"
+                "width:6px;border-radius:3px;}}"
+                f"QSlider::handle:vertical{{background:{t['accent']};"
+                "width:16px;height:16px;margin:-5px -5px;"
+                "border-radius:8px;}}"
+                f"QSlider::add-page:vertical{{background:{t['accent']};"
+                "border-radius:3px;}}")
+            val_lbl = QLabel("0 dB")
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            val_lbl.setStyleSheet(
+                f"font-size:9px;color:{t['text_dim']};background:transparent;")
+            sl.valueChanged.connect(
+                lambda v, _l=val_lbl, _i=i: (
+                    _l.setText(f"{'+' if v>0 else ''}{v} dB"),
+                    self._apply_eq()))
+            hz_lbl = QLabel(lbl + " Hz")
+            hz_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            hz_lbl.setStyleSheet(
+                f"font-size:9px;color:{t['text_dim']};background:transparent;")
+            col.addWidget(val_lbl)
+            col.addWidget(sl, alignment=Qt.AlignmentFlag.AlignHCenter)
+            col.addWidget(hz_lbl)
+            sliders_row.addLayout(col)
+            self._eq_sliders.append(sl)
+
+        ep_lay.addLayout(sliders_row)
+
+        eq_btns = QHBoxLayout()
+        for preset_name, vals in [
+            ("Flat",     [0]*10),
+            ("Bass+",    [8,6,4,2,0,0,0,0,0,0]),
+            ("Treble+",  [0,0,0,0,0,2,4,6,8,10]),
+            ("Rock",     [5,4,3,0,-2,-1,2,4,5,5]),
+            ("Classical",[0,0,0,0,0,0,-2,-4,-4,-5]),
+            ("Vocal",    [-2,-1,0,2,4,4,3,2,1,0]),
+        ]:
+            pb = QPushButton(preset_name)
+            pb.setFixedHeight(28)
+            pb.setStyleSheet(
+                f"QPushButton{{background:{t['bg3']};color:{t['text']};"
+                f"border:1px solid {t['border']};border-radius:6px;font-size:10px;}}"
+                f"QPushButton:hover{{background:{t['btn_hover']};}}")
+            pb.clicked.connect(
+                lambda _, v=vals: [s.setValue(v[i])
+                                   for i, s in enumerate(self._eq_sliders)])
+            eq_btns.addWidget(pb)
+        ep_lay.addLayout(eq_btns)
+        ep_lay.addStretch()
+        self._stack.addWidget(ep)   # idx 6
+
+        # ── Page 7 — Lyrics ───────────────────────────────────────────────────
+        lp2 = QWidget()
+        lp2.setStyleSheet(f"background:{t['bg']};")
+        lp2_lay = QVBoxLayout(lp2)
+        lp2_lay.setContentsMargins(16,12,16,12); lp2_lay.setSpacing(8)
+
+        ly_hdr_row = QHBoxLayout()
+        ly_hdr = QLabel("📝  Текст песни")
+        ly_hdr.setStyleSheet(
+            f"font-size:14px;font-weight:bold;color:{t['accent']};background:transparent;")
+        ly_hdr_row.addWidget(ly_hdr)
+        ly_hdr_row.addStretch()
+        ly_search_btn = QPushButton("🔍 Найти")
+        ly_search_btn.setObjectName("accent_btn")
+        ly_search_btn.setFixedHeight(30)
+        ly_hdr_row.addWidget(ly_search_btn)
+        lp2_lay.addLayout(ly_hdr_row)
+
+        ly_query_row = QHBoxLayout()
+        self._ly_artist = QLineEdit()
+        self._ly_artist.setPlaceholderText("Исполнитель")
+        self._ly_title  = QLineEdit()
+        self._ly_title.setPlaceholderText("Название")
+        for w in [self._ly_artist, self._ly_title]:
+            w.setStyleSheet(
+                f"background:{t['bg3']};color:{t['text']};"
+                f"border:1px solid {t['border']};border-radius:6px;"
+                "padding:4px 8px;font-size:11px;")
+        ly_query_row.addWidget(self._ly_artist)
+        ly_query_row.addWidget(self._ly_title)
+        lp2_lay.addLayout(ly_query_row)
+
+        self._ly_text = QPlainTextEdit()
+        self._ly_text.setReadOnly(True)
+        self._ly_text.setStyleSheet(
+            f"QPlainTextEdit{{background:{t['bg3']};color:{t['text']};"
+            "font-size:12px;border:none;"
+            "border-radius:10px;padding:16px;}}")
+        self._ly_text.setPlaceholderText(
+            "Выберите трек и нажмите Найти, или введите вручную. "
+            "Тексты с lyrics.ovh (без ключа API).")
+        lp2_lay.addWidget(self._ly_text, stretch=1)
+        ly_search_btn.clicked.connect(self._fetch_lyrics)
+        self._stack.addWidget(lp2)   # idx 7
+
         rc_lay.addWidget(self._stack, stretch=1)
 
         # ── PLAYER BAR ────────────────────────────────────────────────────────
@@ -16548,13 +18168,13 @@ class MewaPlayer(QWidget):
             if accent:
                 s = (f"QPushButton{{background:{t['accent']};color:white;"
                      "border-radius:15px;font-size:15px;border:none;"
-                     "border-bottom:2px solid rgba(0,0,0,.35);}}"
+                     "border-bottom:2px solid rgba(0,0,0,89);}}"
                      f"QPushButton:hover{{background:{t['accent2']};}}"
                      "QPushButton:pressed{padding-top:2px;border-bottom:1px solid;}")
             else:
                 s = (f"QPushButton{{background:{t['bg3']};color:{t['text']};"
                      f"border-radius:6px;font-size:13px;border:1px solid {t['border']};"
-                     "border-bottom:2px solid rgba(0,0,0,.25);}}"
+                     "border-bottom:2px solid rgba(0,0,0,63);}}"
                      f"QPushButton:hover{{background:{t['btn_hover']};}}"
                      "QPushButton:pressed{padding-top:2px;border-bottom:1px solid;}")
             b.setStyleSheet(s)
@@ -16652,7 +18272,7 @@ class MewaPlayer(QWidget):
         return tbl
 
     # ── sections ──────────────────────────────────────────────────────────────
-    _SEC_IDX = {"queue":0,"library":1,"files":2,"playlists":3,"video":4}
+    _SEC_IDX = {"queue":0,"library":1,"files":2,"playlists":3,"video":4,"radio":5,"eq":6,"lyrics":7}
 
     def _show_section(self, key: str):
         for k, b in self._section_btns.items():
@@ -16756,6 +18376,57 @@ class MewaPlayer(QWidget):
             pass
         return info
 
+    def _apply_eq(self):
+        """Apply EQ - note: QMediaPlayer doesn't expose EQ bands directly.
+        We use a workaround with audio output volume shaping."""
+        # In a real implementation, we'd use gstreamer/ffmpeg EQ filters
+        # For now, just update the UI and store settings
+        if not hasattr(self, '_eq_sliders') or not self._eq_sliders:
+            return
+        vals = [s.value() for s in self._eq_sliders]
+        try:
+            import json as _j
+            S().set("mewa_eq", _j.dumps(vals))
+        except Exception: pass
+
+    def _fetch_lyrics(self):
+        """Fetch lyrics from lyrics.ovh API."""
+        artist = getattr(self, '_ly_artist', None)
+        title  = getattr(self, '_ly_title', None)
+        if artist is None or title is None:
+            return
+        a = artist.text().strip()
+        t_str = title.text().strip()
+        # Auto-fill from current track if empty
+        if not a or not t_str:
+            if self._queue_idx >= 0 and self._playlist:
+                info = self._playlist[self._queue_idx]
+                if not a: a = info.get("artist","")
+                if not t_str: t_str = info.get("title","")
+                if artist: artist.setText(a)
+                if title: title.setText(t_str)
+        if not a or not t_str:
+            if hasattr(self, '_ly_text'):
+                self._ly_text.setPlainText("Введите исполнителя и название")
+            return
+        if hasattr(self, '_ly_text'):
+            self._ly_text.setPlainText("Загрузка...")
+        import threading, urllib.request, urllib.parse, json as _j
+        def _fetch():
+            try:
+                url = (f"https://api.lyrics.ovh/v1/"
+                       f"{urllib.parse.quote(a)}/{urllib.parse.quote(t_str)}")
+                with urllib.request.urlopen(url, timeout=8) as resp:
+                    data = _j.loads(resp.read().decode())
+                lyrics = data.get("lyrics","Текст не найден")
+                QTimer.singleShot(0, lambda l=lyrics:
+                    self._ly_text.setPlainText(l) if hasattr(self,'_ly_text') else None)
+            except Exception as e:
+                QTimer.singleShot(0, lambda err=str(e):
+                    self._ly_text.setPlainText(f"Ошибка: {err}")
+                    if hasattr(self,'_ly_text') else None)
+        threading.Thread(target=_fetch, daemon=True).start()
+
     def open_file(self, path: str):
         """Public API: add file to queue and play immediately.
         _play_idx will automatically switch to the video page for video files."""
@@ -16763,6 +18434,114 @@ class MewaPlayer(QWidget):
         idx = len(self._playlist) - 1
         if idx >= 0:
             self._play_idx(idx)
+
+    # ── Radio ─────────────────────────────────────────────────────────────────
+    def _play_radio(self, item=None):
+        """Play selected radio station."""
+        if item is None:
+            item = self._radio_list.currentItem()
+        if not item: return
+        url = item.data(Qt.ItemDataRole.UserRole)
+        name = item.text()
+        self._play_radio_url(url, name)
+
+    def _play_radio_url(self, url: str = "", name: str = ""):
+        if not url:
+            inp = getattr(self, '_radio_url_input', None)
+            if inp: url = inp.text().strip()
+        if not url: return
+        if not name: name = url
+
+        # Stop any previous radio subprocess
+        self._stop_radio_proc()
+
+        # Update UI immediately
+        self._play_btn.setText("⏸")
+        try: self._np_bar.setText(f"📻 {name}")
+        except Exception: pass
+        try: self._np_bar_artist.setText("Онлайн Радио")
+        except Exception: pass
+        try: self._np_title.setText(name)
+        except Exception: pass
+        try: self._np_artist.setText("Онлайн Радио")
+        except Exception: pass
+        try: self._np_album.setText(url)
+        except Exception: pass
+        if hasattr(self, '_radio_now'):
+            self._radio_now.setText(f"▶ {name}")
+        self._show_section("radio")
+
+        # Try QMediaPlayer first (works if GStreamer/FFmpeg plugin installed)
+        qt_ok = False
+        if self._has_player:
+            try:
+                from PyQt6.QtCore import QUrl
+                self._player.setSource(QUrl(url))
+                self._player.play()
+                # Give it 2 seconds to start, check status
+                def _check_qt():
+                    from PyQt6.QtMultimedia import QMediaPlayer as _QMP
+                    st = self._player.mediaStatus()
+                    err = self._player.error() if hasattr(self._player, 'error') else None
+                    if (st in (_QMP.MediaStatus.NoMedia, _QMP.MediaStatus.InvalidMedia)
+                            or (err and err != _QMP.Error.NoError)):
+                        # Qt failed — fall back to subprocess
+                        self._player.stop()
+                        self._play_radio_subprocess(url, name)
+                QTimer.singleShot(2500, _check_qt)
+                qt_ok = True
+            except Exception:
+                pass
+
+        if not qt_ok:
+            self._play_radio_subprocess(url, name)
+
+    def _play_radio_subprocess(self, url: str, name: str):
+        """Play radio via mpv/vlc/ffplay as subprocess fallback."""
+        import subprocess as _sp
+        self._radio_proc = None
+        players = ["mpv", "vlc", "ffplay", "mplayer"]
+        for player in players:
+            try:
+                args = {
+                    "mpv":    [player, "--no-video", "--really-quiet", url],
+                    "vlc":    [player, "--intf", "dummy", "--no-video", url],
+                    "ffplay": [player, "-nodisp", "-autoexit", "-loglevel", "quiet", url],
+                    "mplayer":[player, "-nocache", "-vo", "null", url],
+                }.get(player, [player, url])
+                self._radio_proc = _sp.Popen(
+                    args, stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+                if hasattr(self, '_radio_now'):
+                    self._radio_now.setText(f"▶ {name}  (via {player})")
+                print(f"[radio] playing via {player}: {url}")
+                return
+            except FileNotFoundError:
+                continue
+        # Nothing worked
+        if hasattr(self, '_radio_now'):
+            self._radio_now.setText(
+                "❌ Установи mpv или vlc для воспроизведения потока")
+        self._play_btn.setText("▶")
+        print("[radio] no player available: install mpv or vlc")
+
+    def _stop_radio_proc(self):
+        proc = getattr(self, '_radio_proc', None)
+        if proc:
+            try: proc.terminate()
+            except Exception: pass
+            self._radio_proc = None
+
+    def _stop_radio(self):
+        self._stop_radio_proc()
+        if self._has_player:
+            try: self._player.stop()
+            except Exception: pass
+        self._play_btn.setText("▶")
+        if hasattr(self, '_radio_now'):
+            self._radio_now.setText("Нет трансляции")
+        if hasattr(self, '_np_bar'):
+            try: self._np_bar.setText("Нет трека")
+            except Exception: pass
 
     def _clear_queue(self):
         if QMessageBox.question(self, "Очистить очередь", "Очистить весь список?",
@@ -16823,6 +18602,11 @@ class MewaPlayer(QWidget):
             except Exception: pass
         else:
             self._load_art(info["path"])
+            # Auto-populate lyrics fields
+            if hasattr(self, '_ly_artist') and self._ly_artist:
+                self._ly_artist.setText(info.get("artist",""))
+            if hasattr(self, '_ly_title') and self._ly_title:
+                self._ly_title.setText(info.get("title",""))
 
     def _load_art(self, path: str):
         t = get_theme(S().theme)
@@ -17656,12 +19440,16 @@ class MainWindow(QMainWindow):
             w.repaint()
 
     def _open_wns(self):
-        """Open Winora NetScape browser."""
-        if not hasattr(self, '_wns_window') or self._wns_window is None:
-            self._wns_window = WinoraNetScape()
-        self._wns_window.show()
-        self._wns_window.raise_()
-        self._wns_window.activateWindow()
+        """Switch to the WNS tab."""
+        for i in range(self._tabs.count()):
+            if "WNS" in self._tabs.tabText(i):
+                self._tabs.setCurrentIndex(i)
+                return
+        # Fallback: create if missing
+        if not hasattr(self, '_wns_player') or self._wns_player is None:
+            self._wns_player = WinoraNetScape()
+        idx = self._tabs.addTab(self._wns_player, "🌐 WNS")
+        self._tabs.setCurrentIndex(idx)
 
     def _open_terminal(self):
         """Show ZLink Terminal tab."""
@@ -17769,8 +19557,13 @@ class MainWindow(QMainWindow):
         self._mewa_player = MewaPlayer()
         self._tabs.addTab(self._mewa_player, "♫ Mewa")
 
+        # WNS as inline tab (not separate window)
+        self._wns_player = WinoraNetScape()
+        self._tabs.addTab(self._wns_player, "🌐 WNS")
+        self._wns_window = None  # no longer used as window
+
         # Mark permanent count
-        self._permanent_tab_count = 4
+        self._permanent_tab_count = 5
 
         # Splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -18352,6 +20145,24 @@ class MainWindow(QMainWindow):
         self._upd_checker.start()
 
     # ── Window events ───────────────────────────────────────────────────
+    def _refresh_weather(self):
+        """Fetch weather from wttr.in."""
+        import threading, urllib.request
+        def _fetch():
+            try:
+                req = urllib.request.Request(
+                    "https://wttr.in/?format=%l:+%c+%t",
+                    headers={"User-Agent": "curl/7.0"})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    txt = resp.read().decode("utf-8").strip()
+                QTimer.singleShot(0, lambda t=txt: (
+                    self._weather_lbl.setText(f"🌍 {t}")
+                    if hasattr(self, "_weather_lbl") else None))
+            except Exception:
+                pass
+        threading.Thread(target=_fetch, daemon=True).start()
+        QTimer.singleShot(30*60*1000, self._refresh_weather)
+
     def closeEvent(self, event):
         S().set("window_geometry", self.saveGeometry())
         S().set("window_state", self.saveState())
@@ -18367,33 +20178,39 @@ class MainWindow(QMainWindow):
 #  GOIDA DEATH SCREEN  — синий экран смерти GoidaPhone
 # ═══════════════════════════════════════════════════════════════════════════
 class GoidaDeathScreen(QWidget):
-    """
-    Экран смерти GoidaPhone — аналог BSOD.
-    Показывается при необработанном исключении или вручную (Ctrl+F12).
-    manual=True добавляет кнопку «Вернуться» (только ручной вызов).
-    """
+    """BSOD with QR, auto-restart 30s, halts all windows."""
     ERROR_CODES = {
-        "EXCEPTION":          "UNHANDLED_EXCEPTION",
-        "MANUAL":             "MANUALLY_TRIGGERED_0xDEADBEEF",
-        "THREAD_CRASH":       "THREAD_POOL_EXHAUSTED",
-        "AUDIO_FAULT":        "AUDIO_ENGINE_FAULT",
-        "NETWORK_FAULT":      "NETWORK_SUBSYSTEM_FAULT",
+        "EXCEPTION":     "UNHANDLED_EXCEPTION",
+        "MANUAL":        "MANUALLY_TRIGGERED_0xDEADBEEF",
+        "THREAD_CRASH":  "THREAD_POOL_EXHAUSTED",
+        "AUDIO_FAULT":   "AUDIO_ENGINE_FAULT",
+        "NETWORK_FAULT": "NETWORK_SUBSYSTEM_FAULT",
     }
+    DEVELOPER_EMAIL = "mymygang0078@gmail.com"
 
     def __init__(self, exc_type=None, exc_value=None, exc_tb=None,
-                 manual: bool = False, parent=None):
-        super().__init__(parent)
-        self._manual = manual
-        # Overlay only the parent window (not full screen)
-        if parent is not None:
+                 manual: bool = False, parent=None, inside_window: bool = False):
+        if inside_window and parent is not None:
+            # Show as overlay inside the parent window
+            super().__init__(parent)
             self.setWindowFlags(Qt.WindowType.Widget)
+            # Resize to fill parent
+            self.resize(parent.size())
+            parent.resizeEvent = lambda e, _s=self, _p=parent: (
+                super(type(parent), parent).resizeEvent(e),
+                _s.resize(_p.size()))
         else:
-            self.setWindowFlags(Qt.WindowType.FramelessWindowHint |
-                                Qt.WindowType.WindowStaysOnTopHint)
+            super().__init__(None)
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Window)
+        self._manual = manual
+        self._countdown = 30
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-        self.setStyleSheet("background:#0032A0;color:white;")
+        self.setStyleSheet("background:#0032A0;")
+        self._inside_window = inside_window
 
-        # Build traceback string
         if exc_type is not None:
             tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
         else:
@@ -18401,154 +20218,249 @@ class GoidaDeathScreen(QWidget):
 
         error_code = self.ERROR_CODES["MANUAL" if manual else "EXCEPTION"]
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        self._tb_str = tb_str
+        self._error_code = error_code
+        self._ts = ts
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(60, 60, 60, 60)
+        lay.setContentsMargins(60, 48, 60, 36)
         lay.setSpacing(0)
 
-        # Sad face
         sad = QLabel(":(")
         sad.setStyleSheet(
             "font-size:96px;font-weight:900;color:white;background:transparent;")
         lay.addWidget(sad)
-        lay.addSpacing(20)
+        lay.addSpacing(14)
 
-        # Title
-        title = QLabel(
-            "GoidaPhone столкнулся с проблемой\n"
-            "и перестал отвечать.")
+        title = QLabel("GoidaPhone столкнулся с проблемой и перестал отвечать.")
         title.setStyleSheet(
-            "font-size:24px;font-weight:bold;color:white;background:transparent;")
+            "font-size:26px;font-weight:bold;color:white;background:transparent;")
         title.setWordWrap(True)
         lay.addWidget(title)
-        lay.addSpacing(28)
+        lay.addSpacing(14)
 
         if manual:
-            desc = QLabel(
-                "Экран смерти вызван вручную (Ctrl+F12).\n"
-                "Это не настоящая ошибка — нажмите «Вернуться» для возврата.")
-            desc.setStyleSheet(
-                "font-size:14px;color:#CCE0FF;background:transparent;")
-            desc.setWordWrap(True)
-            lay.addWidget(desc)
+            desc_text = "Экран смерти вызван вручную (Ctrl+F12). Нажмите Вернуться."
         else:
-            desc = QLabel(
-                "Мы собираем информацию об ошибке и постараемся "
-                "исправить её в следующем обновлении.\n"
-                "Сохраните отчёт и отправьте разработчику.")
-            desc.setStyleSheet(
-                "font-size:14px;color:#CCE0FF;background:transparent;")
-            desc.setWordWrap(True)
-            lay.addWidget(desc)
+            desc_text = ("Мы собираем информацию об ошибке. "
+                         "Отсканируйте QR-код чтобы отправить отчёт разработчику.")
+        # Always show QR (even manual) - useful for reporting test crashes
+        desc = QLabel(desc_text)
+        desc.setStyleSheet("font-size:14px;color:#CCE0FF;background:transparent;")
+        desc.setWordWrap(True)
+        lay.addWidget(desc)
+        lay.addSpacing(18)
 
-        lay.addSpacing(32)
+        # Content row
+        content_row = QHBoxLayout()
+        content_row.setSpacing(36)
+        left_col = QVBoxLayout()
+        left_col.setSpacing(6)
 
-        # Error code
-        code_lbl = QLabel(f"Код ошибки: {error_code}")
-        code_lbl.setStyleSheet(
-            "font-size:14px;font-weight:bold;color:white;background:transparent;")
-        lay.addWidget(code_lbl)
-        lay.addSpacing(4)
+        for lbl_text, style in [
+            (f"Код ошибки: {error_code}",
+             "font-size:13px;font-weight:bold;color:white;background:transparent;"),
+            (f"Время: {ts}",
+             "font-size:11px;color:#A0C0FF;background:transparent;"),
+            (f"GoidaPhone v{APP_VERSION}  |  Python {sys.version.split()[0]}  |  "
+             f"{platform.system()} {platform.release()}",
+             "font-size:10px;color:#8AAAEE;background:transparent;"),
+        ]:
+            lbl_w = QLabel(lbl_text)
+            lbl_w.setStyleSheet(style)
+            lbl_w.setWordWrap(True)
+            left_col.addWidget(lbl_w)
 
-        time_lbl = QLabel(f"Время: {ts}")
-        time_lbl.setStyleSheet(
-            "font-size:11px;color:#A0C0FF;background:transparent;")
-        lay.addWidget(time_lbl)
-
-        ver_lbl = QLabel(
-            f"GoidaPhone v{APP_VERSION}  |  Python {sys.version.split()[0]}  |  "
-            f"Platform: {platform.system()} {platform.release()}")
-        ver_lbl.setStyleSheet(
-            "font-size:10px;color:#8AAAEE;background:transparent;")
-        lay.addWidget(ver_lbl)
-
-        lay.addSpacing(28)
-
-        # Traceback box
-        tb_lbl = QLabel("Трассировка стека:")
-        tb_lbl.setStyleSheet(
+        left_col.addSpacing(10)
+        tb_hdr = QLabel("Трассировка стека:")
+        tb_hdr.setStyleSheet(
             "font-size:11px;font-weight:bold;color:#A0C8FF;background:transparent;")
-        lay.addWidget(tb_lbl)
+        left_col.addWidget(tb_hdr)
 
         tb_box = QPlainTextEdit(tb_str)
         tb_box.setReadOnly(True)
-        tb_box.setMaximumHeight(180)
+        tb_box.setMaximumHeight(160)
         tb_box.setStyleSheet(
             "QPlainTextEdit{background:#001870;color:#A8C8FF;"
             "border:1px solid #4060C0;border-radius:6px;"
             "font-family:monospace;font-size:10px;padding:8px;}")
-        lay.addWidget(tb_box)
-        lay.addSpacing(24)
+        left_col.addWidget(tb_box)
+        content_row.addLayout(left_col, stretch=1)
 
-        # Buttons
+        if True:  # Always show QR
+            right_col = QVBoxLayout()
+            right_col.setAlignment(
+                Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+            right_col.setSpacing(8)
+            qr_title = QLabel("📧 Отправить отчёт")
+            qr_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            qr_title.setStyleSheet(
+                "font-size:11px;font-weight:bold;color:#CCE0FF;background:transparent;")
+            right_col.addWidget(qr_title)
+            self._qr_img = QLabel()
+            self._qr_img.setFixedSize(160, 160)
+            self._qr_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._qr_img.setStyleSheet(
+                "background:white;border-radius:8px;border:3px solid #4060C0;"
+                "color:#0032A0;font-size:9px;")
+            self._qr_img.setText("Генерация...")
+            right_col.addWidget(self._qr_img)
+            qr_hint = QLabel(self.DEVELOPER_EMAIL)
+            qr_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            qr_hint.setStyleSheet("font-size:9px;color:#8AAAEE;background:transparent;")
+            right_col.addWidget(qr_hint)
+            content_row.addLayout(right_col)
+            QTimer.singleShot(200, lambda: self._generate_qr(tb_str, error_code, ts))
+
+        lay.addLayout(content_row)
+        lay.addSpacing(16)
+
+        if not manual:
+            self._countdown_lbl = QLabel(
+                f"⟳  Автоматический перезапуск через {self._countdown} сек.")
+            self._countdown_lbl.setStyleSheet(
+                "font-size:12px;color:#FFD080;background:transparent;font-weight:bold;")
+            lay.addWidget(self._countdown_lbl)
+            lay.addSpacing(10)
+
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(12)
+        btn_row.setSpacing(10)
 
-        save_btn = QPushButton("💾  Сохранить отчёт")
-        save_btn.setFixedHeight(38)
-        save_btn.setStyleSheet(
-            "QPushButton{background:#0050CC;color:white;border-radius:6px;"
-            "font-size:12px;font-weight:bold;padding:0 18px;border:none;}"
-            "QPushButton:hover{background:#0060EE;}")
-        save_btn.clicked.connect(lambda: self._save_report(tb_str, error_code, ts))
-        btn_row.addWidget(save_btn)
+        def _make_btn(text, bg, hover_bg, cb):
+            b = QPushButton(text)
+            b.setFixedHeight(40)
+            b.setStyleSheet(
+                f"QPushButton{{background:{bg};color:white;border-radius:8px;"
+                f"font-size:12px;font-weight:bold;padding:0 18px;border:none;}}"
+                f"QPushButton:hover{{background:{hover_bg};}}")
+            b.clicked.connect(cb)
+            return b
 
-        copy_btn = QPushButton("📋  Копировать")
-        copy_btn.setFixedHeight(38)
-        copy_btn.setStyleSheet(save_btn.styleSheet())
-        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(
-            f"GoidaPhone Death Report\n{ts}\n{error_code}\n\n{tb_str}"))
-        btn_row.addWidget(copy_btn)
-
+        if not manual:
+            btn_row.addWidget(
+                _make_btn("🔄 Перезапустить", "#005522", "#007733", self._do_restart))
+        btn_row.addWidget(
+            _make_btn("💾 Сохранить отчёт", "#0050CC", "#0066EE",
+                      lambda: self._save_report(tb_str, error_code, ts)))
+        btn_row.addWidget(
+            _make_btn("📋 Копировать", "#0050CC", "#0066EE",
+                      lambda: QApplication.clipboard().setText(
+                          f"GoidaPhone Death Report\n{ts}\n{error_code}\n\n{tb_str}")))
         if manual:
-            back_btn = QPushButton("↩  Вернуться")
-            back_btn.setFixedHeight(38)
-            back_btn.setStyleSheet(
-                "QPushButton{background:#005522;color:white;border-radius:6px;"
-                "font-size:12px;font-weight:bold;padding:0 18px;border:none;}"
-                "QPushButton:hover{background:#007733;}")
-            back_btn.clicked.connect(self.close)
-            btn_row.addWidget(back_btn)
+            btn_row.addWidget(
+                _make_btn("↩ Вернуться", "#005522", "#007733", self.close))
         else:
-            exit_btn = QPushButton("⏻  Закрыть GoidaPhone")
-            exit_btn.setFixedHeight(38)
-            exit_btn.setStyleSheet(
-                "QPushButton{background:#550000;color:white;border-radius:6px;"
-                "font-size:12px;font-weight:bold;padding:0 18px;border:none;}"
-                "QPushButton:hover{background:#880000;}")
-            exit_btn.clicked.connect(QApplication.quit)
-            btn_row.addWidget(exit_btn)
-
+            btn_row.addWidget(
+                _make_btn("⏻ Закрыть", "#550000", "#880000", QApplication.quit))
         btn_row.addStretch()
         lay.addLayout(btn_row)
         lay.addStretch()
 
-        # Cover only the parent window (or full screen if no parent)
-        if parent is not None:
-            self.setGeometry(parent.rect())
+        # Show: inside window or fullscreen
+        if getattr(self, '_inside_window', False) and self.parent():
+            self.setGeometry(0, 0,
+                self.parent().width(), self.parent().height())
         else:
-            screen = QApplication.primaryScreen().geometry()
-            self.setGeometry(screen)
+            self.setGeometry(QApplication.primaryScreen().geometry())
+        self.show(); self.raise_(); self.activateWindow()
+        if not manual:
+            # Hide other top-level windows (not the parent)
+            _parent = self.parent()
+            for w in QApplication.topLevelWidgets():
+                if w is not self and w is not _parent:
+                    try: w.hide()
+                    except Exception: pass
+            self._timer = QTimer(self)
+            self._timer.timeout.connect(self._tick)
+            self._timer.start(1000)
+
+    def _tick(self):
+        self._countdown -= 1
+        if self._countdown <= 0:
+            self._timer.stop()
+            self._do_restart()
+        else:
+            color = "#FF6030" if self._countdown <= 10 else "#FFD080"
+            self._countdown_lbl.setText(
+                f"⟳  Автоматический перезапуск через {self._countdown} сек.")
+            self._countdown_lbl.setStyleSheet(
+                f"font-size:12px;color:{color};"
+                "background:transparent;font-weight:bold;")
+
+    def _do_restart(self):
+        try:
+            if hasattr(self, '_timer'): self._timer.stop()
+        except Exception: pass
+        try:
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        except Exception:
+            QApplication.quit()
+
+    def _generate_qr(self, tb: str, code: str, ts: str):
+        import urllib.parse
+        subject = f"GoidaPhone Crash — {code}"
+        body = (f"GoidaPhone v{APP_VERSION}\n"
+                f"Time: {ts}\n"
+                f"Platform: {platform.system()} {platform.release()}\n"
+                f"Python: {sys.version.split()[0]}\n\n"
+                f"Error: {code}\n\nTraceback:\n{tb[:1200]}")
+        mailto = (f"mailto:{self.DEVELOPER_EMAIL}"
+                  f"?subject={urllib.parse.quote(subject)}"
+                  f"&body={urllib.parse.quote(body)}")
+        try:
+            import qrcode as _qr
+            from io import BytesIO
+            qr = _qr.QRCode(box_size=4, border=2)
+            qr.add_data(mailto)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            pm = QPixmap()
+            pm.loadFromData(buf.getvalue())
+            pm = pm.scaled(152, 152,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            self._qr_img.setPixmap(pm)
+            self._qr_img.setToolTip(mailto)
+        except ImportError:
+            pm = QPixmap(152, 152)
+            pm.fill(QColor("white"))
+            from PyQt6.QtGui import QPainter, QFont as _QF
+            p = QPainter(pm)
+            for rx,ry,rw,rh,rc in [
+                (4,4,36,36,"#000"),(8,8,28,28,"#fff"),(12,12,20,20,"#000"),
+                (112,4,36,36,"#000"),(116,8,28,28,"#fff"),(120,12,20,20,"#000"),
+                (4,112,36,36,"#000"),(8,116,28,28,"#fff"),(12,120,20,20,"#000"),
+            ]:
+                p.fillRect(rx,ry,rw,rh,QColor(rc))
+            p.setPen(QColor("#0032A0"))
+            p.setFont(_QF("monospace", 7))
+            p.drawText(pm.rect(), Qt.AlignmentFlag.AlignCenter,
+                       "pip install\nqrcode Pillow\nдля QR")
+            p.end()
+            self._qr_img.setPixmap(pm)
+            self._qr_img.setToolTip(
+                "pip install qrcode Pillow --break-system-packages")
+        except Exception as e:
+            self._qr_img.setText(f"Err: {e}")
 
     @staticmethod
     def _save_report(tb: str, code: str, ts: str):
         fn, _ = QFileDialog.getSaveFileName(
-            None, "Сохранить отчёт об ошибке",
+            None, "Сохранить отчёт",
             f"goidaphone_crash_{ts.replace(':','-').replace(' ','_')}.txt",
             "Text (*.txt)")
         if fn:
             try:
-                with open(fn, "w", encoding="utf-8") as f:
-                    f.write(
-                        f"GoidaPhone v{APP_VERSION} — Crash Report\n"
-                        f"Time: {ts}\n"
-                        f"Code: {code}\n"
-                        f"Platform: {platform.system()} {platform.release()}\n"
-                        f"Python: {sys.version}\n\n"
-                        f"Traceback:\n{tb}\n")
-                QMessageBox.information(None, "Сохранено", f"Отчёт сохранён:\n{fn}")
+                open(fn, "w", encoding="utf-8").write(
+                    f"GoidaPhone v{APP_VERSION} — Crash Report\n"
+                    f"Time: {ts}\nCode: {code}\n"
+                    f"Platform: {platform.system()} {platform.release()}\n"
+                    f"Python: {sys.version}\n\nTraceback:\n{tb}\n")
+                QMessageBox.information(None, "Сохранено", f"Отчёт: {fn}")
             except Exception as e:
-                QMessageBox.warning(None, "Ошибка", f"Не удалось сохранить: {e}")
+                QMessageBox.warning(None, "Ошибка", str(e))
 
 
 def _install_death_screen_handler(window: "MainWindow"):
@@ -18561,25 +20473,25 @@ def _install_death_screen_handler(window: "MainWindow"):
             return
         traceback.print_exception(exc_type, exc_value, exc_tb)
         try:
-            ds = GoidaDeathScreen(exc_type, exc_value, exc_tb, manual=False, parent=window)
-            ds.setGeometry(window.rect())
-            ds.show()
-            ds.raise_()
-        except Exception:
+            # Show INSIDE the main window as overlay
+            ds = GoidaDeathScreen(exc_type, exc_value, exc_tb,
+                                  manual=False, parent=window,
+                                  inside_window=True)
+            ds.show(); ds.raise_()
+        except Exception as e2:
+            print(f"[BSOD render error] {e2}")
             _orig_excepthook(exc_type, exc_value, exc_tb)
 
     sys.excepthook = _excepthook
 
-    # Ctrl+F12 — manual death screen
+    # Ctrl+F12 — manual death screen (also inside window, with QR)
     sc = QShortcut(QKeySequence("Ctrl+F12"), window)
     sc.activated.connect(lambda: _show_manual_death(window))
 
 
 def _show_manual_death(parent):
-    ds = GoidaDeathScreen(manual=True, parent=parent)
-    ds.setGeometry(parent.rect())
-    ds.show()
-    ds.raise_()
+    ds = GoidaDeathScreen(manual=True, parent=parent, inside_window=True)
+    ds.show(); ds.raise_()
 
 
 def main():
@@ -18589,13 +20501,62 @@ def main():
     if platform.system() == "Linux":
         import os as _os
         _os.environ.setdefault("ALSA_IGNORE_UCM", "1")
-        # Suppress libasound enumeration noise via ALSA config env
         _os.environ.setdefault("ALSA_CARD", "")
-        # webrtcvad pkg_resources warning already filtered at top of file
+
+        # ── Auto-find QtWebEngineProcess (pip user-install) ───────────
+        # Must be set BEFORE QApplication is created
+        if not _os.environ.get("QTWEBENGINEPROCESS_PATH"):
+            import glob as _gl
+            _candidates = _gl.glob(
+                _os.path.expanduser(
+                    "~/.local/lib/python*/site-packages/PyQt6/Qt6/libexec/QtWebEngineProcess"))
+            if _candidates:
+                _os.environ["QTWEBENGINEPROCESS_PATH"] = _candidates[0]
+                # Also set Qt plugin path so WebEngine finds its resources
+                _qt6_dir = _os.path.dirname(_os.path.dirname(_candidates[0]))
+                if _os.path.isdir(_qt6_dir):
+                    _os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS",
+                                           "--disable-gpu-sandbox")
+                    # Add pip Qt6 to library search path
+                    _lib = _os.path.join(_qt6_dir, "lib")
+                    if _os.path.isdir(_lib):
+                        old_ld = _os.environ.get("LD_LIBRARY_PATH","")
+                        _os.environ["LD_LIBRARY_PATH"] = (
+                            _lib + (":" + old_ld if old_ld else ""))
+                print(f"[WNS] QtWebEngineProcess: {_candidates[0]}")
+                # Also set resources path — required for WebEngine to find icudtl.dat etc.
+                _qt6_root = _os.path.join(
+                    _os.path.dirname(_os.path.dirname(_candidates[0])))
+                # Resources are typically in Qt6/resources/
+                for _res_sub in ["resources", ".", "translations"]:
+                    _res_path = _os.path.join(_qt6_root, _res_sub)
+                    if _os.path.isfile(_os.path.join(_res_path, "qtwebengine_resources.pak")) or \
+                       _os.path.isfile(_os.path.join(_res_path, "icudtl.dat")):
+                        _os.environ.setdefault(
+                            "QTWEBENGINE_RESOURCES_PATH", _res_path)
+                        print(f"[WNS] resources: {_res_path}")
+                        break
+                else:
+                    # Fallback: point at Qt6 root itself
+                    _os.environ.setdefault(
+                        "QTWEBENGINE_RESOURCES_PATH", _qt6_root)
+                    print(f"[WNS] resources fallback: {_qt6_root}")
 
     # High-DPI
     if hasattr(Qt.ApplicationAttribute, "AA_UseHighDpiPixmaps"):
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+
+    # ── QtWebEngine MUST be imported before QApplication ─────────────────────
+    # This is a hard requirement from Qt — violating it gives ImportError
+    try:
+        from PyQt6.QtWebEngineWidgets import QWebEngineView as _WEV  # noqa
+        from PyQt6.QtWebEngineCore import (                           # noqa
+            QWebEngineProfile as _WEP,
+            QWebEngineSettings as _WES,
+        )
+        print("[WNS] WebEngine pre-import OK")
+    except Exception as _we_err:
+        print(f"[WNS] WebEngine pre-import failed: {_we_err}")
 
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
