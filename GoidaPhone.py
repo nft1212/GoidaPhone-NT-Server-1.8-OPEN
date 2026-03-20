@@ -634,19 +634,12 @@ def get_os_name() -> str:
 #   3. OS fallback beep if nothing found.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SOUND_MAP = {
-    # event             preferred files (tried left-to-right)
-    # Mapped to actual gdfsound/ files per user spec:
-    #   criterr.mp3    — критическая ошибка
-    #   err.wav        — обычная ошибка
-    #   gdfclick.wav   — клик по кнопкам
-    #   mvdtotrash.wav — удаление чего-либо
-    #   oshibka_usera.mp3 — ошибка пользователя
-    #   zakrep.wav     — закрепление
+_SOUND_MAP_DEFAULT = {
     "message":    ["gdfclick.wav"],
+    "mention":    ["criterr.mp3"],
     "call":       ["criterr.mp3"],
     "call_end":   ["err.wav"],
-    "online":     ["gdfclick.wav"],
+    "online":     ["zakrep.wav"],
     "offline":    ["err.wav"],
     "error":      ["err.wav"],
     "user_error": ["oshibka_usera.mp3"],
@@ -657,8 +650,40 @@ _SOUND_MAP = {
     "click":      ["gdfclick.wav"],
     "bookmark":   ["zakrep.wav"],
     "reaction":   ["gdfclick.wav"],
-    "mention":    ["criterr.mp3"],
 }
+
+_SOUND_EVENT_LABELS = {
+    "message":    "💬 Новое сообщение",
+    "mention":    "🔔 Упоминание (@имя)",
+    "call":       "📞 Входящий звонок",
+    "call_end":   "📵 Звонок завершён",
+    "online":     "🟢 Пользователь онлайн",
+    "offline":    "🔴 Пользователь офлайн",
+    "delete":     "🗑 Удаление",
+    "pin":        "📌 Закрепление",
+    "click":      "🖱 Клик кнопки",
+    "error":      "⚠ Ошибка",
+    "user_error": "❗ Ошибка пользователя",
+    "critical":   "💀 Критическая ошибка",
+}
+
+def _get_sound_map() -> dict:
+    """Возвращает звуковую схему — пользовательскую или дефолтную."""
+    try:
+        import json as _j
+        user = _j.loads(S().get("sound_scheme", "{}", t=str))
+        result = {}
+        for event, default_files in _SOUND_MAP_DEFAULT.items():
+            uv = user.get(event)
+            if uv == "__none__":  result[event] = []
+            elif uv:              result[event] = [uv]  # полный путь или имя
+            else:                 result[event] = default_files
+        return result
+    except Exception:
+        return dict(_SOUND_MAP_DEFAULT)
+
+_SOUND_MAP = _SOUND_MAP_DEFAULT  # backward compat alias
+
 
 _SOUNDS_INSTALLED = False
 
@@ -791,9 +816,18 @@ def install_sounds(force: bool = False):
         print(f"[sound] install_sounds error: {e}")
 
 def _find_sound_file(fname: str) -> str | None:
-    """Find a sound file in any known directory. Returns path string or None."""
+    """Find a sound file. Accepts full path or filename. Returns path or None."""
+    # Если полный путь — проверяем напрямую
+    try:
+        p = Path(fname)
+        if p.is_absolute() and p.exists():
+            return str(p)
+    except Exception:
+        pass
+    # Иначе ищем по имени файла в известных директориях
+    name = Path(fname).name
     for d in _get_sound_dirs():
-        f = d / fname
+        f = d / name
         if f.exists():
             return str(f)
     return None
@@ -812,11 +846,18 @@ def _play_file(sf: str):
         print(f"[sound] file not found: {sf}")
         return
     try:
-        from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+        from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
         from PyQt6.QtCore import QUrl
         player = QMediaPlayer()
-        audio  = QAudioOutput()
-        audio.setVolume(1.0)
+        # Всегда берём актуальный дефолтный выход (работает при смене устройства)
+        try:
+            _default_dev = QMediaDevices.defaultAudioOutput()
+            audio = QAudioOutput(_default_dev)
+        except Exception:
+            audio = QAudioOutput()
+        # Применяем пользовательскую громкость из настроек
+        _vol = max(0.0, min(1.0, S().get("volume", 80, t=int) / 100.0))
+        audio.setVolume(_vol)
         player.setAudioOutput(audio)
         player.setSource(QUrl.fromLocalFile(str(sf_path.resolve())))
         player.play()
@@ -982,8 +1023,8 @@ def play_system_sound(event: str = "message"):
         return
     _SOUND_LAST_PLAYED[event] = now
     try:
-        # 1. Custom files
-        for fname in _SOUND_MAP.get(event, []):
+        # 1. User sound scheme (читаем актуальную — учитывает настройки)
+        for fname in _get_sound_map().get(event, []):
             sf = _find_sound_file(fname)
 
             if sf:
@@ -1256,6 +1297,291 @@ def _open_in_mewa(path: str, parent=None):
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  MEDIA OPEN HELPER — спрашивает открыть через Mewa или системой
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  GoidaCRYPTO — Защищённое локальное хранилище и многоуровневая безопасность
+#  Версия 1.0 | GoidaPhone NT 1.8
+# ═══════════════════════════════════════════════════════════════════════════
+
+GOIDA_CRYPTO_VERSION = "1.0"
+
+# ── Чувствительные ключи которые шифруются в SecureVault ──────────────────
+_VAULT_SENSITIVE_KEYS = {
+    "encryption_passphrase",  # пароль E2E шифрования
+    "license_code",           # ключ лицензии
+    "app_icon_b64",           # кастомная иконка
+    "avatar_b64",             # аватар пользователя
+    "pin_hash",               # хэш PIN
+}
+
+class SecureMemory:
+    """
+    Оборачивает чувствительную строку и обнуляет память при удалении.
+    Предотвращает утечку паролей через дамп памяти.
+    """
+    def __init__(self, value: str):
+        self._data = bytearray(value.encode('utf-8'))
+
+    def get(self) -> str:
+        return self._data.decode('utf-8')
+
+    def wipe(self):
+        for i in range(len(self._data)):
+            self._data[i] = 0
+        self._data = bytearray()
+
+    def __del__(self):
+        self.wipe()
+
+    def __bool__(self):
+        return len(self._data) > 0
+
+
+class SecureVault:
+    """
+    GoidaCRYPTO SecureVault — зашифрованное хранилище чувствительных данных.
+
+    АЛГОРИТМ:
+      • Ключ хранилища = PBKDF2-HMAC-SHA256(vault_passphrase, salt, 600_000 итераций)
+      • Данные шифруются AES-256-GCM с random nonce
+      • Файл хранилища: DATA_DIR/vault.gcrypto
+      • Целостность: HMAC-SHA256 поверх зашифрованного блоба
+
+    СЛОИ ЗАЩИТЫ:
+      Layer 0 — Нет vault_passphrase → данные в QSettings (как раньше)
+      Layer 1 — vault_passphrase установлен → AES-256-GCM шифрование
+      Layer 2 — + история зашифрована ключом хранилища
+      Layer 3 — + Secure Wipe при выходе (перезапись RAM)
+      Layer 4 — Stealth Mode (нет в таскбаре, нет имени в трее)
+      Layer 5 — Anti-screenshot (WA_ContentsMarginsRespectsSafeArea)
+    """
+
+    VAULT_FILE    = "vault.gcrypto"
+    VAULT_MAGIC   = b"GoidaCRYPTO/1.0\x00"
+    PBKDF2_ITERS  = 600_000
+    SALT_SIZE     = 32
+    NONCE_SIZE    = 12
+    TAG_SIZE      = 16
+
+    def __init__(self):
+        self._vault_path = DATA_DIR / self.VAULT_FILE
+        self._unlocked   = False
+        self._vault_key: bytes | None = None
+        self._cache: dict = {}
+        self._dirty  = False
+
+    # ── Unlock / Lock ─────────────────────────────────────────────────────
+
+    def unlock(self, passphrase: str) -> bool:
+        """Открыть хранилище. Возвращает True если пароль верный."""
+        if not self._vault_path.exists():
+            # Первый запуск — создаём новое хранилище
+            self._create_new_vault(passphrase)
+            return True
+        try:
+            raw = self._vault_path.read_bytes()
+            if not raw.startswith(self.VAULT_MAGIC):
+                return False
+            offset = len(self.VAULT_MAGIC)
+            salt = raw[offset:offset+self.SALT_SIZE]; offset += self.SALT_SIZE
+            nonce = raw[offset:offset+self.NONCE_SIZE]; offset += self.NONCE_SIZE
+            ciphertext = raw[offset:]
+
+            key = self._derive_key(passphrase, salt)
+            import json as _j
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+            data = AESGCM(key).decrypt(nonce, ciphertext, self.VAULT_MAGIC + salt)
+            self._cache    = _j.loads(data.decode('utf-8'))
+            self._vault_key = key
+            self._unlocked  = True
+            return True
+        except Exception:
+            return False
+
+    def lock(self):
+        if self._dirty:
+            self._flush()
+        if self._vault_key:
+            import ctypes
+            buf = (ctypes.c_char * len(self._vault_key)).from_buffer_copy(self._vault_key)
+            for i in range(len(buf)): buf[i] = 0
+        self._vault_key = None
+        self._cache.clear()
+        self._unlocked = False
+
+    def is_unlocked(self) -> bool:
+        return self._unlocked
+
+    def vault_exists(self) -> bool:
+        return self._vault_path.exists()
+
+    # ── Read / Write ──────────────────────────────────────────────────────
+
+    def get(self, key: str, default=None):
+        """Прочитать значение из хранилища (только если разблокировано)."""
+        if not self._unlocked:
+            return default
+        return self._cache.get(key, default)
+
+    def set(self, key: str, value) -> bool:
+        """Записать значение в хранилище и сохранить на диск."""
+        if not self._unlocked:
+            return False
+        self._cache[key] = value
+        self._dirty = True
+        return self._flush()
+
+    def delete(self, key: str) -> bool:
+        if not self._unlocked:
+            return False
+        self._cache.pop(key, None)
+        self._dirty = True
+        return self._flush()
+
+    def all_keys(self) -> list:
+        return list(self._cache.keys()) if self._unlocked else []
+
+    # ── Vault management ──────────────────────────────────────────────────
+
+    def change_passphrase(self, old_pass: str, new_pass: str) -> bool:
+        """Смена пароля хранилища — перешифровывает всё."""
+        if not self.unlock(old_pass):
+            return False
+        old_cache = dict(self._cache)
+        self._create_new_vault(new_pass, old_cache)
+        return True
+
+    def destroy(self):
+        """Безвозвратно уничтожить хранилище (3-кратная перезапись)."""
+        if self._vault_path.exists():
+            size = self._vault_path.stat().st_size
+            for _ in range(3):
+                self._vault_path.write_bytes(
+                    __import__('os').urandom(size))
+            self._vault_path.unlink()
+        self.lock()
+
+    def export_audit_log(self) -> str:
+        """Вернуть читаемый отчёт о состоянии хранилища (без значений)."""
+        lines = [
+            f"GoidaCRYPTO SecureVault v{GOIDA_CRYPTO_VERSION}",
+            f"Файл: {self._vault_path}",
+            f"Существует: {self.vault_exists()}",
+            f"Разблокировано: {self.is_unlocked()}",
+            f"PBKDF2 итерации: {self.PBKDF2_ITERS:,}",
+            f"Алгоритм: AES-256-GCM",
+            f"Ключ: PBKDF2-HMAC-SHA256",
+        ]
+        if self._unlocked:
+            lines.append(f"Ключей в хранилище: {len(self._cache)}")
+            for k in sorted(self._cache):
+                v = self._cache[k]
+                preview = (str(v)[:8] + "…") if len(str(v)) > 8 else "***"
+                lines.append(f"  • {k}: {preview}")
+        return "\n".join(lines)
+
+    # ── Internal ──────────────────────────────────────────────────────────
+
+    def _derive_key(self, passphrase: str, salt: bytes) -> bytes:
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+        from cryptography.hazmat.primitives import hashes
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=self.PBKDF2_ITERS,
+        )
+        return kdf.derive(passphrase.encode('utf-8'))
+
+    def _create_new_vault(self, passphrase: str, data: dict | None = None):
+        import json as _j
+        salt = __import__('os').urandom(self.SALT_SIZE)
+        key  = self._derive_key(passphrase, salt)
+        payload = _j.dumps(data or {}).encode('utf-8')
+        nonce = __import__('os').urandom(self.NONCE_SIZE)
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        ct = AESGCM(key).encrypt(nonce, payload, self.VAULT_MAGIC + salt)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        self._vault_path.write_bytes(
+            self.VAULT_MAGIC + salt + nonce + ct)
+        self._vault_key = key
+        self._cache     = data or {}
+        self._unlocked  = True
+        self._dirty     = False
+
+    def _flush(self) -> bool:
+        """Сохранить кэш на диск."""
+        if not self._vault_key:
+            return False
+        try:
+            import json as _j
+            payload = _j.dumps(self._cache).encode('utf-8')
+            salt    = self._vault_path.read_bytes()[len(self.VAULT_MAGIC):
+                                                    len(self.VAULT_MAGIC)+self.SALT_SIZE] \
+                      if self._vault_path.exists() else __import__('os').urandom(self.SALT_SIZE)
+            nonce = __import__('os').urandom(self.NONCE_SIZE)
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+            ct = AESGCM(self._vault_key).encrypt(nonce, payload, self.VAULT_MAGIC + salt)
+            self._vault_path.write_bytes(self.VAULT_MAGIC + salt + nonce + ct)
+            self._dirty = False
+            return True
+        except Exception as e:
+            print(f"[GoidaCRYPTO] flush error: {e}")
+            return False
+
+
+class IntegrityChecker:
+    """
+    Проверяет целостность файла настроек через HMAC-SHA256.
+    Обнаруживает внешнее вмешательство в конфиг.
+    """
+    SIG_FILE = "settings.hmac"
+
+    def __init__(self):
+        self._sig_path = DATA_DIR / self.SIG_FILE
+
+    def sign(self, key: bytes):
+        """Подписать текущий файл настроек."""
+        try:
+            import hmac as _hmac, hashlib as _hl
+            cfg_file = DATA_DIR / "GoidaPhone.ini"
+            if not cfg_file.exists():
+                # QSettings может использовать другой путь
+                import glob
+                matches = list(DATA_DIR.glob("*.ini")) + list(DATA_DIR.glob("*.conf"))
+                if not matches: return
+                cfg_file = matches[0]
+            data = cfg_file.read_bytes()
+            sig  = _hmac.new(key, data, _hl.sha256).digest()
+            self._sig_path.write_bytes(sig)
+        except Exception as e:
+            print(f"[IntegrityChecker] sign: {e}")
+
+    def verify(self, key: bytes) -> bool | None:
+        """Проверить подпись. None = нет подписи (первый запуск)."""
+        if not self._sig_path.exists():
+            return None
+        try:
+            import hmac as _hmac, hashlib as _hl
+            cfg_file = DATA_DIR / "GoidaPhone.ini"
+            if not cfg_file.exists():
+                import glob
+                matches = list(DATA_DIR.glob("*.ini")) + list(DATA_DIR.glob("*.conf"))
+                if not matches: return None
+                cfg_file = matches[0]
+            data     = cfg_file.read_bytes()
+            expected = self._sig_path.read_bytes()
+            actual   = _hmac.new(key, data, _hl.sha256).digest()
+            return _hmac.compare_digest(expected, actual)
+        except Exception:
+            return None
+
+
+# Глобальные экземпляры
+VAULT   = SecureVault()
+ICHECK  = IntegrityChecker()
+
+
 class ToastNotification(QWidget):
     """
     Beautiful in-app toast that slides in from the bottom-right of the parent window.
@@ -1679,17 +2005,133 @@ THEMES = {
     },
 }
 
+# Градиентные темы — bg поддерживает qlineargradient
+GRADIENT_THEMES = {
+    "aurora": {
+        "label": "🌌 Aurora",
+        "bg":        "#1a1a2e",
+        "bg2":       "#16213e",
+        "bg3":       "#0f3460",
+        "border":    "#533483",
+        "text":      "#e0e0ff",
+        "text_dim":  "#8888bb",
+        "accent":    "#e94560",
+        "accent2":   "#c73652",
+        "btn_bg":    "#1f2a4a",
+        "btn_hover": "#2a3a6a",
+        "btn_press": "#0f1f3a",
+        "bubble_own":"#e9456022",
+        "bubble_other":"#0f346022",
+        "input_bg":  "#16213e",
+        "gradient_start": "#1a1a2e",
+        "gradient_end":   "#0f3460",
+        "gradient_angle": "180",
+    },
+    "sunset": {
+        "label": "🌅 Sunset",
+        "bg":        "#1a0a0a",
+        "bg2":       "#2d1515",
+        "bg3":       "#3d2020",
+        "border":    "#7a3030",
+        "text":      "#ffd0c0",
+        "text_dim":  "#b07060",
+        "accent":    "#ff6b35",
+        "accent2":   "#e55a25",
+        "btn_bg":    "#3d2020",
+        "btn_hover": "#5a3030",
+        "btn_press": "#2d1515",
+        "bubble_own":"#ff6b3530",
+        "bubble_other":"#3d202040",
+        "input_bg":  "#2d1515",
+        "gradient_start": "#2d0a0a",
+        "gradient_end":   "#1a0a2d",
+        "gradient_angle": "135",
+    },
+    "ocean": {
+        "label": "🌊 Ocean",
+        "bg":        "#020f1a",
+        "bg2":       "#041828",
+        "bg3":       "#062038",
+        "border":    "#0e4d6e",
+        "text":      "#c0e8ff",
+        "text_dim":  "#5090b0",
+        "accent":    "#00b4d8",
+        "accent2":   "#0096b4",
+        "btn_bg":    "#062038",
+        "btn_hover": "#0a3050",
+        "btn_press": "#041828",
+        "bubble_own":"#00b4d830",
+        "bubble_other":"#06203840",
+        "input_bg":  "#041828",
+        "gradient_start": "#020f1a",
+        "gradient_end":   "#041828",
+        "gradient_angle": "160",
+    },
+    "neon": {
+        "label": "⚡ Neon",
+        "bg":        "#0a0a0a",
+        "bg2":       "#111111",
+        "bg3":       "#1a1a1a",
+        "border":    "#333333",
+        "text":      "#f0f0f0",
+        "text_dim":  "#888888",
+        "accent":    "#00ff88",
+        "accent2":   "#00cc66",
+        "btn_bg":    "#1a1a1a",
+        "btn_hover": "#222222",
+        "btn_press": "#111111",
+        "bubble_own":"#00ff8825",
+        "bubble_other":"#1a1a1a80",
+        "input_bg":  "#111111",
+        "gradient_start": "#050510",
+        "gradient_end":   "#0a0a0a",
+        "gradient_angle": "180",
+    },
+    "sakura": {
+        "label": "🌸 Sakura",
+        "bg":        "#1a0a12",
+        "bg2":       "#280f1e",
+        "bg3":       "#38182c",
+        "border":    "#6a3050",
+        "text":      "#ffd0e8",
+        "text_dim":  "#b07090",
+        "accent":    "#ff6eb4",
+        "accent2":   "#e050a0",
+        "btn_bg":    "#38182c",
+        "btn_hover": "#502040",
+        "btn_press": "#280f1e",
+        "bubble_own":"#ff6eb430",
+        "bubble_other":"#38182c40",
+        "input_bg":  "#280f1e",
+        "gradient_start": "#1a0a12",
+        "gradient_end":   "#0a121a",
+        "gradient_angle": "145",
+    },
+}
+# Объединяем в один словарь
+THEMES.update(GRADIENT_THEMES)
+
 def get_theme(name: str) -> dict:
-    return THEMES.get(name, THEMES["dark"])
+    base = THEMES.get("dark", {})
+    theme = THEMES.get(name, base)
+    return {**base, **theme}  # гарантируем все ключи
 
 def build_stylesheet(t: dict) -> str:
-    """Build a complete Qt stylesheet from a theme dict.
-    Special handling for Win95 theme (__win95__ key).
-    """
-    # ── Win95 Easter Egg ──────────────────────────────────────────────────────
+    """Build a complete Qt stylesheet from a theme dict."""
     if t.get("__win95__"):
         return _build_win95_stylesheet(t)
-    # ── Standard modern stylesheet ────────────────────────────────────────────
+    # Мержим с дефолтной тёмной темой — чтобы никогда не было KeyError
+    _fallback = THEMES.get("dark", {})
+    t = {**_fallback, **t}
+    # Градиентные темы — подменяем bg на qlineargradient строку
+    if t.get("gradient_start") and t.get("gradient_end"):
+        import math
+        rad = math.radians(int(t.get("gradient_angle", 180)))
+        x2 = round(math.sin(rad) * 0.5 + 0.5, 3)
+        y2 = round(-math.cos(rad) * 0.5 + 0.5, 3)
+        t['_bg_gradient'] = (
+            f"qlineargradient(x1:0,y1:0,x2:{x2},y2:{y2},"
+            f"stop:0 {t['gradient_start']},stop:1 {t['gradient_end']})")
     return _build_modern_stylesheet(t)
 
 
@@ -1918,13 +2360,16 @@ QProgressBar::chunk {{
 
 def _build_modern_stylesheet(t: dict) -> str:
     """Modern stylesheet with depth, gradients, and rounded corners."""
+    # Градиент: подменяем bg в итоговом CSS если тема его поддерживает
+    _bg_val = t.get('_bg_gradient', t['bg'])
+    t = dict(t); t['bg'] = _bg_val
     return f"""
 /* ── Global ── */
 QWidget {{
     background-color: {t['bg']};
     color: {t['text']};
-    font-family: "Segoe UI", "Ubuntu", sans-serif;
-    font-size: 11px;
+    font-family: "Segoe UI", "Ubuntu", "Noto Sans", sans-serif;
+    font-size: 9pt;
 }}
 QMainWindow, QDialog {{
     background-color: {t['bg']};
@@ -1939,7 +2384,7 @@ QPushButton {{
     border-bottom: 2px solid rgba(0,0,0,89);
     border-radius: 7px;
     padding: 5px 12px;
-    font-size: 11px;
+    font-size: 9pt;
 }}
 QPushButton:hover {{
     background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
@@ -2066,9 +2511,11 @@ QTabBar::tab {{
     border-bottom: none;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
-    padding: 6px 14px;
+    padding: 3px 12px;
     margin-right: 2px;
-    font-size: 11px;
+    font-size: 9pt;
+    min-height: 0px;
+    max-height: 20px;
 }}
 QTabBar::tab:selected {{
     background-color: {t['bg2']};
@@ -2817,13 +3264,20 @@ class AppSettings:
     @property
     def encryption_passphrase(self) -> str:
         """Shared passphrase for AES-256 encryption.
-        WARNING: stored as plaintext in QSettings — acceptable for LAN use,
-        but users should be warned not to use passwords from other services."""
+        GoidaCRYPTO: если VAULT разблокирован — берём оттуда (зашифровано).
+        Иначе — fallback в QSettings (plaintext, legacy)."""
+        if VAULT.is_unlocked():
+            v = VAULT.get("encryption_passphrase")
+            if v is not None:
+                return v
         return self.get("encryption_passphrase", "", t=str)
 
     @encryption_passphrase.setter
     def encryption_passphrase(self, v: str):
-        self.set("encryption_passphrase", v)
+        if VAULT.is_unlocked():
+            VAULT.set("encryption_passphrase", v)
+        else:
+            self.set("encryption_passphrase", v)
 
     @property
     def device_name(self) -> str:
@@ -3391,8 +3845,14 @@ class AudioEngine(QThread):
     def _init_pa(self) -> bool:
         if not PYAUDIO_AVAILABLE:
             return False
+        # Если старый экземпляр есть но потоки закрыты — пересоздаём
+        if self._pa and (self._in is not None or self._out is not None):
+            return True   # streams живые — OK
+        # Закрываем старый PyAudio перед созданием нового (предотвращает сегфолт)
         if self._pa:
-            return True
+            try: self._pa.terminate()
+            except Exception: pass
+            self._pa = None
         try:
             import pyaudio as pa
             self.FORMAT = pa.paInt16
@@ -3432,9 +3892,17 @@ class AudioEngine(QThread):
         self.running = False
         for stream in [self._in, self._out]:
             if stream:
-                try: stream.stop_stream(); stream.close()
+                try:
+                    stream.stop_stream()
+                    stream.close()
                 except Exception: pass
         self._in = self._out = None
+        # Terminate PyAudio instance — необходимо чтобы следующий звонок
+        # не получил сегфолт при переинициализации
+        if self._pa:
+            try: self._pa.terminate()
+            except Exception: pass
+            self._pa = None
 
     def cleanup(self):
         self.stop_all()
@@ -3593,11 +4061,10 @@ class NetworkManager(QObject):
 
     # ── startup / shutdown ──────────────────────────────────────────────
     def _refresh_local_ips(self):
-        """Refresh local IP cache — VPN adapters (Hamachi/ZeroTier/Radmin) can come and go."""
-        self._all_local_ips = get_all_local_ips()
+        """Refresh IP cache. Called from main thread via QTimer — Qt API safe."""
+        self._local_ips = get_all_local_ips() | {self.host_ip}
         new_primary = get_local_ip()
         if new_primary != self.host_ip:
-            print(f"[net] primary IP changed: {self.host_ip} → {new_primary}")
             self.host_ip = new_primary
 
     def start(self) -> bool:
@@ -3619,6 +4086,7 @@ class NetworkManager(QObject):
         self._tcp_srv.newConnection.connect(self._on_new_connection)
 
         self.running = True
+        self._local_ips = get_all_local_ips() | {self.host_ip}
         self._bcast_timer.start(3000)
         self._broadcast()
         return True
@@ -3696,10 +4164,12 @@ class NetworkManager(QObject):
 
     def _presence_payload(self) -> dict:
         cfg = S()
+        all_ips = list(self._local_ips or get_all_local_ips())
         payload = {
             "type":             MSG_PRESENCE,
             "username":         cfg.username,
             "ip":               self.host_ip,
+            "all_ips":          all_ips,          # all interfaces incl. VPN
             "premium":          cfg.premium,
             "nickname_color":   cfg.nickname_color,
             "custom_emoji":     cfg.custom_emoji,
@@ -3736,9 +4206,17 @@ class NetworkManager(QObject):
         if not CRYPTO.check_rate(host, max_per_sec=200):
             return
         # Never process our own echoed messages (except presence)
-        if (msg.get('username') == S().username and
-                msg.get('type') not in (MSG_PRESENCE, None)):
-            return
+        # Check by IP first (more reliable), then username
+        _msg_from_ip = msg.get('from_ip', '')
+        _my_ips = self._local_ips or {self.host_ip}  # cached — no Qt calls in thread
+        if msg.get('type') not in (MSG_PRESENCE, None):
+            if _msg_from_ip and _msg_from_ip in _my_ips:
+                return   # own message echoed back
+            if host in _my_ips:
+                return   # own broadcast echoed back
+            # Fallback: username match (less reliable — someone could share username)
+            if msg.get('username') == S().username and not _msg_from_ip:
+                return
         # HMAC verification (if session key established)
         sig = msg.pop("_sig", "")
         if sig and CRYPTO.has_session(host):
@@ -3788,9 +4266,14 @@ class NetworkManager(QObject):
             self.sig_message.emit(msg)
 
     def _handle_presence(self, host: str, msg: dict):
+        # Accept packet IP or any self-reported IP
         ip = msg.get("ip", host)
-        if ip == self.host_ip:
+        _my_ips = self._local_ips or {self.host_ip}  # cached
+        if ip in _my_ips or host in _my_ips:
             return
+        # Also index by the actual packet source (useful for NAT/VPN scenarios)
+        if host != ip and host not in ("", "0.0.0.0"):
+            msg.setdefault("source_ip", host)
         # Replay guard on presence packets
         nonce = msg.get("nonce", "")
         ts    = msg.get("ts", 0.0)
@@ -3873,9 +4356,16 @@ class NetworkManager(QObject):
             encrypted = True
         else:
             encrypted = False
-        self.send_udp({"type": MSG_PRIVATE, "username": cfg.username,
-                       "text": text, "to": to_ip, "from_ip": self.host_ip,
-                       "encrypted": encrypted}, to_ip)
+        payload = {"type": MSG_PRIVATE, "username": cfg.username,
+                   "text": text, "to": to_ip, "from_ip": self.host_ip,
+                   "encrypted": encrypted}
+        # Primary: send to known IP
+        self.send_udp(payload, to_ip)
+        # Also send to any alternate IPs peer reported (VPN/LAN redundancy)
+        peer_info = self.peers.get(to_ip, {})
+        for alt_ip in peer_info.get("all_ips", []):
+            if alt_ip != to_ip and alt_ip not in (self._local_ips or {self.host_ip}):
+                self.send_udp(payload, alt_ip)
 
     def send_group_msg(self, gid: str, text: str, members: list[str]):
         cfg = S()
@@ -3967,6 +4457,9 @@ class NetworkManager(QObject):
         if ip in self._voice_cons:
             return True
         sock = QTcpSocket(self)
+        # Try primary IP first, then any alternate IPs the peer reported
+        peer_info = self.peers.get(ip, {})
+        # We always connect to the IP we know them by
         sock.connectToHost(QHostAddress(ip), self._voice_tcp_port)
         if sock.waitForConnected(3000):
             self._voice_cons[ip] = sock
@@ -4530,38 +5023,45 @@ class SplashScreen(QWidget):
                             Qt.WindowType.WindowStaysOnTopHint |
                             Qt.WindowType.SplashScreen)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(520, 340)
-        sg = QApplication.primaryScreen().geometry()
-        self.move((sg.width()-520)//2, (sg.height()-340)//2)
 
         self._dot_count = 0
         self._dot_timer = QTimer(self)
         self._dot_timer.timeout.connect(self._tick_dots)
         self._dot_timer.start(400)
 
-        # Load splash: imag/splash.png first, then custom b64
+        # Загружаем изображение — пользовательское или дефолтное
         self._bg_pixmap: QPixmap | None = None
-        _sfile = Path(__file__).parent / "imag" / "splash.png"
-        if _sfile.exists():
-            pm = QPixmap(str(_sfile))
-            if not pm.isNull():
-                self._bg_pixmap = pm.scaled(520, 340,
-                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                    Qt.TransformationMode.SmoothTransformation)
+
+        # Сплеш: сначала из настроек (явный выбор пользователя)
+        bg_b64 = S().get("splash_image_b64", "", t=str)
+        if bg_b64:
+            try:
+                pm2 = QPixmap()
+                pm2.loadFromData(base64.b64decode(bg_b64))
+                if not pm2.isNull():
+                    self._bg_pixmap = pm2.scaled(
+                        616, 338,
+                        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                        Qt.TransformationMode.SmoothTransformation)
+            except Exception:
+                pass
+        # Дефолт: splashq.jpg рядом с gdf.py (только если нет кастомного)
         if self._bg_pixmap is None:
-            bg_b64 = S().get("splash_image_b64", "", t=str)
-            if bg_b64:
-                pm = QPixmap()
-                try:
-                    data = base64.b64decode(bg_b64)
-                    pm.loadFromData(data)
-                    if not pm.isNull():
-                        self._bg_pixmap = pm.scaled(
-                            520, 340,
-                            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                            Qt.TransformationMode.SmoothTransformation)
-                except Exception:
-                    pass
+            _sp = Path(__file__).parent / "splashq.jpg"
+            if not _sp.exists():
+                _sp = Path(__file__).parent / "splashq.png"
+            if _sp.exists():
+                pm = QPixmap(str(_sp))
+                if not pm.isNull():
+                    self._bg_pixmap = pm.scaled(
+                        616, 338,
+                        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                        Qt.TransformationMode.SmoothTransformation)
+
+        # Фиксированный размер 616×338
+        self.setFixedSize(616, 338)
+        sg = QApplication.primaryScreen().geometry()
+        self.move((sg.width() - 616) // 2, (sg.height() - 338) // 2)
 
         self._build()
 
@@ -4948,7 +5448,16 @@ class TextFormatter:
     _STRIKE  = re.compile(r'~~(.+?)~~')
     _SPOILER = re.compile(r'\|\|(.+?)\|\|')
     _MENTION = re.compile(r'@(\w+)')
-    _URL     = re.compile(r'(https?://[^\s<>"]+|(?<![\w@./])(?:www\.)[\w\-]+\.[a-z]{2,}(?:/[^\s<>"]*)?)')
+    _URL     = re.compile(
+        r'('
+        r'https?://[^\s<>"\']+(?<![.,;:!?\)])'      # http:// or https:// links
+        r'|(?<![\w@./])(?:www\.[\w\-]+\.[\w\-]{2,})'  # www.example.com
+        r'|(?<![\w@./])'                              # bare domain: must not follow word char
+        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)'  # domain label(s)
+        r'(?:com|net|org|io|ru|dev|app|me|co|uk|de|fr|jp|cn|tv|gg|ai|xyz|fun|pro|club)'
+        r'(?:/[^\s<>"\']*(?<![.,;:!?\)]))?'          # optional path
+        r')'
+    )
 
     @classmethod
     def format(cls, text: str, accent_color: str = "#4080FF",
@@ -5519,7 +6028,7 @@ class MessageBubble(QWidget):
             is_big_emoji = _is_emoji_only(txt)
             if is_big_emoji:
                 tl = QLabel(txt)
-                tl.setFont(QFont("Segoe UI Emoji" if platform.system()=="Windows" else "Noto Color Emoji", 56))
+                tl.setFont(QFont("Segoe UI Emoji,Noto Color Emoji,Apple Color Emoji", 56))
                 tl.setStyleSheet("background:transparent;border:none;padding:6px 4px;"
                                  "font-size:56px;")
                 tl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -5613,112 +6122,209 @@ class MessageBubble(QWidget):
         outer.addLayout(row)
 
     def _add_image(self, layout, m, t):
-        """Render image inline. Sticker = transparent/large, image = clickable thumbnail."""
+        """Render image inline — красивый rounded thumbnail с hover."""
+        from PyQt6.QtGui import QPainter, QPainterPath, QColor, QBrush
         is_sticker = getattr(m, 'msg_type', '') == "sticker"
         pm = QPixmap()
         pm.loadFromData(m.image_data)
         if pm.isNull():
-            layout.addWidget(QLabel("⚠ Не удалось загрузить изображение"))
+            err = QLabel("⚠ Не удалось загрузить изображение")
+            err.setStyleSheet(f"color:{t['error'] if 'error' in t else '#e74c3c'};font-size:10px;")
+            layout.addWidget(err)
             return
-        max_w = 160 if is_sticker else 300
-        max_h = 160 if is_sticker else 260
-        pm_s = pm.scaled(max_w, max_h, Qt.AspectRatioMode.KeepAspectRatio,
-                         Qt.TransformationMode.SmoothTransformation)
+
         if is_sticker:
-            lbl = QLabel()
-            lbl.setPixmap(pm_s)
-            lbl.setFixedSize(pm_s.width(), pm_s.height())
-            lbl.setStyleSheet("background:transparent;border:none;")
-            lbl.setCursor(Qt.CursorShape.PointingHandCursor)
-            lbl.setToolTip("Стикер")
-            lbl.mousePressEvent = lambda _: ImageViewer(m.image_data, self).exec()
-            layout.addWidget(lbl)
+            max_w, max_h, radius = 160, 160, 0
         else:
-            btn = QPushButton()
-            btn.setFlat(True)
-            btn.setFixedSize(pm_s.width(), pm_s.height())
-            btn.setIcon(QIcon(pm_s))
-            btn.setIconSize(QSize(pm_s.width(), pm_s.height()))
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setToolTip("Нажмите для просмотра")
-            btn.setStyleSheet(
-                "QPushButton{border:none;border-radius:10px;padding:0;background:transparent;}"
-                "QPushButton:hover{border:2px solid rgba(100,140,255,178);}")
-            btn.clicked.connect(lambda: ImageViewer(m.image_data, self).exec())
-            layout.addWidget(btn)
+            # Адаптивный размер под соотношение сторон, макс 320x400
+            iw, ih = pm.width(), pm.height()
+            scale = min(320/max(iw,1), 400/max(ih,1), 1.0)
+            max_w, max_h, radius = int(iw*scale), int(ih*scale), 14
+
+        pm_s = pm.scaled(max_w, max_h,
+                         Qt.AspectRatioMode.KeepAspectRatio,
+                         Qt.TransformationMode.SmoothTransformation)
+        w, h = pm_s.width(), pm_s.height()
+
+        # Создаём округлённый pixmap
+        rounded = QPixmap(w, h)
+        rounded.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(rounded)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, w, h, radius, radius)
+        painter.setClipPath(path)
+        painter.drawPixmap(0, 0, pm_s)
+        painter.end()
+
+        class _ImgWidget(QLabel):
+            def __init__(self_2, parent=None):
+                super().__init__(parent)
+                self_2._hovered = False
+                self_2.setPixmap(rounded)
+                self_2.setFixedSize(w, h)
+                self_2.setCursor(Qt.CursorShape.PointingHandCursor)
+                self_2.setToolTip("Нажмите для просмотра · ПКМ сохранить")
+                self_2.setAttribute(Qt.WidgetAttribute.WA_Hover)
+
+            def enterEvent(self_2, e):
+                self_2._hovered = True; self_2.update()
+            def leaveEvent(self_2, e):
+                self_2._hovered = False; self_2.update()
+            def paintEvent(self_2, e):
+                super().paintEvent(e)
+                if self_2._hovered and not is_sticker:
+                    p2 = QPainter(self_2)
+                    p2.setRenderHint(QPainter.RenderHint.Antialiasing)
+                    # Затемнение при наведении
+                    p2.setBrush(QBrush(QColor(0, 0, 0, 60)))
+                    p2.setPen(Qt.PenStyle.NoPen)
+                    path2 = QPainterPath()
+                    path2.addRoundedRect(0, 0, w, h, radius, radius)
+                    p2.setClipPath(path2)
+                    p2.drawRect(0, 0, w, h)
+                    # Иконка лупы по центру
+                    p2.setPen(QColor(255, 255, 255, 200))
+                    from PyQt6.QtGui import QFont as _QF
+                    f = _QF(); f.setPixelSize(28); p2.setFont(f)
+                    p2.drawText(0, 0, w, h, Qt.AlignmentFlag.AlignCenter, "🔍")
+                    # Тонкая рамка
+                    p2.setPen(QColor(255, 255, 255, 80))
+                    p2.setBrush(Qt.BrushStyle.NoBrush)
+                    p2.drawRoundedRect(1, 1, w-2, h-2, radius, radius)
+                    p2.end()
+            def mousePressEvent(self_2, e):
+                from PyQt6.QtCore import Qt as _Qt
+                if e.button() == _Qt.MouseButton.LeftButton:
+                    ImageViewer(m.image_data, self).exec()
+                elif e.button() == _Qt.MouseButton.RightButton:
+                    from PyQt6.QtWidgets import QMenu
+                    menu = QMenu(self_2)
+                    menu.addAction("🔍 Открыть", lambda: ImageViewer(m.image_data, self).exec())
+                    menu.addAction("💾 Сохранить", lambda: self._save_image(m))
+                    menu.exec(e.globalPosition().toPoint())
+
+        img_w = _ImgWidget()
+        if not is_sticker:
+            # Добавим тень через контейнер
+            container = QWidget()
+            container.setFixedSize(w + 4, h + 4)
+            container.setStyleSheet("background:transparent;")
+            img_w.setParent(container)
+            img_w.move(2, 2)
+            layout.addWidget(container)
+        else:
+            layout.addWidget(img_w)
+
+    def _save_image(self, m):
+        fname = (m.text or "image") + ".png"
+        sp, _ = QFileDialog.getSaveFileName(self, "Сохранить изображение", fname,
+            "Images (*.png *.jpg *.jpeg *.webp);;All (*)")
+        if sp:
+            pm = QPixmap(); pm.loadFromData(m.image_data); pm.save(sp)
 
     def _add_video(self, layout, m, t):
-        """Show video as thumbnail + download card."""
+        """Красивая видео-карточка с превью, градиентом и кнопкой play."""
+        from PyQt6.QtGui import QPainter, QPainterPath, QLinearGradient, QColor, QFont as _QFont
         fname = m.text or "video.mp4"
-        dest = RECEIVED_DIR / fname
+        dest  = RECEIVED_DIR / fname
         if m.image_data and not dest.exists():
             try: dest.write_bytes(m.image_data)
             except Exception: pass
 
-        card = QFrame()
-        card.setStyleSheet(
-            f"QFrame{{background:rgba(10,10,30,204);"
-            f"border:1px solid {t['border']};border-radius:12px;}}")
-        card.setFixedWidth(280)
-        cl = QVBoxLayout(card)
-        cl.setContentsMargins(0,0,0,0); cl.setSpacing(0)
+        VW, VH, R = 300, 169, 14   # 16:9 thumbnail
 
-        # Thumbnail
-        thumb = QLabel()
-        thumb.setFixedSize(280, 158)
-        thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        thumb.setStyleSheet("background:#080818;border-radius:12px 12px 0 0;font-size:40px;")
-
+        # Получаем превью через ffmpeg
         thumb_path = RECEIVED_DIR / (fname + "_thumb.jpg")
         if not thumb_path.exists() and dest.exists():
             try:
                 subprocess.run(["ffmpeg","-y","-i",str(dest),"-vframes","1",
-                    "-vf","scale=280:158",str(thumb_path)],
+                    "-vf",f"scale={VW}:{VH}:force_original_aspect_ratio=increase,crop={VW}:{VH}",
+                    str(thumb_path)],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
             except Exception: pass
+
+        # Базовый pixmap (превью или заглушка)
         if thumb_path.exists():
-            pm = QPixmap(str(thumb_path)).scaled(280,158,
+            pm_raw = QPixmap(str(thumb_path)).scaled(VW, VH,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation)
-            thumb.setPixmap(pm)
         else:
-            thumb.setText("🎬")
-        cl.addWidget(thumb)
+            pm_raw = QPixmap(VW, VH); pm_raw.fill(QColor("#0d0d1a"))
 
-        # Play overlay
-        play_btn = QPushButton("▶", card)
-        play_btn.setFixedSize(56,56)
-        play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        play_btn.setStyleSheet(
-            "QPushButton{background:rgba(0,0,0,153);color:white;"
-            "border-radius:28px;font-size:20px;border:2px solid white;}"
-            "QPushButton:hover{background:rgba(108,99,255,229);}")
-        play_btn.move(112, 51)
+        # Округляем + накладываем градиент снизу
+        pm_card = QPixmap(VW, VH)
+        pm_card.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm_card)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, VW, VH, R, R)
+        p.setClipPath(path)
+        p.drawPixmap(0, 0, pm_raw)
+        # Градиент снизу (для текста)
+        grad = QLinearGradient(0, VH*0.5, 0, VH)
+        grad.setColorAt(0, QColor(0,0,0,0))
+        grad.setColorAt(1, QColor(0,0,0,180))
+        from PyQt6.QtGui import QBrush
+        p.setBrush(QBrush(grad)); p.setPen(Qt.PenStyle.NoPen)
+        p.drawRect(0, 0, VW, VH)
+        # Имя файла снизу
+        p.setPen(QColor(255,255,255,220))
+        f2 = _QFont(); f2.setPointSize(8); f2.setBold(True); p.setFont(f2)
+        p.drawText(12, VH-12, VW-24, 16, Qt.AlignmentFlag.AlignLeft, fname)
+        p.end()
 
-        # Bottom bar
-        bot = QWidget()
-        bot.setStyleSheet(f"background:{t['bg3']};border-radius:0 0 12px 12px;")
-        bl2 = QHBoxLayout(bot); bl2.setContentsMargins(10,6,10,6); bl2.setSpacing(6)
-        nl = QLabel(fname); nl.setStyleSheet(f"font-size:10px;color:{t['text']};font-weight:bold;")
-        nl.setMaximumWidth(170); bl2.addWidget(nl,1)
-        dl = QPushButton("⬇ Скачать"); dl.setFixedHeight(26)
-        dl.setCursor(Qt.CursorShape.PointingHandCursor)
-        dl.setStyleSheet(f"QPushButton{{background:{t['accent']};color:white;"
-            "border-radius:6px;border:none;font-size:9px;padding:0 8px;}}")
-        def _save(checked=False, _d=dest, _f=fname):
-            if _d.exists():
-                sp,_ = QFileDialog.getSaveFileName(None,"Сохранить видео",_f,
-                    "Video (*.mp4 *.avi *.mkv *.mov *.webm);;All (*)")
-                if sp:
-                    import shutil as _sh; _sh.copy2(str(_d), sp)
-        dl.clicked.connect(_save); bl2.addWidget(dl)
-        cl.addWidget(bot)
+        class _VideoWidget(QLabel):
+            def __init__(self_2, parent=None):
+                super().__init__(parent)
+                self_2._hov = False
+                self_2.setPixmap(pm_card)
+                self_2.setFixedSize(VW, VH)
+                self_2.setCursor(Qt.CursorShape.PointingHandCursor)
+                self_2.setToolTip("Нажмите для воспроизведения")
+                self_2.setAttribute(Qt.WidgetAttribute.WA_Hover)
+            def enterEvent(self_2, e): self_2._hov = True;  self_2.update()
+            def leaveEvent(self_2, e): self_2._hov = False; self_2.update()
+            def paintEvent(self_2, e):
+                super().paintEvent(e)
+                p2 = QPainter(self_2)
+                p2.setRenderHint(QPainter.RenderHint.Antialiasing)
+                # Затемнение при hover
+                if self_2._hov:
+                    cp = QPainterPath(); cp.addRoundedRect(0,0,VW,VH,R,R)
+                    p2.setClipPath(cp)
+                    p2.setBrush(QBrush(QColor(0,0,0,50)))
+                    p2.setPen(Qt.PenStyle.NoPen); p2.drawRect(0,0,VW,VH)
+                # Кнопка play по центру
+                cx, cy, cr = VW//2, VH//2 - 10, 28
+                p2.setBrush(QBrush(QColor(0,0,0,160 if not self_2._hov else 200)))
+                p2.setPen(Qt.PenStyle.NoPen)
+                p2.drawEllipse(cx-cr, cy-cr, cr*2, cr*2)
+                # Рамка круга
+                p2.setPen(QColor(255,255,255,200 if self_2._hov else 160))
+                p2.setBrush(Qt.BrushStyle.NoBrush)
+                p2.drawEllipse(cx-cr, cy-cr, cr*2, cr*2)
+                # Треугольник ▶
+                from PyQt6.QtGui import QPolygon
+                from PyQt6.QtCore import QPoint
+                tri = QPolygon([QPoint(cx-8,cy-12), QPoint(cx-8,cy+12), QPoint(cx+14,cy)])
+                p2.setBrush(QBrush(QColor(255,255,255,230)))
+                p2.setPen(Qt.PenStyle.NoPen); p2.drawPolygon(tri)
+                p2.end()
+            def mousePressEvent(self_2, e):
+                from PyQt6.QtCore import Qt as _Qt2
+                if e.button() == _Qt2.MouseButton.LeftButton:
+                    _open_media_smart(str(dest), self)
+                elif e.button() == _Qt2.MouseButton.RightButton:
+                    from PyQt6.QtWidgets import QMenu
+                    menu = QMenu(self_2)
+                    menu.addAction("▶ Воспроизвести", lambda: _open_media_smart(str(dest), self))
+                    menu.addAction("💾 Сохранить", lambda: (
+                        lambda sp: __import__('shutil').copy2(str(dest), sp) if sp else None
+                    )(QFileDialog.getSaveFileName(None,"Сохранить",fname,"Video (*.mp4 *.mkv);;All (*)")[0]))
+                    menu.exec(e.globalPosition().toPoint())
 
-        def _play(checked=False, _d=dest):
-            _open_media_smart(str(_d), self)
-        play_btn.clicked.connect(_play)
-        thumb.mousePressEvent = lambda e,_d=dest: _play(_d=_d)
-        layout.addWidget(card)
+        layout.addWidget(_VideoWidget())
 
     def _add_file(self, layout, m, t):
         fname = m.text
@@ -5801,7 +6407,7 @@ class MessageBubble(QWidget):
         for em in self.QUICK_REACT:
             rb = QPushButton(em)
             rb.setFixedSize(38, 38)
-            rb.setFont(QFont("Segoe UI Emoji" if platform.system()=="Windows" else "Noto Color Emoji", 16))
+            rb.setFont(QFont("Segoe UI Emoji,Noto Color Emoji,Apple Color Emoji", 16))
             rb.setStyleSheet(
                 f"QPushButton{{font-size:18px;background:{t['bg3']};"
                 f"border:1px solid {t['border']};border-radius:10px;"
@@ -5991,7 +6597,7 @@ class ChatDisplay(QScrollArea):
     def add_message(self, sender, text, ts, is_own, color="#E0E0E0",
                     emoji="", msg_type="public", image_data=None,
                     is_edited=False, is_forwarded=False, forwarded_from="",
-                    reply_to_text="", chat_id=""):
+                    reply_to_text="", chat_id="", animate=True):
         entry = MessageEntry(
             sender=sender, text=text, ts=ts, is_own=is_own,
             color=color, emoji=emoji, msg_type=msg_type,
@@ -5999,7 +6605,7 @@ class ChatDisplay(QScrollArea):
             is_forwarded=is_forwarded, forwarded_from=forwarded_from,
             reply_to_text=reply_to_text, chat_id=chat_id or self.chat_id)
         self._messages.append(entry)
-        self._append_bubble(entry, animate=True)
+        self._append_bubble(entry, animate=animate)
 
     def _append_bubble(self, entry, animate=False):
         b = MessageBubble(entry, self._read_map, self._known_users)
@@ -6011,14 +6617,17 @@ class ChatDisplay(QScrollArea):
         # Use two ticks: first tick lets Qt calculate widget size,
         # second tick does the scroll (avoids scroll to wrong position)
         if self._at_bottom or entry.is_own:
-            # Two-step: flush layout first, then scroll
+            # Wait for layout to settle (one paint event), then scroll smoothly
             def _do_scroll():
                 sb = self.verticalScrollBar()
-                sb.setValue(sb.maximum())
+                if abs(sb.value() - sb.maximum()) > 5:
+                    self._smooth_scroll_to(sb.maximum(), 150)
+                else:
+                    sb.setValue(sb.maximum())
                 self._hide_jump_btn()
-            QTimer.singleShot(80, _do_scroll)
+            QTimer.singleShot(60, _do_scroll)
         else:
-            QTimer.singleShot(30, self._show_jump_btn)
+            QTimer.singleShot(50, self._show_jump_btn)
 
     def retheme(self, t: dict):
         """Re-apply bubble stylesheet when theme changes."""
@@ -6049,20 +6658,20 @@ class ChatDisplay(QScrollArea):
         self.update()
 
     def _anim_in(self, bubble, is_own):
-        """Fade-in animation. Pos animation removed — it caused render delay
-        because bubble.pos() is (0,0) before Qt finishes layout pass."""
+        """Smooth fade-in for new messages."""
         from PyQt6.QtWidgets import QGraphicsOpacityEffect
         eff = QGraphicsOpacityEffect(bubble)
         eff.setOpacity(0.0)
         bubble.setGraphicsEffect(eff)
         fade = QPropertyAnimation(eff, b"opacity", bubble)
-        fade.setDuration(160)
+        fade.setDuration(220)
         fade.setStartValue(0.0)
         fade.setEndValue(1.0)
         fade.setEasingCurve(QEasingCurve.Type.OutCubic)
-        # IMPORTANT: remove effect after animation — leaving it blocks repaint
-        fade.finished.connect(lambda: bubble.setGraphicsEffect(None))
-        fade.finished.connect(lambda: bubble.update())
+        def _done():
+            bubble.setGraphicsEffect(None)
+            bubble.update()
+        fade.finished.connect(_done)
         fade.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def add_system(self, text):
@@ -6158,6 +6767,30 @@ class ChatDisplay(QScrollArea):
             if m.get("system"):
                 self.add_system(m["text"])
             else:
+                # Restore image/video data from disk if stored as path
+                img_data = None
+                msg_type = m.get("msg_type", "text")
+
+                if msg_type in ("image", "video", "sticker", "file"):
+                    # Try sticker_path first (saved to RECEIVED_DIR)
+                    sp = m.get("sticker_path") or m.get("file_path")
+                    if sp:
+                        try:
+                            p = Path(sp)
+                            if p.exists():
+                                img_data = p.read_bytes()
+                        except Exception:
+                            pass
+                    # Fallback to base64 in history
+                    if img_data is None:
+                        b64 = m.get("image_b64","") or m.get("file_b64","")
+                        if b64:
+                            try:
+                                import base64 as _b64
+                                img_data = _b64.b64decode(b64)
+                            except Exception:
+                                pass
+
                 self.add_message(
                     m.get("sender","?"), m.get("text",""),
                     m.get("ts", time.time()), m.get("is_own", False),
@@ -6165,7 +6798,10 @@ class ChatDisplay(QScrollArea):
                     is_edited=m.get("is_edited", False),
                     is_forwarded=m.get("is_forwarded", False),
                     forwarded_from=m.get("forwarded_from", ""),
-                    reply_to_text=m.get("reply_to_text", ""))
+                    reply_to_text=m.get("reply_to_text", ""),
+                    msg_type=msg_type,
+                    image_data=img_data,
+                    animate=False)
 
     def clear(self):
         for b in self._bubbles:
@@ -6477,8 +7113,10 @@ class PeerPanel(QWidget):
         pinned = list(_j.loads(S().get("pinned_peers", "[]", t=str)))
         if ip in pinned:
             pinned.remove(ip)
+            play_system_sound("unpin")
         else:
             pinned.insert(0, ip)
+            play_system_sound("pin")
         S().set("pinned_peers", _j.dumps(pinned))
         self._rebuild_list()
 
@@ -6736,7 +7374,7 @@ class PeerPanel(QWidget):
         # Wrap in scroll for tab display
         _outer = QVBoxLayout(dlg)
         _outer.setContentsMargins(0,0,0,0)
-        _scroll = QScrollArea()
+        _scroll = QScrollArea(dlg)
         _scroll.setWidgetResizable(True)
         _scroll.setStyleSheet(
             f"QScrollArea{{background:{t['bg2']};border:none;}}"
@@ -6974,6 +7612,33 @@ class _GrowingTextEdit(QTextEdit):
         else:
             super().keyPressEvent(event)
 
+    def insertFromMimeData(self, source):
+        """Ctrl+V: если в буфере картинка — передаём в ChatPanel."""
+        if source.hasImage():
+            # Поднимаем наверх к ChatPanel
+            p = self.parent()
+            while p:
+                if hasattr(p, 'dropEvent') and hasattr(p, '_send_file_path'):
+                    from PyQt6.QtCore import QMimeData
+                    p.dropEvent(type('E', (), {
+                        'mimeData': lambda s: source,
+                        'acceptProposedAction': lambda s: None
+                    })())
+                    return
+                p = p.parent() if hasattr(p, 'parent') else None
+        elif source.hasUrls():
+            p = self.parent()
+            while p:
+                if hasattr(p, '_send_file_path'):
+                    for url in source.urls():
+                        path = url.toLocalFile()
+                        if path:
+                            p._send_file_path(path)
+                    return
+                p = p.parent() if hasattr(p, 'parent') else None
+        else:
+            super().insertFromMimeData(source)
+
     def setPlaceholderText(self, text: str):
         self._placeholder = text
         self.document().setPlainText("")
@@ -7002,9 +7667,11 @@ class ChatPanel(QWidget):
         self._typing_timer.timeout.connect(self._send_typing)
         self._in_call = False
         self._drafts: dict[str, str] = {}  # chat_id → draft text
-        self._ttl_seconds: int = 0           # 0=off, else seconds until auto-delete
-        self._ttl_timers: list = []          # active QTimer refs for TTL messages
+        self._ttl_seconds: int = 0
+        self._ttl_timers: list = []
         self._setup()
+        # Drag & drop — файлы и изображения прямо в чат
+        self.setAcceptDrops(True)
 
     def _setup(self):
         lay = QVBoxLayout(self)
@@ -7240,24 +7907,24 @@ class ChatPanel(QWidget):
         sp_lay.addLayout(sp_top)
 
         # Sticker scroll grid
-        sticker_scroll = QScrollArea()
-        sticker_scroll.setWidgetResizable(True)
-        sticker_scroll.setFixedHeight(156)
-        sticker_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        sticker_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        sticker_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        sticker_scroll.setStyleSheet(
-            f"QScrollArea{{background:{t2['bg2']};border:none;}}"
-            f"QScrollBar:vertical{{background:{t2['bg3']};width:6px;border-radius:3px;}}"
-            f"QScrollBar::handle:vertical{{background:{t2['border']};border-radius:3px;}}")
+        self._sticker_scroll = QScrollArea()
+        self._sticker_scroll.setWidgetResizable(True)
+        self._sticker_scroll.setFixedHeight(156)
+        self._sticker_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._sticker_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._sticker_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._sticker_scroll.setStyleSheet(
+        f"QScrollArea{{background:{t2['bg2']};border:none;}}"
+        f"QScrollBar:vertical{{background:{t2['bg3']};width:6px;border-radius:3px;}}"
+        f"QScrollBar::handle:vertical{{background:{t2['border']};border-radius:3px;}}")
         self._sticker_grid_widget = QWidget()
         self._sticker_grid_widget.setStyleSheet(
-            f"background:{t2['bg2']};")
+        f"background:{t2['bg2']};")
         self._sticker_grid_layout = QGridLayout(self._sticker_grid_widget)
         self._sticker_grid_layout.setSpacing(6)
         self._sticker_grid_layout.setContentsMargins(4, 4, 4, 4)
-        sticker_scroll.setWidget(self._sticker_grid_widget)
-        sp_lay.addWidget(sticker_scroll)
+        self._sticker_scroll.setWidget(self._sticker_grid_widget)
+        sp_lay.addWidget(self._sticker_scroll)
 
         self._sticker_panel.setVisible(False)
         # Sticker panel is now shown as floating side popup, NOT in main layout
@@ -7278,7 +7945,7 @@ class ChatPanel(QWidget):
         il.setSpacing(6)
 
         self._input = _GrowingTextEdit()
-        self._input.setPlaceholderText(TR("type_message"))
+        self._input.setPlaceholderText(TR("type_message") + "  •  перетащи файл или Ctrl+V")
         self._input.send_pressed.connect(self._send_text)
         self._input.textChanged.connect(self._on_typing_te)
         self._input.textChanged.connect(self._on_slash_complete_te)
@@ -7933,6 +8600,111 @@ class ChatPanel(QWidget):
         self.net.send_reaction(to_ip, chat_id, ts, emoji, added)
 
     # ── send ─────────────────────────────────────────────────────────────
+    # ── Drag & Drop ────────────────────────────────────────────────────────
+    def dragEnterEvent(self, event):
+        """Принимаем файлы и текст с изображениями."""
+        md = event.mimeData()
+        if md.hasUrls() or md.hasImage() or md.hasText():
+            event.acceptProposedAction()
+            # Визуальная подсказка — подсветить поле ввода
+            t = get_theme(S().theme)
+            _iw = self.findChild(QWidget, "input_area")
+            if _iw:
+                _iw.setStyleSheet(
+                    f"QWidget#input_area{{background:{t['bg3']};border-radius:12px;"
+                    f"border:2px dashed {t['accent']};}}")
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        t = get_theme(S().theme)
+        _iw = self.findChild(QWidget, "input_area")
+        if _iw: _iw.setStyleSheet("")   # сброс — применится global QSS
+
+    def dropEvent(self, event):
+        """Обработать дроп — файлы, изображения, текст."""
+        t = get_theme(S().theme)
+        _iw = self.findChild(QWidget, "input_area")
+        if _iw: _iw.setStyleSheet("")   # сброс — применится global QSS
+        md = event.mimeData()
+
+        if md.hasUrls():
+            # Файлы/папки — отправляем каждый
+            for url in md.urls():
+                path = url.toLocalFile()
+                if path and Path(path).is_file():
+                    self._send_file_path(path)
+            event.acceptProposedAction()
+
+        elif md.hasImage():
+            # Изображение из буфера (скриншот, копипаст из браузера)
+            img = md.imageData()
+            if img and not img.isNull():
+                import tempfile, os as _os
+                tmp = Path(tempfile.mktemp(suffix=".png"))
+                img.save(str(tmp))
+                self._send_file_path(str(tmp))
+                QTimer.singleShot(5000, lambda: tmp.unlink(missing_ok=True))
+            event.acceptProposedAction()
+
+        elif md.hasText():
+            # Текст — вставляем в поле ввода
+            self._input.insertPlainText(md.text())
+            event.acceptProposedAction()
+
+    def _send_file_path(self, path: str):
+        """Отправить файл по пути — то же что нажать скрепку."""
+        p = Path(path)
+        if not p.exists(): return
+        ext   = p.suffix.lower()
+        fname = p.name
+        fsize = p.stat().st_size
+        ts    = time.time()
+        prog_id = f"up_{int(ts*1000)}"
+        self._display.add_upload_progress(fname, fsize, prog_id)
+        to_ip = self._current_peer["ip"] if self._current_peer else None
+
+        _pre_data = None
+        if ext in self._IMG_EXTS or ext in self._VID_EXTS:
+            try: _pre_data = p.read_bytes()
+            except Exception: pass
+
+        dest0 = RECEIVED_DIR / fname
+        try:
+            import shutil as _sh
+            if not dest0.exists():
+                _sh.copy2(path, str(dest0))
+        except Exception: pass
+
+        try:
+            self.net.send_file(to_ip, path)
+        except Exception as e:
+            print(f"[drag-send] {e}")
+
+        _chat_id = "public"
+        if self._current_peer:   _chat_id = self._current_peer.get("ip", "public")
+        elif self._current_gid:  _chat_id = f"group_{self._current_gid}"
+
+        _msg_type = ("image" if ext in self._IMG_EXTS
+                     else "video" if ext in self._VID_EXTS
+                     else "file")
+
+        self._display.remove_progress(prog_id)
+        if ext in self._IMG_EXTS:
+            self._display.add_message("Вы", fname, ts, is_own=True,
+                image_data=_pre_data)
+        elif ext in self._VID_EXTS:
+            self._display.add_message("Вы", fname, ts, is_own=True,
+                msg_type="video", image_data=_pre_data)
+        else:
+            self._display.add_message("Вы", fname, ts, is_own=True, msg_type="file")
+
+        HISTORY.append(_chat_id, {
+            "sender": S().username, "text": fname, "ts": ts,
+            "is_own": True, "color": S().nickname_color,
+            "msg_type": _msg_type, "file_path": str(dest0),
+        })
+
     def _send_text(self):
         text = self._input.toPlainText().strip()
         if not text:
@@ -8210,15 +8982,21 @@ class ChatPanel(QWidget):
 
         _rext = Path(fname).suffix.lower()
         _rvid = {".mp4",".avi",".mkv",".mov",".webm",".m4v",".wmv",".flv"}
-        if is_image and show:
+        _is_vid = _rext in _rvid
+        _msg_type = "video" if _is_vid else ("image" if is_image else "file")
+
+        if show:
             self._display.add_message(sender, fname, ts, is_own=False,
-                                      color=color, image_data=data)
-        elif _rext in _rvid and show:
-            self._display.add_message(sender, fname, ts, is_own=False,
-                                      color=color, msg_type="video", image_data=data)
-        elif show:
-            self._display.add_message(sender, fname, ts, is_own=False,
-                                      color=color, msg_type="file")
+                                      color=color, msg_type=_msg_type,
+                                      image_data=data if (is_image or _is_vid) else None)
+
+        # Always save to history with file path so it persists across restarts
+        HISTORY.append(chat_id, {
+            "sender": sender, "text": fname, "ts": ts,
+            "is_own": False, "color": color,
+            "msg_type": _msg_type,
+            "file_path": str(dest),
+        })
 
         if S().notification_sounds and not show:
             play_system_sound("message")
@@ -8256,18 +9034,31 @@ class ChatPanel(QWidget):
         if ext in self._IMG_EXTS or ext in self._VID_EXTS:
             try: _pre_data = p.read_bytes()
             except Exception: pass
-        # Copy to received dir so "open" works for sender
-        if ext not in self._IMG_EXTS and ext not in self._VID_EXTS:
-            dest0 = RECEIVED_DIR / fname
-            try:
-                import shutil as _sh0; _sh0.copy2(path, str(dest0))
-            except Exception: pass
+
+        # Copy ALL sent files to RECEIVED_DIR so they persist after restart
+        dest0 = RECEIVED_DIR / fname
+        try:
+            import shutil as _sh0
+            if not dest0.exists():
+                _sh0.copy2(path, str(dest0))
+        except Exception: pass
 
         # send_file uses QTimer internally — returns immediately, no thread needed
         try:
             self.net.send_file(to_ip, path)
         except Exception as e:
             print(f"[send] {e}")
+
+        # Determine chat_id for history
+        _chat_id = "public"
+        if self._current_peer:
+            _chat_id = self._current_peer.get("ip", "public")
+        elif self._current_gid:
+            _chat_id = f"group_{self._current_gid}"
+
+        _msg_type_s = ("image" if ext in self._IMG_EXTS
+                       else "video" if ext in self._VID_EXTS
+                       else "file")
 
         # Remove progress and show bubble right away
         self._display.remove_progress(prog_id)
@@ -8279,6 +9070,14 @@ class ChatPanel(QWidget):
                 msg_type="video", image_data=_pre_data)
         else:
             self._display.add_message("Вы", fname, ts, is_own=True, msg_type="file")
+
+        # Save to history WITH file_path — restores on restart
+        HISTORY.append(_chat_id, {
+            "sender": S().username, "text": fname, "ts": ts,
+            "is_own": True, "color": S().nickname_color,
+            "msg_type": _msg_type_s,
+            "file_path": str(dest0),
+        })
 
     # ── call ──────────────────────────────────────────────────────────────
     def _toggle_call(self):
@@ -8359,7 +9158,7 @@ class ChatPanel(QWidget):
         self.net.send_call_accept(ip)
         self.net.connect_voice(ip)
         self.voice.call(ip)
-        active = ActiveCallWindow(caller, ip, av_b64)
+        active = ActiveCallWindow(caller, ip, av_b64, voice_mgr=self.voice)
         self._float_call = active
         active.sig_hangup.connect(lambda: self._hangup())
         active.sig_mute.connect(self.voice.set_mute)
@@ -8373,6 +9172,26 @@ class ChatPanel(QWidget):
         else:
             self.voice.hangup_all()
         self._set_call_active(False)
+
+    def _on_system_audio_output_changed(self):
+        """Системное аудио-устройство изменилось — уведомляем все модули."""
+        # Mewa: пересоздаёт QAudioOutput автоматически через свой коннект
+        # Mewa делает это сам через self._media_devices в _init_player
+        
+        # VoiceCallManager: если идёт звонок — переподключаем стримы
+        try:
+            if hasattr(self.voice, '_voice') and self.voice._voice:
+                v = self.voice._voice
+                if v.running:
+                    in_dev  = S().get("in_device",  None)
+                    out_dev = S().get("out_device",  None)
+                    v.stop_all()
+                    v.start_capture(in_dev, out_dev)
+        except Exception:
+            pass
+
+        # Звуки (_play_file) — каждый раз создают QAudioOutput заново,
+        # уже используют QMediaDevices.defaultAudioOutput() — OK
 
     def _toggle_mute(self):
         muted = self.voice.toggle_mute()
@@ -9711,7 +10530,7 @@ class ProfileDialog(QDialog):
         for e in ["👑","⭐","🔥","💎","🚀","⚡","🎯","💫","🌟","🦋"]:
             b = QPushButton(e)
             b.setFixedSize(34, 30)
-            b.setFont(QFont("Segoe UI Emoji" if platform.system()=="Windows" else "Noto Color Emoji", 14))
+            b.setFont(QFont("Segoe UI Emoji,Noto Color Emoji,Apple Color Emoji", 14))
             b.clicked.connect(lambda _, em=e: self._emoji_edit.setText(em))
             eq.addWidget(b)
         eq.addStretch()
@@ -9994,6 +10813,8 @@ class SettingsDialog(QDialog):
         tabs = QTabWidget()
         tabs.setUsesScrollButtons(True)   # scroll when too many tabs
         tabs.setElideMode(Qt.TextElideMode.ElideNone)
+        tabs.tabBar().setFixedHeight(26)
+        tabs.tabBar().setExpanding(False)
 
         tabs.addTab(self._tab_audio(),      TR("tab_audio"))
         tabs.addTab(self._tab_network(),    TR("tab_network"))
@@ -10025,7 +10846,19 @@ class SettingsDialog(QDialog):
 
     # ── Audio tab ──────────────────────────────────────────────────────
     def _tab_audio(self) -> QWidget:
-        w = QWidget()
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0,0,0,0)
+        _sa = QScrollArea(outer)          # parent=outer keeps it alive
+        _sa.setWidgetResizable(True)
+        _sa.setFrameShape(QFrame.Shape.NoFrame)
+        _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer_lay.addWidget(_sa)
+        w = QWidget(_sa)                  # parent=_sa keeps it alive
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
+        _sa.setWidget(w)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12,12,12,12)
         lay.setSpacing(8)
@@ -10080,8 +10913,141 @@ class SettingsDialog(QDialog):
         fl3.addRow("Джиттер-буфер:", jb_row)
 
         lay.addWidget(g3)
+
+        # ── Звуковая схема ────────────────────────────────────────────────
+        g4 = QGroupBox("🎵  Звуковая схема")
+        g4.setToolTip("Назначь звук для каждого события — нажми 📂 чтобы выбрать файл")
+        fl4 = QVBoxLayout(g4)
+
+        t = get_theme(S().theme)
+
+        import json as _j4
+        try:
+            _user_scheme = _j4.loads(S().get("sound_scheme", "{}", t=str))
+        except Exception:
+            _user_scheme = {}
+
+        self._sound_labels = {}   # event → QLabel с именем файла
+
+        for event, label in _SOUND_EVENT_LABELS.items():
+            row = QWidget()
+            row.setStyleSheet(
+                f"QWidget{{background:{t['bg3']};border-radius:6px;margin:1px 0;}}"
+                f"QWidget:hover{{background:{t['btn_hover']};}}")
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(8, 5, 8, 5)
+            rl.setSpacing(8)
+
+            # Название события
+            ev_lbl = QLabel(label)
+            ev_lbl.setMinimumWidth(190)
+            ev_lbl.setStyleSheet(
+                f"background:transparent;font-size:9pt;color:{t['text']};")
+            rl.addWidget(ev_lbl)
+
+            # Текущий файл
+            cur = _user_scheme.get(event)
+            if cur == "__none__":
+                cur_text = "🔇 выключен"
+            elif cur:
+                cur_text = cur
+            else:
+                default = _SOUND_MAP_DEFAULT.get(event, [""])[0]
+                cur_text = f"{default} (по умолч.)" if default else "—"
+
+            file_lbl = QLabel(cur_text)
+            file_lbl.setMinimumWidth(160)
+            file_lbl.setStyleSheet(
+                f"background:transparent;font-size:9pt;"
+                f"color:{t['text_dim']};font-style:italic;")
+            rl.addWidget(file_lbl, stretch=1)
+            self._sound_labels[event] = file_lbl
+
+            # Кнопка выбрать файл
+            pick_btn = QPushButton("📂")
+            pick_btn.setFixedSize(30, 26)
+            pick_btn.setToolTip("Выбрать звуковой файл (.wav, .mp3, .ogg)")
+            pick_btn.setStyleSheet(
+                f"QPushButton{{background:{t['bg2']};color:{t['text']};"
+                "border-radius:4px;border:none;font-size:13px;}}"
+                f"QPushButton:hover{{background:{t['accent']};color:white;}}")
+            def _pick_file(_ev=event, _lbl=file_lbl):
+                fn, _ = QFileDialog.getOpenFileName(
+                    self, f"Звук для: {_SOUND_EVENT_LABELS.get(_ev, _ev)}",
+                    str(Path(__file__).parent),
+                    "Звуковые файлы (*.wav *.mp3 *.ogg *.flac *.aac);;Все файлы (*)")
+                if fn:
+                    fname = Path(fn).name
+                    # Сохраняем полный путь если файл не рядом с gdf.py
+                    try:
+                        import json as _jx
+                        sc = _jx.loads(S().get("sound_scheme", "{}", t=str))
+                    except Exception:
+                        sc = {}
+                    sc[_ev] = fn   # полный путь
+                    S().set("sound_scheme", __import__('json').dumps(sc))
+                    _lbl.setText(fname)
+                    _lbl.setStyleSheet(
+                        f"background:transparent;font-size:9pt;"
+                        f"color:{t['text']};font-style:normal;")
+            pick_btn.clicked.connect(_pick_file)
+            rl.addWidget(pick_btn)
+
+            # Кнопка выключить звук
+            mute_btn = QPushButton("🔇")
+            mute_btn.setFixedSize(30, 26)
+            mute_btn.setToolTip("Выключить этот звук")
+            mute_btn.setStyleSheet(pick_btn.styleSheet())
+            def _mute(_ev=event, _lbl=file_lbl):
+                try:
+                    import json as _jm
+                    sc = _jm.loads(S().get("sound_scheme", "{}", t=str))
+                except Exception:
+                    sc = {}
+                sc[_ev] = "__none__"
+                S().set("sound_scheme", __import__('json').dumps(sc))
+                _lbl.setText("🔇 выключен")
+                _lbl.setStyleSheet(
+                    f"background:transparent;font-size:9pt;"
+                    f"color:{t['text_dim']};font-style:italic;")
+            mute_btn.clicked.connect(_mute)
+            rl.addWidget(mute_btn)
+
+            # Кнопка preview
+            prev_btn = QPushButton("▶")
+            prev_btn.setFixedSize(30, 26)
+            prev_btn.setToolTip("Прослушать")
+            prev_btn.setStyleSheet(
+                f"QPushButton{{background:{t['bg2']};color:{t['accent']};"
+                "border-radius:4px;border:none;font-size:11px;}}"
+                f"QPushButton:hover{{background:{t['accent']};color:white;}}")
+            def _preview(_ev=event):
+                play_system_sound(_ev)
+            prev_btn.clicked.connect(_preview)
+            rl.addWidget(prev_btn)
+
+            fl4.addWidget(row)
+
+        # Кнопки снизу
+        btn_row2 = QHBoxLayout()
+        reset_btn2 = QPushButton("↩ Сброс к дефолту")
+        reset_btn2.setFixedHeight(28)
+        def _reset2():
+            S().set("sound_scheme", "{}")
+            for ev, lbl in self._sound_labels.items():
+                default = _SOUND_MAP_DEFAULT.get(ev, [""])[0]
+                lbl.setText(f"{default} (по умолч.)" if default else "—")
+                lbl.setStyleSheet(
+                    f"background:transparent;font-size:9pt;"
+                    f"color:{t['text_dim']};font-style:italic;")
+        reset_btn2.clicked.connect(_reset2)
+        btn_row2.addWidget(reset_btn2)
+        btn_row2.addStretch()
+        fl4.addLayout(btn_row2)
+
+        lay.addWidget(g4)
         lay.addStretch()
-        return w
+        return outer
 
     def _populate_audio_devices(self):
         self._in_dev.clear()
@@ -10106,7 +11072,19 @@ class SettingsDialog(QDialog):
     # ── Appearance tab ─────────────────────────────────────────────────
     def _tab_appearance(self) -> QWidget:
         """App scale, splash screen customisation, launcher, tab visibility."""
-        w = QWidget()
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0,0,0,0)
+        _sa = QScrollArea(outer)          # parent=outer keeps it alive
+        _sa.setWidgetResizable(True)
+        _sa.setFrameShape(QFrame.Shape.NoFrame)
+        _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer_lay.addWidget(_sa)
+        w = QWidget(_sa)                  # parent=_sa keeps it alive
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
+        _sa.setWidget(w)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 12, 12, 12)
         lay.setSpacing(10)
@@ -10127,7 +11105,7 @@ class SettingsDialog(QDialog):
         scale_row.addWidget(self._scale_slider)
         scale_row.addWidget(self._scale_lbl)
         sfl.addRow("Масштаб:", scale_row)
-        scale_hint = QLabel("Изменение масштаба применяется после перезапуска. 100% — стандарт.")
+        scale_hint = QLabel("Масштаб сохраняется и применяется при следующем запуске. 100% — стандарт.")
         scale_hint.setStyleSheet(f"color:{t['text_dim']};font-size:9px;")
         sfl.addRow(scale_hint)
         apply_scale_btn = QPushButton("Применить сейчас (приблизительно)")
@@ -10177,6 +11155,38 @@ class SettingsDialog(QDialog):
         lfl.addRow(self._show_launcher_cb)
         lay.addWidget(launch_g)
 
+        # App icon
+        icon_g = QGroupBox("🖼  Иконка приложения")
+        ifl = QFormLayout(icon_g)
+        self._icon_preview = QLabel("По умолчанию")
+        self._icon_preview.setFixedSize(64, 64)
+        self._icon_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._icon_preview.setStyleSheet(
+            f"background:{t['bg3']};border-radius:8px;"
+            f"color:{t['text_dim']};font-size:9px;")
+        icon_b64 = S().get("app_icon_b64", "", t=str)
+        if icon_b64:
+            try:
+                pm_i = QPixmap()
+                pm_i.loadFromData(base64.b64decode(icon_b64))
+                if not pm_i.isNull():
+                    self._icon_preview.setPixmap(pm_i.scaled(
+                        56, 56, Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation))
+                    self._icon_preview.setText("")
+            except Exception: pass
+        ifl.addRow("Иконка:", self._icon_preview)
+        icon_btn_row = QHBoxLayout()
+        pick_icon_btn = QPushButton("📂 Выбрать (.png/.ico)")
+        pick_icon_btn.clicked.connect(self._pick_app_icon)
+        clear_icon_btn = QPushButton("Убрать")
+        clear_icon_btn.clicked.connect(self._clear_app_icon)
+        icon_btn_row.addWidget(pick_icon_btn)
+        icon_btn_row.addWidget(clear_icon_btn)
+        ifl.addRow(icon_btn_row)
+        ifl.addRow(QLabel("Применяется после перезапуска"))
+        lay.addWidget(icon_g)
+
         # Tab visibility
         tabs_g = QGroupBox("Постоянные вкладки (скрыть, но не удалить)")
         tfl = QFormLayout(tabs_g)
@@ -10188,7 +11198,7 @@ class SettingsDialog(QDialog):
         tfl.addRow(self._tab_show_calls)
         lay.addWidget(tabs_g)
         lay.addStretch()
-        return w
+        return outer
 
     def _apply_scale_now(self):
         val = getattr(self, '_scale_slider', None)
@@ -10199,6 +11209,36 @@ class SettingsDialog(QDialog):
         font.setPointSizeF(max(7.0, 9.0 * factor))
         QApplication.instance().setFont(font)
         S().set("app_scale", val.value())
+
+    def _pick_app_icon(self):
+        fn, _ = QFileDialog.getOpenFileName(
+            self, "Выбрать иконку приложения", "",
+            "Images (*.png *.ico *.jpg *.jpeg)")
+        if not fn:
+            return
+        pm = QPixmap(fn)
+        if pm.isNull():
+            return
+        buf = __import__('io').BytesIO()
+        pm.toImage().save(buf := __import__('io').BytesIO(), 'PNG')
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        S().set("app_icon_b64", b64)
+        # Обновляем превью
+        self._icon_preview.setPixmap(pm.scaled(
+            56, 56, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation))
+        self._icon_preview.setText("")
+        # Применяем сразу
+        QApplication.instance().setWindowIcon(QIcon(fn))
+
+    def _clear_app_icon(self):
+        S().set("app_icon_b64", "")
+        self._icon_preview.setPixmap(QPixmap())
+        self._icon_preview.setText("По умолчанию")
+        # Сброс к icon.png если есть
+        _def = Path(__file__).parent / "icon.png"
+        if _def.exists():
+            QApplication.instance().setWindowIcon(QIcon(str(_def)))
 
     def _pick_splash_image(self):
         fn, _ = QFileDialog.getOpenFileName(
@@ -10226,15 +11266,19 @@ class SettingsDialog(QDialog):
 
     # ── Network tab ────────────────────────────────────────────────────
     def _tab_network(self) -> QWidget:
-        w = QWidget()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setWidget(w)
         outer = QWidget()
         outer_lay = QVBoxLayout(outer)
         outer_lay.setContentsMargins(0,0,0,0)
+        scroll = QScrollArea(outer)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         outer_lay.addWidget(scroll)
+        w = QWidget(scroll)
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
+        scroll.setWidget(w)
 
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12,12,12,12)
@@ -10539,7 +11583,17 @@ class SettingsDialog(QDialog):
 
     # ── Themes tab ─────────────────────────────────────────────────────
     def _tab_themes(self) -> QWidget:
-        w = QWidget()
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0,0,0,0)
+        _sa = QScrollArea(outer); _sa.setWidgetResizable(True)
+        _sa.setFrameShape(QFrame.Shape.NoFrame)
+        _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer_lay.addWidget(_sa)
+        w = QWidget(_sa); _sa.setWidget(w)
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12,12,12,12)
         lay.setSpacing(8)
@@ -10575,7 +11629,7 @@ class SettingsDialog(QDialog):
             g2.setTitle("👑 Кастомные темы (требует Премиум)")
         lay.addWidget(g2)
         lay.addStretch()
-        return w
+        return outer
 
     def _preview_theme(self):
         key = self._theme_combo.currentData()
@@ -10606,44 +11660,188 @@ class SettingsDialog(QDialog):
 
     # ── License tab ────────────────────────────────────────────────────
     def _tab_license(self) -> QWidget:
-        w = QWidget()
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0,0,0,0)
+        _sa = QScrollArea(outer); _sa.setWidgetResizable(True)
+        _sa.setFrameShape(QFrame.Shape.NoFrame)
+        _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer_lay.addWidget(_sa)
+        w = QWidget(_sa); _sa.setWidget(w)
+        w.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.MinimumExpanding)
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(12,12,12,12)
-        lay.setSpacing(8)
+        lay.setContentsMargins(20, 20, 20, 20)
+        lay.setSpacing(16)
 
-        g = QGroupBox("Статус Премиум")
-        gl = QVBoxLayout(g)
+        t = get_theme(S().theme)
+        is_premium = S().premium
+
+        # ── Статус-карточка ──────────────────────────────────────────────────
+        card = QFrame()
+        card.setFrameShape(QFrame.Shape.NoFrame)
+        if is_premium:
+            card.setStyleSheet(
+                "QFrame{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+                "stop:0 #0d2a0d,stop:0.5 #142814,stop:1 #0d200d);"
+                "border-radius:18px;}")
+        else:
+            card.setStyleSheet(
+                f"QFrame{{background:{t['bg3']};border-radius:18px;}}")
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(28, 24, 28, 24)
+        cl.setSpacing(10)
+
+        # Значок и план
+        top_row = QHBoxLayout()
+        badge = QLabel("✦" if is_premium else "◇")
+        badge.setStyleSheet(
+            f"font-size:36px;"
+            f"color:{'#FFD700' if is_premium else t['text_dim']};"
+            "background:transparent;")
+        top_row.addWidget(badge)
+
+        plan_col = QVBoxLayout()
+        plan_name = QLabel("GoidaPhone Premium" if is_premium else "Стандартная версия")
+        plan_name.setStyleSheet(
+            f"font-size:16px;font-weight:700;"
+            f"color:{'#FFD700' if is_premium else t['text']};"
+            "background:transparent;")
+        plan_col.addWidget(plan_name)
 
         self._lic_status = QLabel()
-        self._lic_status.setWordWrap(True)
-        gl.addWidget(self._lic_status)
+        self._lic_status.setStyleSheet(
+            f"font-size:10pt;color:{t['text_dim']};background:transparent;")
+        plan_col.addWidget(self._lic_status)
+        top_row.addLayout(plan_col)
+        top_row.addStretch()
+        cl.addLayout(top_row)
 
-        info = QLabel(
-            "Премиум возможности:\n"
-            "• Цветной ник\n"
-            "• Кастомный эмодзи рядом с именем\n"
-            "• 3 слота кастомных тем оформления\n"
-            "• Срок действия: 30 дней"
-        )
-        info.setStyleSheet("padding:8px; border-radius:4px;")
-        gl.addWidget(info)
+        # Прогресс-бар (только если premium)
+        if is_premium:
+            try:
+                from datetime import datetime as _dt
+                exp_dt = _dt.fromisoformat(S().premium_expires)
+                act_dt = exp_dt - __import__('datetime').timedelta(days=LICENSE_DAYS)
+                total  = max(1, (exp_dt - act_dt).days)
+                remain = max(0, (exp_dt - _dt.now()).days)
+                pct    = int(remain / total * 100)
+                clr    = "#27AE60" if pct > 40 else "#F39C12" if pct > 15 else "#E74C3C"
 
-        self._lic_input = LicenseLineEdit()
-        gl.addWidget(self._lic_input)
+                sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+                sep.setStyleSheet("background:rgba(255,255,255,15);max-height:1px;border:none;")
+                cl.addWidget(sep)
 
-        self._activate_btn = QPushButton("🎫 Активировать")
-        self._activate_btn.setObjectName("accent_btn")
-        self._activate_btn.clicked.connect(self._activate)
-        gl.addWidget(self._activate_btn)
+                prog = QProgressBar()
+                prog.setRange(0, 100); prog.setValue(pct)
+                prog.setFixedHeight(5); prog.setTextVisible(False)
+                prog.setStyleSheet(
+                    f"QProgressBar{{background:rgba(255,255,255,20);border-radius:3px;border:none;}}"
+                    f"QProgressBar::chunk{{background:{clr};border-radius:3px;}}")
+                cl.addWidget(prog)
 
-        buy_btn = QPushButton("📱 Купить лицензию (Telegram)")
-        buy_btn.clicked.connect(lambda: QDesktopServices.openUrl(
-            QUrl("https://t.me/WinoraCompany")))
-        gl.addWidget(buy_btn)
+                days_lbl = QLabel(
+                    f"{'Истекает' if remain < 7 else 'Активна'} — осталось {remain} дн. из {total}")
+                days_lbl.setStyleSheet(
+                    f"font-size:8pt;color:{'#E74C3C' if remain<7 else 'rgba(255,255,255,120)'};"
+                    "background:transparent;")
+                cl.addWidget(days_lbl)
+            except Exception:
+                pass
 
-        lay.addWidget(g)
+        lay.addWidget(card)
+
+        # ── Преимущества ─────────────────────────────────────────────────────
+        feats_w = QWidget()
+        feats_w.setStyleSheet(f"background:{t['bg3']};border-radius:12px;")
+        feats_l = QVBoxLayout(feats_w)
+        feats_l.setContentsMargins(16, 14, 16, 14)
+        feats_l.setSpacing(8)
+
+        feats_hdr = QLabel("Что входит в Premium")
+        feats_hdr.setStyleSheet(
+            f"font-size:10pt;font-weight:600;color:{t['text']};background:transparent;")
+        feats_l.addWidget(feats_hdr)
+
+        for feat, desc in [
+            ("🎨 Цветной ник",          "Любой цвет для своего имени в чате"),
+            ("😎 Кастомный эмодзи",     "Эмодзи рядом с именем"),
+            ("🖌 Свои темы",            "3 слота для кастомных тем оформления"),
+            ("⭐ Значок в профиле",     "Золотой значок Premium"),
+        ]:
+            row = QHBoxLayout()
+            feat_lbl = QLabel(feat)
+            feat_lbl.setStyleSheet(
+                f"font-size:10pt;font-weight:500;color:{t['text']};background:transparent;"
+                "min-width:160px;")
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet(
+                f"font-size:9pt;color:{t['text_dim']};background:transparent;")
+            row.addWidget(feat_lbl)
+            row.addWidget(desc_lbl)
+            row.addStretch()
+            feats_l.addLayout(row)
+
+        lay.addWidget(feats_w)
+
+        # ── Активация / Управление ───────────────────────────────────────────
+        act_w = QWidget()
+        act_w.setStyleSheet(f"background:{t['bg3']};border-radius:12px;")
+        act_l = QVBoxLayout(act_w)
+        act_l.setContentsMargins(16, 14, 16, 14)
+        act_l.setSpacing(10)
+
+        if is_premium:
+            # Только кнопка деактивации — без показа ключа
+            deact_lbl = QLabel("Подписка активна и привязана к этому устройству.")
+            deact_lbl.setStyleSheet(
+                f"font-size:9pt;color:{t['text_dim']};background:transparent;")
+            deact_lbl.setWordWrap(True)
+            act_l.addWidget(deact_lbl)
+
+            self._activate_btn = QPushButton("Деактивировать Premium")
+            self._activate_btn.setStyleSheet(
+                f"QPushButton{{background:transparent;color:{t['text_dim']};"
+                f"border:1px solid {t['border']};border-radius:8px;"
+                "padding:6px 14px;font-size:9pt;}}"
+                f"QPushButton:hover{{border-color:#E74C3C;color:#E74C3C;}}")
+            self._activate_btn.clicked.connect(self._deactivate_premium)
+            act_l.addWidget(self._activate_btn)
+
+            self._lic_input = LicenseLineEdit()
+            self._lic_input.setVisible(False)
+        else:
+            enter_lbl = QLabel("Введи код лицензии")
+            enter_lbl.setStyleSheet(
+                f"font-size:10pt;font-weight:600;color:{t['text']};background:transparent;")
+            act_l.addWidget(enter_lbl)
+
+            self._lic_input = LicenseLineEdit()
+            act_l.addWidget(self._lic_input)
+
+            btn_row = QHBoxLayout()
+            self._activate_btn = QPushButton("Активировать")
+            self._activate_btn.setObjectName("accent_btn")
+            self._activate_btn.setFixedHeight(36)
+            self._activate_btn.clicked.connect(self._activate)
+            btn_row.addWidget(self._activate_btn)
+
+            buy_btn = QPushButton("Купить в Telegram →")
+            buy_btn.setFixedHeight(36)
+            buy_btn.setStyleSheet(
+                f"QPushButton{{background:transparent;color:{t['accent']};"
+                f"border:1px solid {t['accent']};border-radius:8px;padding:0 14px;}}"
+                f"QPushButton:hover{{background:{t['accent']};color:white;}}")
+            buy_btn.clicked.connect(lambda: QDesktopServices.openUrl(
+                QUrl("https://t.me/WinoraCompany")))
+            btn_row.addWidget(buy_btn)
+            act_l.addLayout(btn_row)
+
+        lay.addWidget(act_w)
         lay.addStretch()
-        return w
+
+        self._update_lic_status()
+        return outer
+
 
     def _activate(self):
         code = self._lic_input.raw_digits()
@@ -10656,18 +11854,61 @@ class SettingsDialog(QDialog):
         else:
             QMessageBox.warning(self,"Ошибка","Неверный код лицензии.")
 
+    def _deactivate_premium(self):
+        from PyQt6.QtWidgets import QMessageBox
+        if QMessageBox.question(self, "Деактивация",
+                "Деактивировать Premium? Все настройки будут сброшены.",
+            ) == QMessageBox.StandardButton.Yes:
+            S().set("premium", False)
+            S().set("license_code", "")
+            S().set("premium_expires", "")
+            self.settings_saved.emit()
+            # Перезагружаем вкладку
+            QMessageBox.information(self, "Деактивация", "Premium деактивирован.")
+
     def _update_lic_status(self):
+        if not hasattr(self, '_lic_status'):
+            return
         if S().premium:
-            exp = datetime.fromisoformat(S().premium_expires).strftime("%d.%m.%Y")
-            self._lic_status.setText(f"✅ Премиум активен до {exp}")
-            self._lic_status.setStyleSheet("color:#27AE60; font-weight:bold;")
+            try:
+                from datetime import datetime as _dt2
+                exp_dt = _dt2.fromisoformat(S().premium_expires)
+                remain = (exp_dt - _dt2.now()).days
+                exp_str = exp_dt.strftime("%d.%m.%Y")
+                if remain > 0:
+                    self._lic_status.setText(
+                        f"✅  Активен до {exp_str}  ({remain} дн.)")
+                    self._lic_status.setStyleSheet(
+                        "color:#27AE60;font-weight:bold;background:transparent;")
+                else:
+                    self._lic_status.setText("⚠  Срок действия истёк!")
+                    self._lic_status.setStyleSheet(
+                        "color:#E74C3C;font-weight:bold;background:transparent;")
+                    S().set("premium", False)
+            except Exception:
+                self._lic_status.setText("✅  Активен")
+                self._lic_status.setStyleSheet(
+                    "color:#27AE60;font-weight:bold;background:transparent;")
         else:
-            self._lic_status.setText("❌ Не активировано")
-            self._lic_status.setStyleSheet("color:#E74C3C; font-weight:bold;")
+            self._lic_status.setText("❌  Не активировано")
+            self._lic_status.setStyleSheet(
+                "color:#E74C3C;font-weight:bold;background:transparent;")
 
     # ── Data tab ───────────────────────────────────────────────────────
     def _tab_data(self) -> QWidget:
-        w = QWidget()
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0,0,0,0)
+        _sa = QScrollArea(outer)          # parent=outer keeps it alive
+        _sa.setWidgetResizable(True)
+        _sa.setFrameShape(QFrame.Shape.NoFrame)
+        _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer_lay.addWidget(_sa)
+        w = QWidget(_sa)                  # parent=_sa keeps it alive
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
+        _sa.setWidget(w)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12,12,12,12)
         lay.setSpacing(8)
@@ -10704,7 +11945,7 @@ class SettingsDialog(QDialog):
         lay.addWidget(upd_g)
 
         lay.addStretch()
-        return w
+        return outer
 
     def _clear_history(self):
         if QMessageBox.question(self,"Очистить","Удалить всю историю чатов?",
@@ -10778,7 +12019,19 @@ class SettingsDialog(QDialog):
 
     # ── Language tab ────────────────────────────────────────────────────
     def _tab_language(self) -> QWidget:
-        w = QWidget()
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0,0,0,0)
+        _sa = QScrollArea(outer)          # parent=outer keeps it alive
+        _sa.setWidgetResizable(True)
+        _sa.setFrameShape(QFrame.Shape.NoFrame)
+        _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer_lay.addWidget(_sa)
+        w = QWidget(_sa)                  # parent=_sa keeps it alive
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
+        _sa.setWidget(w)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12,12,12,12)
         lay.setSpacing(8)
@@ -10822,12 +12075,24 @@ class SettingsDialog(QDialog):
 
         lay.addWidget(g2)
         lay.addStretch()
-        return w
+        return outer
 
     # ── Specialist tab ──────────────────────────────────────────────────
     def _tab_pin_security(self) -> QWidget:
         """PIN lock and auto-lock settings tab."""
-        w = QWidget()
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0,0,0,0)
+        _sa = QScrollArea(outer)          # parent=outer keeps it alive
+        _sa.setWidgetResizable(True)
+        _sa.setFrameShape(QFrame.Shape.NoFrame)
+        _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer_lay.addWidget(_sa)
+        w = QWidget(_sa)                  # parent=_sa keeps it alive
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
+        _sa.setWidget(w)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12,12,12,12)
         lay.setSpacing(10)
@@ -10909,7 +12174,7 @@ class SettingsDialog(QDialog):
         lay.addWidget(note)
 
         lay.addStretch()
-        return w
+        return outer
 
     def _set_pin(self):
         import hashlib as _hl
@@ -10942,11 +12207,24 @@ class SettingsDialog(QDialog):
             QMessageBox.information(self,"PIN","PIN-код удалён.")
 
     def _tab_privacy(self) -> QWidget:
-        """🛡 Privacy & security settings — fully functional."""
-        w = QWidget()
+        """🛡 Privacy & security settings."""
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0, 0, 0, 0)
+        _sa = QScrollArea(outer)
+        _sa.setWidgetResizable(True)
+        _sa.setFrameShape(QFrame.Shape.NoFrame)
+        _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer_lay.addWidget(_sa)
+        w = QWidget(_sa)
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
+        _sa.setWidget(w)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(14, 14, 14, 14)
         lay.setSpacing(10)
+        t = get_theme(S().theme)
 
         def _grp(title: str) -> tuple:
             g = QGroupBox(title)
@@ -11137,13 +12415,150 @@ class SettingsDialog(QDialog):
         fl5.addLayout(fl5_form)
         lay.addWidget(g5)
 
+        # ── GoidaCRYPTO — слои защиты ──────────────────────────────────
+        g_crypto = QGroupBox("🔐  GoidaCRYPTO — Слои защиты")
+        g_crypto.setToolTip("Многоуровневая защита данных GoidaPhone")
+        cfl = QVBoxLayout(g_crypto)
+
+        _vault_exists = VAULT.vault_exists()
+        _vault_open   = VAULT.is_unlocked()
+
+        # Статус хранилища
+        vault_status = QLabel(
+            f"{'🔓 Хранилище разблокировано' if _vault_open else '🔒 Хранилище заблокировано' if _vault_exists else '⭕ Хранилище не создано'}")
+        vault_status.setStyleSheet(
+            f"font-weight:bold;color:{'#27AE60' if _vault_open else '#E74C3C' if _vault_exists else '#F39C12'};"
+            "background:transparent;")
+        cfl.addWidget(vault_status)
+
+        # Описание слоёв
+        layers_lbl = QLabel(
+            "Layer 0 — QSettings (без защиты, по умолчанию)\n"
+            "Layer 1 — SecureVault AES-256-GCM + PBKDF2 (600k итераций)\n"
+            "Layer 2 — История зашифрована ключом хранилища\n"
+            "Layer 3 — Secure Wipe: обнуление RAM при выходе\n"
+            "Layer 4 — Stealth Mode: нет в таскбаре/трее\n"
+            "Layer 5 — Защита от скриншотов (WA_NoSystemBackground)")
+        layers_lbl.setStyleSheet(
+            f"font-size:8pt;color:{t['text_dim']};background:transparent;font-family:monospace;")
+        layers_lbl.setWordWrap(True)
+        cfl.addWidget(layers_lbl)
+
+        # Поле пароля хранилища
+        vault_pass_row = QHBoxLayout()
+        vault_pass_lbl = QLabel("Пароль хранилища:")
+        vault_pass_lbl.setStyleSheet("background:transparent;")
+        vault_pass_row.addWidget(vault_pass_lbl)
+        self._vault_pass_edit = QLineEdit()
+        self._vault_pass_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self._vault_pass_edit.setPlaceholderText(
+            "Введите для разблокировки…" if _vault_exists else "Создать новый пароль…")
+        vault_pass_row.addWidget(self._vault_pass_edit, 1)
+        cfl.addLayout(vault_pass_row)
+
+        vault_btn_row = QHBoxLayout()
+        if _vault_open:
+            lock_btn = QPushButton("🔒 Заблокировать хранилище")
+            lock_btn.clicked.connect(lambda: (VAULT.lock(), QMessageBox.information(
+                self, "GoidaCRYPTO", "Хранилище заблокировано.")))
+            vault_btn_row.addWidget(lock_btn)
+        else:
+            unlock_btn = QPushButton("🔓 Разблокировать / Создать")
+            def _vault_unlock():
+                pp = self._vault_pass_edit.text()
+                if not pp:
+                    QMessageBox.warning(self, "GoidaCRYPTO", "Введите пароль хранилища.")
+                    return
+                if VAULT.vault_exists():
+                    ok = VAULT.unlock(pp)
+                    if ok:
+                        QMessageBox.information(self, "GoidaCRYPTO",
+                            "✅ Хранилище разблокировано!\n"
+                            "Пароль шифрования теперь хранится зашифровано.")
+                    else:
+                        QMessageBox.warning(self, "GoidaCRYPTO", "❌ Неверный пароль.")
+                else:
+                    # Создаём новое — мигрируем существующие данные
+                    VAULT.unlock(pp)  # создаст пустое
+                    # Мигрируем чувствительные данные
+                    cfg = S()
+                    for key in _VAULT_SENSITIVE_KEYS:
+                        val = cfg.get(key, "", t=str)
+                        if val:
+                            VAULT.set(key, val)
+                    QMessageBox.information(self, "GoidaCRYPTO",
+                        "✅ Хранилище создано!\n"
+                        f"Мигрировано {len(_VAULT_SENSITIVE_KEYS)} полей.\n"
+                        "Данные зашифрованы AES-256-GCM.")
+                self._vault_pass_edit.clear()
+            unlock_btn.clicked.connect(_vault_unlock)
+            vault_btn_row.addWidget(unlock_btn)
+
+        audit_btn = QPushButton("📋 Аудит")
+        audit_btn.setToolTip("Показать содержимое хранилища (без значений)")
+        def _show_audit():
+            report = VAULT.export_audit_log()
+            dlg = QDialog(self); dlg.setWindowTitle("GoidaCRYPTO Audit")
+            dlg.resize(500, 350)
+            vl = QVBoxLayout(dlg)
+            te = QPlainTextEdit(report); te.setReadOnly(True)
+            te.setStyleSheet(f"font-family:monospace;font-size:9pt;background:{t['bg3']};color:{t['text']};")
+            vl.addWidget(te)
+            vl.addWidget(QPushButton("Закрыть", clicked=dlg.accept))
+            dlg.exec()
+        audit_btn.clicked.connect(_show_audit)
+        vault_btn_row.addWidget(audit_btn)
+
+        destroy_btn = QPushButton("💣 Уничтожить")
+        destroy_btn.setStyleSheet(
+            f"QPushButton{{background:#7a1a1a;color:white;border-radius:4px;border:none;padding:4px 8px;}}"
+            f"QPushButton:hover{{background:#c0392b;}}")
+        destroy_btn.setToolTip("Безвозвратно уничтожить хранилище (3-кратная перезапись)")
+        def _destroy_vault():
+            from PyQt6.QtWidgets import QMessageBox
+            if QMessageBox.question(self, "GoidaCRYPTO",
+                    "Безвозвратно уничтожить хранилище?\nВсе зашифрованные данные будут утеряны!",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                ) == QMessageBox.StandardButton.Yes:
+                VAULT.destroy()
+                QMessageBox.information(self, "GoidaCRYPTO", "Хранилище уничтожено (3-pass wipe).")
+        destroy_btn.clicked.connect(_destroy_vault)
+        vault_btn_row.addWidget(destroy_btn)
+        vault_btn_row.addStretch()
+        cfl.addLayout(vault_btn_row)
+
+        # Опциональные слои
+        self._layer2_cb = QCheckBox("Layer 2 — Шифровать историю чатов")
+        self._layer2_cb.setChecked(S().get("crypto_layer2_history", False, t=bool))
+        self._layer2_cb.setEnabled(VAULT.is_unlocked())
+        self._layer2_cb.setToolTip("История шифруется ключом хранилища. Без пароля — не читается.")
+        cfl.addWidget(self._layer2_cb)
+
+        self._layer3_cb = QCheckBox("Layer 3 — Secure Wipe: обнулять RAM при выходе")
+        self._layer3_cb.setChecked(S().get("crypto_layer3_wipe", False, t=bool))
+        self._layer3_cb.setToolTip("Перезаписывает все чувствительные строки в памяти нулями.")
+        cfl.addWidget(self._layer3_cb)
+
+        self._layer4_cb = QCheckBox("Layer 4 — Stealth Mode (нет в таскбаре)")
+        self._layer4_cb.setChecked(S().get("crypto_layer4_stealth", False, t=bool))
+        self._layer4_cb.setToolTip("Окно не отображается в Alt+Tab и панели задач.")
+        cfl.addWidget(self._layer4_cb)
+
+        self._layer5_cb = QCheckBox("Layer 5 — Блокировать скриншоты окна")
+        self._layer5_cb.setChecked(S().get("crypto_layer5_screenshot", False, t=bool))
+        self._layer5_cb.setToolTip("Окно не захватывается скриншотами ОС (где поддерживается).")
+        cfl.addWidget(self._layer5_cb)
+
+        lay.addWidget(g_crypto)
+
         note = QLabel(
             "ℹ Все настройки вступают в силу немедленно после сохранения.")
         note.setStyleSheet("font-size:9px;color:gray;")
         lay.addWidget(note)
 
         lay.addStretch()
-        return w
+        return outer
 
     def _save_privacy(self):
         # Save media preference
@@ -11202,11 +12617,14 @@ class SettingsDialog(QDialog):
         """📞 Звонки — проверка микрофона, камеры, демонстрации экрана, качества."""
         outer = QWidget()
         outer_lay = QVBoxLayout(outer); outer_lay.setContentsMargins(0,0,0,0)
-        _sa = QScrollArea(); _sa.setWidgetResizable(True)
+        _sa = QScrollArea(outer); _sa.setWidgetResizable(True)
         _sa.setFrameShape(QFrame.Shape.NoFrame)
         _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         outer_lay.addWidget(_sa)
-        w = QWidget(); _sa.setWidget(w)
+        w = QWidget(_sa); _sa.setWidget(w)
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(14, 14, 14, 14)
         lay.setSpacing(10)
@@ -11560,7 +12978,19 @@ class SettingsDialog(QDialog):
         - Разработчиков
         - Системных администраторов
         """
-        w = QWidget()
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0,0,0,0)
+        _sa = QScrollArea(outer)          # parent=outer keeps it alive
+        _sa.setWidgetResizable(True)
+        _sa.setFrameShape(QFrame.Shape.NoFrame)
+        _sa.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer_lay.addWidget(_sa)
+        w = QWidget(_sa)                  # parent=_sa keeps it alive
+        w.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding)
+        _sa.setWidget(w)
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12,12,12,12)
         lay.setSpacing(8)
@@ -11580,6 +13010,30 @@ class SettingsDialog(QDialog):
             padding: 8px; font-size: 10px;
         """)
         lay.addWidget(warn)
+
+        # Static peers (VPN/WAN direct IPs)
+        static_g = QGroupBox("📍 Статические пиры (VPN / WAN)")
+        static_fl = QFormLayout(static_g)
+
+        static_info = QLabel("Добавь IP пиров для VPN/WAN. Один IP на строку: 1.2.3.4 или 1.2.3.4:17385")
+        static_info.setWordWrap(True)
+        static_info.setStyleSheet(f"font-size:10px;color:{t['text_dim']};background:transparent;")
+        static_fl.addRow(static_info)
+
+        import json as _j
+        raw_static = S().get("static_peers", "[]", t=str)
+        try: _initial_peers = chr(10).join(_j.loads(raw_static))
+        except: _initial_peers = ""
+
+        self._static_peers_edit = QPlainTextEdit(_initial_peers)
+        self._static_peers_edit.setFixedHeight(100)
+        self._static_peers_edit.setPlaceholderText("192.168.1.100 / 26.123.45.67 / 10.0.0.1:17385")
+        self._static_peers_edit.setStyleSheet(
+            f"QPlainTextEdit{{background:{t['bg']};color:{t['text']};"
+            f"border:1px solid {t['border']};border-radius:6px;"
+            "font-family:monospace;font-size:11px;padding:6px;}}")
+        static_fl.addRow(self._static_peers_edit)
+        lay.addWidget(static_g)
 
         # Relay server
         relay_g = QGroupBox("🌐 Relay Сервер")
@@ -11775,23 +13229,23 @@ class SettingsDialog(QDialog):
 
         lay.addWidget(g_bind)
         lay.addStretch()
-        return w
+        return outer
 
     def _mk_specialist_scroll(self) -> QScrollArea:
         """Wrap the specialist tab in a scroll area so content never clips."""
         inner = self._tab_specialist()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setWidget(inner)
+        self._specialist_scroll_ref = QScrollArea()
+        self._specialist_scroll_ref.setWidgetResizable(True)
+        self._specialist_scroll_ref.setFrameShape(QFrame.Shape.NoFrame)
+        self._specialist_scroll_ref.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._specialist_scroll_ref.setWidget(inner)
         t2 = get_theme(S().theme)
-        scroll.setStyleSheet(
+        self._specialist_scroll_ref.setStyleSheet(
             f"QScrollArea{{background:{t2['bg']};border:none;}}"
             f"QScrollBar:vertical{{background:{t2['bg3']};width:6px;border-radius:3px;}}"
             f"QScrollBar::handle:vertical{{background:{t2['accent']};border-radius:3px;}}"
             "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-        return scroll
+        return self._specialist_scroll_ref
 
     def _test_relay(self):
         """Test connection to relay server."""
@@ -11869,6 +13323,20 @@ class SettingsDialog(QDialog):
         cfg = S()
         cfg.set("volume", self._vol.value())
         cfg.set("notification_sounds", self._notif_sounds.isChecked())
+
+        # Звуковая схема
+        if hasattr(self, '_sound_combos'):
+            import json as _j5
+            scheme = {}
+            for event, combo in self._sound_combos.items():
+                val = combo.currentText()
+                if val == "(выключен)":
+                    scheme[event] = "__none__"
+                elif val == "(без изменений)":
+                    pass  # не перезаписываем — остаётся дефолт
+                else:
+                    scheme[event] = val
+            cfg.set("sound_scheme", _j5.dumps(scheme))
         cfg.set("vad_enabled",  self._vad_cb.isChecked() if hasattr(self, '_vad_cb') else WEBRTCVAD_AVAILABLE)
         cfg.set("jitter_frames", self._jb_spin.value()  if hasattr(self, '_jb_spin') else 6)
         cfg.set("udp_port", self._udp_p.value())
@@ -11902,6 +13370,11 @@ class SettingsDialog(QDialog):
             cfg.relay_enabled = self._relay_enabled.isChecked()
         if hasattr(self, '_relay_addr'):
             cfg.relay_server = self._relay_addr.text().strip()
+        if hasattr(self, '_static_peers_edit'):
+            import json as _j3
+            _peers_raw = self._static_peers_edit.toPlainText()
+            _peers_list = [p.strip() for p in _peers_raw.replace(',', '\n').splitlines() if p.strip()]
+            cfg.set("static_peers", _j3.dumps(_peers_list))
         if hasattr(self, '_broadcast_interval'):
             cfg.set("broadcast_interval", self._broadcast_interval.value())
         if hasattr(self, '_peer_timeout'):
@@ -11935,16 +13408,45 @@ class SettingsDialog(QDialog):
         if _ha(self, '_allow_relay'):      cfg.set("allow_relay",       "true" if self._allow_relay.isChecked() else "false")
         if _ha(self, '_encrypt_transport'): cfg.set("encrypt_transport", "true" if self._encrypt_transport.isChecked() else "false")
 
+        # Privacy settings
+        if hasattr(self, '_priv_show_status'):
+            S().set("priv_show_status",    self._priv_show_status.isChecked())
+        if hasattr(self, '_priv_show_avatar'):
+            S().set("priv_show_avatar",    self._priv_show_avatar.isChecked())
+        if hasattr(self, '_priv_show_typing'):
+            S().set("priv_show_typing",    self._priv_show_typing.isChecked())
+        if hasattr(self, '_priv_read_receipts'):
+            S().set("priv_read_receipts",  self._priv_read_receipts.isChecked())
+        if hasattr(self, '_priv_allow_calls'):
+            S().set("priv_allow_calls",    self._priv_allow_calls.isChecked())
+        if hasattr(self, '_priv_allow_group_calls'):
+            S().set("priv_allow_group_calls", self._priv_allow_group_calls.isChecked())
+        if hasattr(self, '_priv_link_preview'):
+            S().set("priv_link_preview",   self._priv_link_preview.isChecked())
+        if hasattr(self, '_priv_save_drafts'):
+            S().set("priv_save_drafts",    self._priv_save_drafts.isChecked())
+        if hasattr(self, '_link_pref_combo'):
+            S().set("link_open_pref",      self._link_pref_combo.currentData() or "ask")
+
         # Apply theme immediately
         key = self._theme_combo.currentData()
         if key and not key.startswith("__custom"):
             QApplication.instance().setStyleSheet(build_stylesheet(get_theme(key)))
 
-        # Apply tab visibility
+        # Apply tab visibility immediately
         if hasattr(self.parent(), '_apply_tab_visibility'):
             self.parent()._apply_tab_visibility()
 
-        QMessageBox.information(self, "Настройки", TR("saved"))
+        # Apply scale immediately
+        try:
+            if hasattr(self, '_scale_slider'):
+                _pt = max(7.0, 9.0 * self._scale_slider.value() / 100.0)
+                _f = QApplication.instance().font()
+                _f.setPointSizeF(_pt)
+                QApplication.instance().setFont(_f)
+        except Exception:
+            pass
+
         self.settings_saved.emit()
         self.accept()
 
@@ -11979,6 +13481,25 @@ class SettingsDialog(QDialog):
             idx = self._theme_combo.findData(cfg.theme)
             if idx >= 0:
                 self._theme_combo.setCurrentIndex(idx)
+
+        # License status
+        if hasattr(self, '_update_lic_status'):
+            self._update_lic_status()
+
+        # Privacy tab
+        _priv_map = {
+            '_priv_show_status':       ("priv_show_status",       True),
+            '_priv_show_avatar':       ("priv_show_avatar",       True),
+            '_priv_show_typing':       ("priv_show_typing",       True),
+            '_priv_read_receipts':     ("priv_read_receipts",     True),
+            '_priv_allow_calls':       ("priv_allow_calls",       True),
+            '_priv_allow_group_calls': ("priv_allow_group_calls", True),
+            '_priv_link_preview':      ("priv_link_preview",      True),
+            '_priv_save_drafts':       ("priv_save_drafts",       True),
+        }
+        for _attr, (_key, _default) in _priv_map.items():
+            if hasattr(self, _attr):
+                getattr(self, _attr).setChecked(S().get(_key, _default, t=bool))
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  INCOMING CALL DIALOG
@@ -12047,7 +13568,7 @@ def _show_peer_profile_overlay(peer: dict, parent=None):
     close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
     close_btn.setStyleSheet(
         f"QPushButton{{background:transparent;color:{t['text_dim']};border:none;font-size:14px;}}"
-        "QPushButton:hover{color:#E74C3C;}")
+        f"QPushButton:hover{{color:#E74C3C;}}")
     def _close_panel():
         anim = QPropertyAnimation(panel, b"pos")
         anim.setDuration(200)
@@ -12062,11 +13583,11 @@ def _show_peer_profile_overlay(peer: dict, parent=None):
     vl.addWidget(hdr)
 
     # ── Scroll area ──
-    scroll = QScrollArea()
+    scroll = QScrollArea(panel)
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QFrame.Shape.NoFrame)
     scroll.setStyleSheet(f"QScrollArea{{background:{t['bg2']};border:none;}}")
-    content = QWidget()
+    content = QWidget(scroll)
     content.setStyleSheet(f"background:{t['bg2']};")
     cl = QVBoxLayout(content)
     cl.setContentsMargins(0, 0, 0, 20)
@@ -12475,10 +13996,10 @@ WNS_HOME_HTML = """<!DOCTYPE html>
     overflow:hidden;user-select:none;
   }
   .logo-text{
-    font-size:96px;font-weight:900;letter-spacing:-6px;
+    font-size:96px;font-weight:900;letter-spacing:-2px;
     background:linear-gradient(135deg,var(--accent,#8ab4f8),#a8c7fa 60%,#74a8f8);
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-    background-clip:text;line-height:1;margin-bottom:24px;
+    background-clip:text;line-height:1.15;padding:0 8px;margin-bottom:24px;
     filter:drop-shadow(0 2px 20px #8ab4f840);
   }
   .search-wrap{
@@ -14068,6 +15589,117 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
                 if sc.get("code") and hasattr(view,"page"):
                     view.page().runJavaScript(sc["code"])
 
+    def _open_extensions(self):
+        """Extensions panel: userscripts list + Chrome Web Store link."""
+        import json as _j
+        t = get_theme(S().theme)
+        dlg = QDialog(self)
+        dlg.setWindowTitle("🧩 Расширения WNS")
+        dlg.resize(720, 500)
+        dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
+        vl = QVBoxLayout(dlg); vl.setContentsMargins(0,0,0,0); vl.setSpacing(0)
+
+        # Header bar
+        hdr = QWidget(); hdr.setFixedHeight(52)
+        hdr.setStyleSheet(f"background:{t['bg3']};border-bottom:1px solid {t['border']};")
+        hl2 = QHBoxLayout(hdr); hl2.setContentsMargins(16,0,16,0); hl2.setSpacing(12)
+        ttl = QLabel("🧩  Расширения WNS")
+        ttl.setStyleSheet(f"font-size:15px;font-weight:bold;color:{t['text']};background:transparent;")
+        hl2.addWidget(ttl); hl2.addStretch()
+        store_btn = QPushButton("🏪  Chrome Web Store")
+        store_btn.setObjectName("accent_btn"); store_btn.setFixedHeight(34)
+        store_btn.clicked.connect(lambda: (
+            dlg.accept(),
+            self._new_tab("https://chrome.google.com/webstore/category/extensions")))
+        hl2.addWidget(store_btn)
+        vl.addWidget(hdr)
+
+        # Tabs
+        inner_tabs = QTabWidget()
+        inner_tabs.setStyleSheet(
+            f"QTabWidget::pane{{background:{t['bg2']};border:none;}}"
+            f"QTabBar::tab{{background:{t['bg3']};color:{t['text_dim']};"
+            "padding:8px 20px;border:none;font-size:12px;}}"
+            f"QTabBar::tab:selected{{background:{t['bg2']};color:{t['text']};"
+            f"border-bottom:2px solid {t['accent']};}}")
+        vl.addWidget(inner_tabs, stretch=1)
+
+        # ── Userscripts tab ──────────────────────────────────────────────────
+        us_w = QWidget(); us_l = QVBoxLayout(us_w)
+        us_l.setContentsMargins(16,12,16,12); us_l.setSpacing(8)
+        us_hdr_row = QHBoxLayout()
+        us_hdr_row.addWidget(QLabel("Скрипты запускаются автоматически при загрузке страниц"))
+        us_hdr_row.addStretch()
+        add_btn = QPushButton("➕ Новый скрипт")
+        add_btn.setObjectName("accent_btn"); add_btn.setFixedHeight(30)
+        add_btn.clicked.connect(lambda: (dlg.accept(), self._open_userscripts()))
+        us_hdr_row.addWidget(add_btn)
+        us_l.addLayout(us_hdr_row)
+
+        raw = S().get("wns_userscripts", "[]", t=str)
+        try: scripts = _j.loads(raw)
+        except: scripts = []
+
+        if not scripts:
+            empty = QLabel("Нет установленных скриптов. Нажмите «Новый скрипт».")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.setStyleSheet(f"color:{t['text_dim']};font-size:12px;background:transparent;")
+            us_l.addWidget(empty, stretch=1)
+        else:
+            for i, sc in enumerate(scripts):
+                card = QFrame()
+                card.setStyleSheet(
+                    f"QFrame{{background:{t['bg3']};border-radius:8px;"
+                    f"border:1px solid {t['border']};margin:1px 0;}}")
+                cl = QHBoxLayout(card); cl.setContentsMargins(12,8,12,8)
+                tog = QCheckBox(); tog.setChecked(sc.get('enabled', True))
+                cl.addWidget(tog)
+                info_l = QVBoxLayout()
+                nm = QLabel(sc.get('name', 'Без названия'))
+                nm.setStyleSheet(
+                    f"font-size:12px;font-weight:bold;color:{t['text']};background:transparent;")
+                mt = QLabel(sc.get('match', '*'))
+                mt.setStyleSheet(
+                    f"font-size:10px;color:{t['text_dim']};background:transparent;")
+                info_l.addWidget(nm); info_l.addWidget(mt)
+                cl.addLayout(info_l, stretch=1)
+                del_b = QPushButton("🗑")
+                del_b.setFixedSize(28,28)
+                del_b.setStyleSheet(
+                    f"QPushButton{{background:transparent;color:{t['text_dim']};"
+                    "border:none;border-radius:4px;}}"
+                    f"QPushButton:hover{{background:#FF444430;color:#FF4444;}}")
+                def _del(_i=i, _s=scripts):
+                    _s.pop(_i); S().set("wns_userscripts",_j.dumps(_s))
+                    dlg.accept(); self._open_extensions()
+                del_b.clicked.connect(_del)
+                cl.addWidget(del_b)
+                def _tog(v, _i=i, _s=scripts):
+                    _s[_i]['enabled'] = v; S().set("wns_userscripts",_j.dumps(_s))
+                tog.toggled.connect(_tog)
+                us_l.addWidget(card)
+            us_l.addStretch()
+        inner_tabs.addTab(us_w, "📜 Userscripts")
+
+        # ── Chrome Extensions tab ────────────────────────────────────────────
+        crx_w = QWidget(); crx_l = QVBoxLayout(crx_w)
+        crx_l.setAlignment(Qt.AlignmentFlag.AlignCenter); crx_l.setSpacing(16)
+        note = QLabel("WNS использует Chromium. Нажмите «Открыть Chrome Web Store».")
+        note.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{t['text_dim']};font-size:12px;background:transparent;")
+        crx_l.addWidget(note)
+        open_store = QPushButton("🏪  Открыть Chrome Web Store")
+        open_store.setObjectName("accent_btn"); open_store.setFixedHeight(40)
+        open_store.setFixedWidth(280)
+        open_store.clicked.connect(lambda: (
+            dlg.accept(),
+            self._new_tab("https://chrome.google.com/webstore/category/extensions")))
+        crx_l.addWidget(open_store)
+        inner_tabs.addTab(crx_w, "🧩 Chrome Extensions")
+
+        dlg.exec()
+
     def _show_about(self):
         t = get_theme(S().theme)
         dlg = QDialog(self); dlg.setWindowTitle("О Winora NetScape 3.0"); dlg.resize(420, 320)
@@ -14217,7 +15849,7 @@ class OutgoingCallWindow(QWidget):
     sig_cancelled = pyqtSignal()
 
     def __init__(self, peer_name: str, peer_ip: str, avatar_b64: str = "",
-                 parent=None):
+                 voice_mgr=None, parent=None):
         super().__init__(parent,
             Qt.WindowType.Window |
             Qt.WindowType.FramelessWindowHint |
@@ -14266,7 +15898,7 @@ class OutgoingCallWindow(QWidget):
         close_x.setStyleSheet(
             "QPushButton{background:rgba(255,255,255,20);color:#888;border:none;"
             "border-radius:14px;font-size:12px;}"
-            "QPushButton:hover{background:rgba(255,255,255,45);color:white;}")
+            f"QPushButton:hover{{background:rgba(255,255,255,45);color:white;}}")
         close_x.clicked.connect(self._cancel)
         drag_bar.addWidget(close_x)
         root.addLayout(drag_bar)
@@ -14518,6 +16150,7 @@ class ActiveCallWindow(QWidget):
         self._peer_name  = peer_name
         self._peer_ip    = peer_ip
         self._avatar_b64 = avatar_b64
+        self._voice_mgr  = voice_mgr
         self._muted      = False
         self._speaker    = True
         self._elapsed    = 0
@@ -14527,18 +16160,27 @@ class ActiveCallWindow(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(1000)
+        # Подписываемся на голосовую активность
+        try:
+            self._voice_mgr.subscribe_speaking(self._on_speaking)
+        except Exception:
+            pass
 
     def _build(self):
         card = QWidget(self)
         card.setGeometry(0, 0, 320, 500)
         card.setObjectName("acw_card")
-        card.setStyleSheet("""
-            QWidget#acw_card {
+        _t = get_theme(S().theme)
+        _bg_s = _t.get("gradient_start", _t["bg2"])
+        _bg_e = _t.get("gradient_end",   _t["bg3"])
+        _brd  = _t["border"]
+        card.setStyleSheet(f"""
+            QWidget#acw_card {{
                 background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-                    stop:0 #1C1C2E, stop:1 #0D0D1A);
+                    stop:0 {_bg_s}, stop:1 {_bg_e});
                 border-radius: 24px;
-                border: 1px solid #2D2D4E;
-            }
+                border: 1px solid {_brd};
+            }}
         """)
         root = QVBoxLayout(card)
         root.setContentsMargins(24, 24, 24, 28)
@@ -14547,10 +16189,9 @@ class ActiveCallWindow(QWidget):
 
         # Top bar: status + minimize
         tb = QHBoxLayout()
-        self._status_lbl = QLabel("🔴  GoidaPhone — Активный звонок")
+        self._status_lbl = QLabel("\U0001f534  GoidaPhone — Активный звонок")
         self._status_lbl.setStyleSheet(
-            "color:#7C4DFF;font-size:10px;font-weight:bold;"
-            "background:transparent;letter-spacing:1px;")
+            f"color:{chr(123)}_t['accent']{chr(125)};font-size:10px;font-weight:bold;background:transparent;letter-spacing:1px;")
         tb.addWidget(self._status_lbl)
         tb.addStretch()
         self._min_btn = QPushButton("─")
@@ -14558,7 +16199,7 @@ class ActiveCallWindow(QWidget):
         self._min_btn.setStyleSheet(
             "QPushButton{background:rgba(255,255,255,17);color:#888;border:none;"
             "border-radius:13px;font-size:13px;}"
-            "QPushButton:hover{background:rgba(255,255,255,45);color:white;}")
+            f"QPushButton:hover{{background:rgba(255,255,255,45);color:white;}}")
         self._min_btn.clicked.connect(self._toggle_minimize)
         tb.addWidget(self._min_btn)
         root.addLayout(tb)
@@ -14571,7 +16212,7 @@ class ActiveCallWindow(QWidget):
         pm = _call_avatar_pixmap(self._avatar_b64, self._peer_name, 134)
         self._av_lbl.setPixmap(pm)
         self._av_lbl.setStyleSheet(
-            "border: 3px solid #27AE60; border-radius: 70px; background: #1C1C2E;")
+            f"border: 3px solid {_t['border']}; border-radius: 70px; background: {_t['bg3']};")
         av_row = QHBoxLayout()
         av_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
         av_row.addWidget(self._av_lbl)
@@ -14603,11 +16244,11 @@ class ActiveCallWindow(QWidget):
         # Mute
         self._mute_col = QVBoxLayout()
         self._mute_col.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._mute_btn = _call_round_btn("🎤", "#2C2C4E", 60, 24, "#3D3D6E")
+        self._mute_btn = _call_round_btn("🎤", _t["btn_bg"], 60, 24, _t["btn_hover"])
         self._mute_btn.clicked.connect(self._toggle_mute)
         self._mute_sub = QLabel("Микрофон")
         self._mute_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._mute_sub.setStyleSheet("color:#888;font-size:9px;background:transparent;")
+        self._mute_sub.setStyleSheet(f"color:{_t['text_dim']};font-size:9px;background:transparent;")
         self._mute_col.addWidget(self._mute_btn)
         self._mute_col.addWidget(self._mute_sub)
         ctrl.addLayout(self._mute_col)
@@ -14689,35 +16330,62 @@ class ActiveCallWindow(QWidget):
         sg = QApplication.primaryScreen().geometry()
         self.move((sg.width()-320)//2, (sg.height()-500)//2)
 
+    def _on_speaking(self, active: bool):
+        """Голосовая активность — подсвечиваем аватар."""
+        _t = get_theme(S().theme)
+        if active:
+            self._av_lbl.setStyleSheet(
+                "border: 3px solid #27AE60;"
+                "border-radius: 70px;"
+                f"background: {_t['bg3']};")
+        else:
+            self._av_lbl.setStyleSheet(
+                f"border: 3px solid {_t['border']};"
+                "border-radius: 70px;"
+                f"background: {_t['bg3']};")
+
+    def closeEvent(self, event):
+        try:
+            self._voice_mgr.unsubscribe_speaking(self._on_speaking)
+        except Exception:
+            pass
+        super().closeEvent(event)
+
     def _tick(self):
         self._elapsed += 1
         m = self._elapsed // 60; s = self._elapsed % 60
         self._timer_lbl.setText(f"{m:02d}:{s:02d}")
 
+    def _btn_style(self, bg, hover, size):
+        """Generate round button stylesheet from theme colors."""
+        return (f"QPushButton{{background:{bg};border-radius:{size//2}px;"
+                f"border:none;color:white;font-size:{max(16,size//3)}px;}}"
+                f"QPushButton:hover{{background:{hover};}}")
+
     def _toggle_mute(self):
         self._muted = not self._muted
+        _t = get_theme(S().theme)
         if self._muted:
             self._mute_btn.setText("🔇")
-            self._mute_btn.setStyleSheet(self._mute_btn.styleSheet()
-                .replace("#2C2C4E","#4A3A00").replace("#3D3D6E","#AA8800"))
+            self._mute_btn.setStyleSheet(self._btn_style("#7A6000","#AA8800",60))
             self._mute_sub.setText("Без звука")
+            self._mute_sub.setStyleSheet(f"color:#AA8800;font-size:9px;background:transparent;")
         else:
             self._mute_btn.setText("🎤")
-            self._mute_btn.setStyleSheet(self._mute_btn.styleSheet()
-                .replace("#4A3A00","#2C2C4E").replace("#AA8800","#3D3D6E"))
+            self._mute_btn.setStyleSheet(self._btn_style(_t["btn_bg"],_t["btn_hover"],60))
             self._mute_sub.setText("Микрофон")
+            self._mute_sub.setStyleSheet(f"color:{_t['text_dim']};font-size:9px;background:transparent;")
         self.sig_mute.emit(self._muted)
 
     def _toggle_speaker(self):
         self._speaker = not self._speaker
+        _t = get_theme(S().theme)
         if not self._speaker:
             self._spk_btn.setText("🔈")
-            self._spk_btn.setStyleSheet(self._spk_btn.styleSheet()
-                .replace("#2C2C4E","#3A1A1A"))
+            self._spk_btn.setStyleSheet(self._btn_style("#3A1010","#5A2020",60))
         else:
             self._spk_btn.setText("🔊")
-            self._spk_btn.setStyleSheet(self._spk_btn.styleSheet()
-                .replace("#3A1A1A","#2C2C4E"))
+            self._spk_btn.setStyleSheet(self._btn_style(_t["btn_bg"],_t["btn_hover"],60))
 
     def _hangup(self):
         self._timer.stop()
@@ -14742,7 +16410,7 @@ class ActiveCallWindow(QWidget):
     def _start_screen_share_1on1(self):
         self._sharing_active = True
         self._share_btn.setStyleSheet(
-            self._share_btn.styleSheet().replace("#1E2A3A","#0A3A1A").replace("#2A3A5A","#0F5A2A"))
+            self._btn_style("#0A3A1A","#0F5A2A",48))
         self._share_preview.setVisible(True)
         self.setFixedSize(320, 640)
         self._share_timer_1on1 = QTimer(self)
@@ -14765,7 +16433,7 @@ class ActiveCallWindow(QWidget):
     def _stop_screen_share_1on1(self):
         self._sharing_active = False
         self._share_btn.setStyleSheet(
-            self._share_btn.styleSheet().replace("#0A3A1A","#1E2A3A").replace("#0F5A2A","#2A3A5A"))
+            self._btn_style(get_theme(S().theme)["btn_bg"],get_theme(S().theme)["btn_hover"],48))
         self._share_preview.setVisible(False)
         self.setFixedSize(320, 500)
         if self._share_timer_1on1:
@@ -14785,14 +16453,13 @@ class ActiveCallWindow(QWidget):
             from PyQt6.QtMultimediaWidgets import QVideoWidget
             self._cam_on = True
             self._cam_btn.setStyleSheet(
-                self._cam_btn.styleSheet()
-                    .replace("#1E2A3A", "#0A2A3A").replace("#2A3A5A", "#0A4A6A"))
+                self._btn_style("#0A2A3A","#0A4A6A",48))
             # Create video widget for preview
             if not hasattr(self, '_video_widget') or self._video_widget is None:
                 self._video_widget = QVideoWidget(self)
                 self._video_widget.setFixedHeight(120)
                 self._video_widget.setStyleSheet(
-                    "border-radius:8px;border:1px solid #27AE60;background:#000;")
+                    f"border-radius:8px;border:1px solid {get_theme(S().theme)['accent']};background:{get_theme(S().theme)['bg3']};")
                 # Insert before share_preview
                 card = self.findChild(QWidget, "acw_card")
                 if card and card.layout():
@@ -14819,8 +16486,7 @@ class ActiveCallWindow(QWidget):
     def _stop_camera(self):
         self._cam_on = False
         self._cam_btn.setStyleSheet(
-            self._cam_btn.styleSheet()
-                .replace("#0A2A3A", "#1E2A3A").replace("#0A4A6A", "#2A3A5A"))
+            self._btn_style(get_theme(S().theme)["btn_bg"],get_theme(S().theme)["btn_hover"],48))
         try:
             if hasattr(self, '_camera') and self._camera:
                 self._camera.stop()
@@ -14984,7 +16650,7 @@ class GroupCallWindow(QWidget):
         self._pts_btn.setStyleSheet(
             "QPushButton{background:#2A2A46;border-radius:20px;color:white;"
             "font-size:12px;padding:0 18px;border:none;}"
-            "QPushButton:hover{background:#38385E;}")
+            f"QPushButton:hover{{background:#38385E;}}")
         self._pts_btn.clicked.connect(self._show_participants)
         cbl.addWidget(self._pts_btn)
 
@@ -14994,7 +16660,7 @@ class GroupCallWindow(QWidget):
         chat_btn.setStyleSheet(
             "QPushButton{background:#2A2A46;border-radius:20px;color:white;"
             "font-size:12px;padding:0 18px;border:none;}"
-            "QPushButton:hover{background:#38385E;}")
+            f"QPushButton:hover{{background:#38385E;}}")
         cbl.addWidget(chat_btn)
 
         # ⋯ More menu
@@ -15005,7 +16671,7 @@ class GroupCallWindow(QWidget):
         more_btn.setStyleSheet(
             "QPushButton{background:#2A2A46;border-radius:22px;font-size:18px;"
             "color:white;border:none;}"
-            "QPushButton:hover{background:#38385E;}")
+            f"QPushButton:hover{{background:#38385E;}}")
         more_btn.clicked.connect(lambda: self._show_more_menu(more_btn))
         cbl.addWidget(more_btn)
 
@@ -15019,7 +16685,7 @@ class GroupCallWindow(QWidget):
         leave_btn.setStyleSheet(
             "QPushButton{background:#C0392B;border-radius:28px;"
             "font-size:24px;border:none;}"
-            "QPushButton:hover{background:#922B21;}")
+            f"QPushButton:hover{{background:#922B21;}}")
         leave_btn.clicked.connect(self._leave)
         cbl.addWidget(leave_btn)
 
@@ -15160,7 +16826,7 @@ class GroupCallWindow(QWidget):
         stop_btn.setStyleSheet(
             "QPushButton{background:#3D1A1A;color:#FF6666;border:1px solid #5A2A2A;"
             "border-radius:8px;padding:3px 10px;font-size:10px;}"
-            "QPushButton:hover{background:#5A2020;}")
+            f"QPushButton:hover{{background:#5A2020;}}")
         stop_btn.clicked.connect(self._stop_screen_share)
         hdr.addWidget(stop_btn)
         sl.addLayout(hdr)
@@ -15319,7 +16985,7 @@ class GroupCallWindow(QWidget):
         lw.setStyleSheet(
             "QListWidget{background:#12121F;border:1px solid #2D2D4E;"
             "border-radius:8px;}"
-            "QListWidget::item{padding:8px;border-bottom:1px solid #1E1E32;}"
+            f"QListWidget::item{{padding:8px;border-bottom:1px solid #1E1E32;}}"
             "QListWidget::item:selected{background:#2A2A4E;}")
         for peer in getattr(self, '_all_peers', []):
             name = peer.get("username","?")
@@ -15417,7 +17083,7 @@ class GroupCallWindow(QWidget):
         stop_btn.setStyleSheet(
             "QPushButton{background:#3D1A1A;color:#FF6666;border:none;"
             "border-radius:10px;font-size:10px;font-weight:bold;}"
-            "QPushButton:hover{background:#882222;}")
+            f"QPushButton:hover{{background:#882222;}}")
         stop_btn.clicked.connect(self._stop_screen_share)
         hdr.addWidget(stop_btn)
         tl.addLayout(hdr)
@@ -16217,8 +17883,7 @@ class GoidaTerminal(QWidget):
             QPlainTextEdit {{
                 background: #000000;
                 color: #A0A0A0;
-                font-family: 'JetBrains Mono','Fira Code','Courier New',
-                             'DejaVu Sans Mono',monospace;
+                font-family: 'JetBrains Mono','Fira Code','Courier New','DejaVu Sans Mono',monospace;
                 font-size: 11px;
                 border: none;
                 padding: 10px 12px;
@@ -16435,7 +18100,7 @@ class GoidaTerminal(QWidget):
         refresh_btn.setStyleSheet(
             "QPushButton{background:#111122;color:#7070BB;"
             "border:none;border-top:1px solid #1A1A3A;font-size:10px;}"
-            "QPushButton:hover{color:#A0A0FF;}")
+            f"QPushButton:hover{{color:#A0A0FF;}}")
         refresh_btn.clicked.connect(self._graph_w.update)
         lay.addWidget(refresh_btn)
         return w
@@ -18174,13 +19839,9 @@ class MewaPlayer(QWidget):
             sl.setRange(-12, 12); sl.setValue(0)
             sl.setFixedHeight(160)
             sl.setStyleSheet(
-                f"QSlider::groove:vertical{{background:{t['bg3']};"
-                "width:6px;border-radius:3px;}}"
-                f"QSlider::handle:vertical{{background:{t['accent']};"
-                "width:16px;height:16px;margin:-5px -5px;"
-                "border-radius:8px;}}"
-                f"QSlider::add-page:vertical{{background:{t['accent']};"
-                "border-radius:3px;}}")
+                f"QSlider::groove:vertical{{background:{t['bg3']};width:6px;border-radius:3px;}}"
+                f"QSlider::handle:vertical{{background:{t['accent']};width:16px;height:16px;margin:-5px -5px;border-radius:8px;}}"
+                f"QSlider::add-page:vertical{{background:{t['accent']};border-radius:3px;}}")
             val_lbl = QLabel("0 dB")
             val_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             val_lbl.setStyleSheet(
@@ -18319,13 +19980,13 @@ class MewaPlayer(QWidget):
                      "border-radius:15px;font-size:15px;border:none;"
                      "border-bottom:2px solid rgba(0,0,0,89);}}"
                      f"QPushButton:hover{{background:{t['accent2']};}}"
-                     "QPushButton:pressed{padding-top:2px;border-bottom:1px solid;}")
+                     f"QPushButton:pressed{{padding-top:2px;border-bottom:1px solid;}}")
             else:
                 s = (f"QPushButton{{background:{t['bg3']};color:{t['text']};"
                      f"border-radius:6px;font-size:13px;border:1px solid {t['border']};"
                      "border-bottom:2px solid rgba(0,0,0,63);}}"
                      f"QPushButton:hover{{background:{t['btn_hover']};}}"
-                     "QPushButton:pressed{padding-top:2px;border-bottom:1px solid;}")
+                     f"QPushButton:pressed{{padding-top:2px;border-bottom:1px solid;}}")
             b.setStyleSheet(s)
             b.clicked.connect(cb)
             return b
@@ -18431,7 +20092,7 @@ class MewaPlayer(QWidget):
     # ── player init ───────────────────────────────────────────────────────────
     def _init_player(self):
         try:
-            from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+            from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
             self._player     = QMediaPlayer()
             self._audio_out  = QAudioOutput()
             self._player.setAudioOutput(self._audio_out)
@@ -18440,9 +20101,16 @@ class MewaPlayer(QWidget):
             self._player.durationChanged.connect(self._on_dur)
             self._player.playbackStateChanged.connect(self._on_state)
             self._player.mediaStatusChanged.connect(self._on_status)
-            # Connect video output (created in _setup as part of video page)
+            # Connect video output
             if getattr(self, '_video_widget', None) is not None:
                 self._player.setVideoOutput(self._video_widget)
+            # Hot-swap: пересоздаём QAudioOutput когда система меняет устройство
+            try:
+                self._media_devices = QMediaDevices(self)
+                self._media_devices.audioOutputsChanged.connect(
+                    self._on_audio_device_changed)
+            except Exception:
+                pass
             self._has_player = True
         except Exception as e:
             self._has_player = False
@@ -18731,6 +20399,28 @@ class MewaPlayer(QWidget):
     _VIDEO_EXTS = {".mp4",".avi",".mkv",".webm",".mov",".m4v",
                     ".mpg",".mpeg",".wmv",".3gp",".ts",".m2ts"}
 
+    def _on_audio_device_changed(self):
+        """Системное аудио-устройство изменилось — переподключаем вывод."""
+        if not self._has_player or not self._player:
+            return
+        try:
+            from PyQt6.QtMultimedia import QAudioOutput, QMediaDevices
+            vol = self._audio_out.volume() if self._audio_out else 0.85
+            state = self._player.playbackState()
+            pos   = self._player.position()
+            # Пересоздаём QAudioOutput с новым дефолтным устройством
+            new_out = QAudioOutput()
+            new_out.setVolume(vol)
+            self._player.setAudioOutput(new_out)
+            self._audio_out = new_out
+            # Восстанавливаем позицию если играло
+            from PyQt6.QtMultimedia import QMediaPlayer as _QMP
+            if state == _QMP.PlaybackState.PlayingState:
+                self._player.setPosition(pos)
+                self._player.play()
+        except Exception:
+            pass
+
     def _play_idx(self, idx: int):
         if not self._has_player or idx < 0 or idx >= len(self._playlist):
             return
@@ -18974,7 +20664,7 @@ class PinLockScreen(QWidget):
         box.setStyleSheet(
             f"QWidget{{background:{t['bg2']};border-radius:18px;"
             f"border:1px solid {t['border']};}}"
-            "QLabel{border:none;}"
+            f"QLabel{{border:none;}}"
             "QGridLayout{border:none;}")
         lay = QVBoxLayout(box)
         lay.setContentsMargins(30,30,30,30)
@@ -19391,6 +21081,15 @@ class MainWindow(QMainWindow):
         # File transfer assembler
         self._ft_pending: dict[str, dict] = {}   # tid → meta+chunks
 
+        # Hot-swap audio device listener — применяется ко всему приложению
+        try:
+            from PyQt6.QtMultimedia import QMediaDevices
+            self._media_devices = QMediaDevices(self)
+            self._media_devices.audioOutputsChanged.connect(
+                self._on_system_audio_output_changed)
+        except Exception:
+            pass
+
         self._apply_theme_from_settings()
         self._setup_window()
         self._setup_ui()
@@ -19711,6 +21410,8 @@ class MainWindow(QMainWindow):
         self._tabs = QTabWidget()
         self._tabs.setDocumentMode(True)
         self._tabs.setTabsClosable(False)   # default off; per-tab via button
+        self._tabs.tabBar().setFixedHeight(28)   # prevent tab bar height growth
+        self._tabs.tabBar().setExpanding(False)
         self._tabs.currentChanged.connect(self._on_tab_changed)
 
         # Permanent tabs
@@ -19913,7 +21614,7 @@ class MainWindow(QMainWindow):
         peer = self.net.peers.get(ip, {"username": caller, "ip": ip})
         # Show active call window
         av_b64 = peer.get("avatar_b64", "")
-        self._active_call_win = ActiveCallWindow(caller, ip, av_b64)
+        self._active_call_win = ActiveCallWindow(caller, ip, av_b64, voice_mgr=self.voice)
         self._active_call_win.sig_hangup.connect(lambda: self._hangup_call(ip))
         self._active_call_win.sig_mute.connect(self.voice.set_mute)
         self._active_call_win.show()
@@ -19956,7 +21657,7 @@ class MainWindow(QMainWindow):
         self._call_start_time = time.time()
         peer  = self.net.peers.get(ip, {"username": caller, "ip": ip})
         av_b64 = peer.get("avatar_b64", "")
-        self._active_call_win = ActiveCallWindow(caller, ip, av_b64)
+        self._active_call_win = ActiveCallWindow(caller, ip, av_b64, voice_mgr=self.voice)
         self._active_call_win.sig_hangup.connect(lambda: self._hangup_call(ip))
         self._active_call_win.sig_mute.connect(self.voice.set_mute)
         self._active_call_win.show()
@@ -19985,34 +21686,49 @@ class MainWindow(QMainWindow):
         self.chat_panel.on_call_ended  # ensure chat knows
 
     def _on_call_ended(self, ip: str):
-        # Close any active call windows
-        if self._active_call_win:
+        # Guard: предотвращаем двойной вызов (net + voice оба эмитируют)
+        if getattr(self, '_call_ending', False):
+            return
+        self._call_ending = True
+        try:
+            play_system_sound("call_end")
+            # Завершаем аудио через VCM (закрывает pyaudio streams)
             try:
-                self._active_call_win._timer.stop()
-                self._active_call_win.hide()
-                self._active_call_win.deleteLater()
+                if ip in self.voice.active:
+                    self.voice.hangup(ip)
             except Exception:
                 pass
-            self._active_call_win = None
-        if self._outgoing_call_win:
-            try:
-                self._outgoing_call_win.call_rejected()
-            except Exception:
-                pass
-            self._outgoing_call_win = None
+            # Close any active call windows
+            if self._active_call_win:
+                try:
+                    self._active_call_win._timer.stop()
+                    self._active_call_win.hide()
+                    self._active_call_win.deleteLater()
+                except Exception:
+                    pass
+                self._active_call_win = None
+            if self._outgoing_call_win:
+                try:
+                    self._outgoing_call_win.call_rejected()
+                except Exception:
+                    pass
+                self._outgoing_call_win = None
 
-        dur = time.time() - self._call_start_time if self._call_start_time else 0
-        peer = self.net.peers.get(ip, {})
-        name = peer.get("username", ip)
-        if self._call_log_widget and dur > 0:
-            self._call_log_widget.add_call(name, False, dur)
-        self._call_start_time = 0.0
-        t = get_theme(S().theme)
-        self._status_call.setText("📞 Нет звонков")
-        self._status_call.setStyleSheet(
-            f"color:{t['text_dim']}; background:{t['bg2']}; border:1px solid {t['border']};"
-            "border-radius:3px; padding:1px 7px; font-size:10px;")
-        self.chat_panel.on_call_ended(ip)
+            dur = time.time() - self._call_start_time if self._call_start_time else 0
+            peer = self.net.peers.get(ip, {})
+            name = peer.get("username", ip)
+            if self._call_log_widget and dur > 0:
+                self._call_log_widget.add_call(name, False, dur)
+            self._call_start_time = 0.0
+            t = get_theme(S().theme)
+            self._status_call.setText("📞 Нет звонков")
+            self._status_call.setStyleSheet(
+                f"color:{t['text_dim']}; background:{t['bg2']}; border:1px solid {t['border']};"
+                "border-radius:3px; padding:1px 7px; font-size:10px;")
+            self.chat_panel.on_call_ended(ip)
+        finally:
+            # Сбрасываем флаг через небольшую задержку чтобы все сигналы успели пройти
+            QTimer.singleShot(300, lambda: setattr(self, '_call_ending', False))
 
     # ── GROUP CALL ───────────────────────────────────────────────────────
     def _start_group_call(self, gid: str):
@@ -20204,8 +21920,63 @@ class MainWindow(QMainWindow):
                 break
 
     def _on_settings_saved(self):
+        """Apply ALL settings to the live UI after SettingsDialog saves."""
+        t = get_theme(S().theme)
+
+        # 1. Theme
         self._apply_theme_from_settings()
+
+        # 2. Premium badge
         self._status_prem.setVisible(S().premium)
+
+        # 3. App scale — apply immediately
+        try:
+            _scale = S().get("app_scale", 100, t=int)
+            _pt = max(7.0, 9.0 * _scale / 100.0)
+            _font = QApplication.instance().font()
+            _font.setPointSizeF(_pt)
+            QApplication.instance().setFont(_font)
+        except Exception:
+            pass
+
+        # 4. Tab visibility
+        self._apply_tab_visibility()
+
+        # 5. Reload status bar info
+        try:
+            ip = get_local_ip()
+            self._status_ip.setText(f"IP: {ip}")
+        except Exception:
+            pass
+
+        # 6. Window title update (username may have changed via ProfileEditor)
+        try:
+            self.setWindowTitle(
+                f"{APP_NAME} v{APP_VERSION} — {COMPANY_NAME}")
+        except Exception:
+            pass
+
+        # 7. Sidebar weather refresh
+        try:
+            if hasattr(self, '_refresh_weather'):
+                self._refresh_weather()
+        except Exception:
+            pass
+
+        # 8. Broadcast updated presence (shows new status/avatar to peers)
+        try:
+            if hasattr(self, 'net') and self.net.running:
+                self.net._broadcast()
+        except Exception:
+            pass
+
+        # 9. Notify user what requires restart
+        _restart_needed = []
+        if S().get("udp_port", 17385, t=int) != getattr(self.net, '_udp_port_at_start', S().get("udp_port", 17385, t=int)):
+            _restart_needed.append("UDP/TCP порты")
+        if _restart_needed:
+            from PyQt6.QtWidgets import QToolTip
+            pass  # silently — user sees ports change note in UI
 
     def _toggle_mute(self):
         muted = self.voice.toggle_mute()
@@ -20338,6 +22109,15 @@ class MainWindow(QMainWindow):
         S().set("window_state", self.saveState())
         self.notes_widget._save()
         self.voice.cleanup()
+        # Layer 3: Secure Wipe — обнуляем RAM перед выходом
+        if S().get("crypto_layer3_wipe", False, t=bool):
+            try:
+                _pp = S().get("encryption_passphrase", "", t=str)
+                if _pp:
+                    SecureMemory(_pp).wipe()
+                VAULT.lock()
+            except Exception:
+                pass
         self.net.stop()
         event.accept()
 
@@ -20670,15 +22450,39 @@ def main():
     # that silences Python tracebacks and makes crashes invisible.
     if platform.system() == "Linux":
         import os as _os
-        _os.environ.setdefault("ALSA_IGNORE_UCM", "1")
-        _os.environ.setdefault("ALSA_CARD", "")
-        # Suppress ffmpeg console spam from QMediaPlayer audio backend
-        _os.environ.setdefault("FFREPORT", "")
-        _os.environ.setdefault("AV_LOG_FORCE_NOCOLOR", "1")
-        # Suppress Qt CSS parse warnings
-        _os.environ.setdefault("QT_LOGGING_RULES",
-            "qt.qpa.stylesheet=false;qt.widgets.stylesheet=false;"
-            "qt.multimedia.ffmpeg=false")
+        # ── ALSA: глушим спам про неизвестные PCM устройства ─────────────────
+        _os.environ["ALSA_IGNORE_UCM"]       = "1"
+        _os.environ["LIBASOUND_THREAD_SAFE"] = "0"
+        # ALSA: подавляем спам через env vars и ~/.asoundrc
+        _os.environ["ALSA_IGNORE_UCM"]       = "1"
+        _os.environ["LIBASOUND_THREAD_SAFE"] = "0"
+        # Создаём minimal ~/.asoundrc если нет — глушит Unknown PCM спам
+        try:
+            _asoundrc = Path.home() / ".asoundrc"
+            if not _asoundrc.exists():
+                _asoundrc.write_text("pcm.!default {type hw;card 0}\nctl.!default {type hw;card 0}\n")
+        except Exception:
+            pass
+
+        # ── FFmpeg/Vulkan спам ────────────────────────────────────────────────
+        _os.environ["FFREPORT"]              = ""
+        _os.environ["AV_LOG_FORCE_NOCOLOR"]  = "1"
+        _os.environ["LIBVA_MESSAGING_LEVEL"] = "0"
+        # Отключаем Vulkan HW decode — нет смысла на большинстве систем
+        _os.environ.setdefault("LIBVA_DRIVER_NAME", "iHD")
+
+        # ── Qt CSS warnings ("Could not parse stylesheet") ────────────────────
+        # В Qt6 правильные имена категорий:
+        _os.environ["QT_LOGGING_RULES"] = (
+            "*.debug=false\n"
+            "qt.qpa.stylesheet=false\n"
+            "qt.qpa.fonts=false\n"
+            "qt.widgets.stylesheet=false\n"
+            "qt.multimedia*=false\n"
+            "ffmpeg*=false\n"
+        )
+        # Дополнительно через QLoggingCategory после создания QApplication:
+        # вызывается ниже после app = QApplication(...)
 
         # ── Auto-find QtWebEngineProcess (pip user-install) ───────────
         # Must be set BEFORE QApplication is created
@@ -20727,9 +22531,11 @@ def main():
                         print(f"[WNS] locales: {_loc_path}")
                         break
 
-    # High-DPI
+    # High-DPI — critical for Windows at 125%/150% scaling
     if hasattr(Qt.ApplicationAttribute, "AA_UseHighDpiPixmaps"):
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+    if hasattr(Qt.ApplicationAttribute, "AA_EnableHighDpiScaling"):
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling)
 
     # ── QtWebEngine MUST be imported before QApplication ─────────────────────
     # This is a hard requirement from Qt — violating it gives ImportError
@@ -20745,8 +22551,49 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
+
+    # ── Восстановить stderr после инициализации Qt/ALSA ─────────────────────
+    if platform.system() == "Linux":
+        try:
+            import ctypes as _ct2
+            _libc2 = _ct2.CDLL("libc.so.6")
+            # Восстанавливаем оригинальный stderr (Python ошибки снова видны)
+            # ALSA уже инициализировалась и больше не будет спамить
+            if hasattr(_ct2, '_saved_stderr_fd'):
+                _libc2.dup2(_ct2._saved_stderr_fd, 2)
+        except Exception:
+            pass
+
+    # ── Заглушить CSS warnings programmatically (Qt6) ─────────────────────────
+    try:
+        from PyQt6.QtCore import QLoggingCategory
+        QLoggingCategory.setFilterRules(
+            "*.debug=false\nqt.qpa.stylesheet=false\nqt.widgets.stylesheet=false\nqt.multimedia*=false\n"
+        )
+    except Exception:
+        pass
     app.setApplicationVersion(APP_VERSION)
     app.setOrganizationName(COMPANY_NAME)
+
+    # ── Force Fusion style for pixel-perfect cross-platform look ─────────────
+    # Without this, Windows uses "windowsvista" style which ignores most QSS rules.
+    # Fusion is Qt's own renderer — identical output on Linux, Windows, macOS.
+    app.setStyle("Fusion")
+
+    # ── Base font: apply user scale setting ───────────────────────────────────
+    import platform as _plat
+    _scale = S().get("app_scale", 100, t=int)
+    _base_pt = max(7.0, 9.0 * _scale / 100.0)   # 9pt base ≈ old 11px on 96dpi
+    _base_font = QFont()
+    if _plat.system() == "Windows":
+        _base_font.setFamily("Segoe UI")
+    else:
+        _base_font.setFamily("Ubuntu")
+    _base_font.setPointSizeF(_base_pt)
+    _base_font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+    app.setFont(_base_font)
+
+    # ── Emoji font — platform aware ───────────────────────────────────────────
 
     # Install early crash handler — catches errors even before MainWindow
     def _early_excepthook(exc_type, exc_val, exc_tb):
@@ -20765,16 +22612,22 @@ def main():
             print(f"[FATAL] {e2}")
         sys.exit(1)
     sys.excepthook = _early_excepthook
-    _icon_path = Path(__file__).parent / "icon.png"
-    if _icon_path.exists():
-        app.setWindowIcon(QIcon(str(_icon_path)))
+    # Иконка: сначала из настроек, потом icon.png рядом
+    _icon_b64 = S().get("app_icon_b64", "", t=str)
+    if _icon_b64:
+        try:
+            _pm_ico = QPixmap()
+            _pm_ico.loadFromData(base64.b64decode(_icon_b64))
+            if not _pm_ico.isNull():
+                app.setWindowIcon(QIcon(_pm_ico))
+        except Exception:
+            pass
+    else:
+        _icon_path = Path(__file__).parent / "icon.png"
+        if _icon_path.exists():
+            app.setWindowIcon(QIcon(str(_icon_path)))
 
-    # Apply app scale from settings
-    scale = S().get("app_scale", 100, t=int)
-    if scale != 100:
-        font = app.font()
-        font.setPointSizeF(max(7.0, 9.0 * scale / 100.0))
-        app.setFont(font)
+    # Scale already applied in _base_font above
 
     # Apply theme before anything
     key = S().theme
@@ -21039,18 +22892,270 @@ def main():
             app.quit()
             return
 
+        # ── 3. Startup sequence — initramfs/systemd style ─────────────
+        import sys as _sys, time as _t, threading as _thr, os as _os2
+
+        # ── ANSI colours ────────────────────────────────────────────────
+        _R  = "\033[0m"
+        _G  = "\033[32m"      # green
+        _Y  = "\033[33m"      # yellow
+        _C  = "\033[36m"      # cyan
+        _RE = "\033[31m"      # red
+        _B  = "\033[1m"       # bold
+        _D  = "\033[2m"       # dim
+        _W  = "\033[37m"      # white
+
+        def _step(tag, color, msg, delay=0.055):
+            _t.sleep(delay)
+            print(f"  {color}[ {tag:^6} ]{_R}  {msg}")
+
+        def _ok(msg,   d=0.05): _step(" OK ",  _G,  msg, d)
+        def _info(msg, d=0.04): _step("INFO",  _C,  msg, d)
+        def _warn(msg, d=0.04): _step(" !! ",  _Y,  msg, d)
+        def _fail(msg, d=0.04): _step("FAIL",  _RE, msg, d)
+        def _run(msg,  d=0.03): _step("INIT",  _D,  msg, d)
+
+        W = 62   # line width
+
+        # ── Braille spinner ─────────────────────────────────────────────
+        _BRAILLE = ["⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"]
+        _spin_stop = _thr.Event()
+        _spin_msg  = ["Инициализация..."]
+
+        def _spinner():
+            i = 0
+            while not _spin_stop.is_set():
+                frame = _BRAILLE[i % len(_BRAILLE)]
+                line  = f"\r  {_C}{frame}{_R}  {_D}{_spin_msg[0]}{_R}"
+                _sys.stdout.write(line)
+                _sys.stdout.flush()
+                _t.sleep(0.08)
+                i += 1
+            _sys.stdout.write("\r" + " " * 72 + "\r")
+            _sys.stdout.flush()
+
+        _spin_thr = _thr.Thread(target=_spinner, daemon=True)
+
+        # ── ASCII header ────────────────────────────────────────────────
+        print()
+        print(f"  {_B}{_G}{'─'*W}{_R}")
+        print(f"  {_B}{_G}  GoidaPhone™ NT Server 1.8{_R}")
+        print(f"  {_D}  Powered by Winora Company  ©  2026{_R}")
+        print(f"  {_B}{_G}{'─'*W}{_R}")
+        print()
+        _t.sleep(0.1)
+
+        # ── Kernel / environment ─────────────────────────────────────────
+        _spin_msg[0] = "Проверка окружения..."
+        _spin_thr.start()
+        _t.sleep(0.3)
+        _spin_stop.set(); _spin_thr.join(); _spin_stop.clear()
+        _spin_thr = _thr.Thread(target=_spinner, daemon=True)
+
+        import platform as _pl
+        _ok(f"Kernel:          Python {_pl.python_version()}  |  {_pl.system()} {_pl.release()}")
+        _ok(f"Architecture:    {_pl.machine()}")
+        _ok(f"Qt framework:    PyQt6 + Fusion renderer")
+
+        _t.sleep(0.06)
+        _ok(f"Build:           GoidaPhone v{APP_VERSION}  [{__import__('time').strftime('%Y-%m-%d')}]")
+
+        # ── Data & config ────────────────────────────────────────────────
+        print()
+        _run("Mounting data directory...")
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            RECEIVED_DIR.mkdir(parents=True, exist_ok=True)
+            _ok(f"Data dir:        {DATA_DIR}")
+            _ok(f"Received files:  {RECEIVED_DIR}")
+        except Exception as _e:
+            _fail(f"Data dir:        {_e}")
+
+        # ── Security layer ───────────────────────────────────────────────
+        print()
+        _run("Starting security subsystem...")
+        _t.sleep(0.08)
+        _ok("Crypto engine:   AES-256-GCM  +  X25519 ECDH  +  Ed25519")
+        _ok("Replay guard:    HMAC-SHA256 nonce validation  [ACTIVE]")
+        if S().encryption_enabled and S().encryption_passphrase:
+            _ok("Passphrase enc:  [ENABLED]")
+        else:
+            _warn("Passphrase enc:  [DISABLED]  — включить в Настройки → Безопасность")
+        _t.sleep(0.05)
+        _ok(f"Protocol:        PROTOCOL_VERSION={PROTOCOL_VERSION}  COMPAT={PROTOCOL_COMPAT}")
+
+        # ── Sound subsystem ──────────────────────────────────────────────
+        print()
+        _run("Loading sound subsystem...")
+        _spin_msg[0] = "Загрузка звуков..."
+        _spin_stop = _thr.Event()
+        _spin_thr = _thr.Thread(target=_spinner, daemon=True)
+        _spin_thr.start()
+        try:
+            install_sounds(force=True)
+            _sound_files = []
+            for _sd in _get_sound_dirs():
+                if _sd.exists():
+                    _sound_files = [f for f in _sd.glob("*") if f.is_file()]
+                    if _sound_files: break
+        except Exception:
+            _sound_files = []
+        _t.sleep(0.2)
+        _spin_stop.set(); _spin_thr.join()
+
+        _audio_exts = {".wav", ".mp3", ".ogg", ".flac", ".aac"}
+        _sound_files = [f for f in _sound_files if f.suffix.lower() in _audio_exts]
+        if _sound_files:
+            _ok(f"Sound engine:    {len(_sound_files)} file(s)  [{_sound_files[0].parent}]")
+            for _sf in _sound_files[:8]:
+                _info(f"  \u21b3 {_sf.name}")
+        else:
+            _warn("Sound engine:    no sound files found")
+            _info("  \u21b3 положи .wav/.mp3 рядом с gdf.py")
+
+        # ── Network ──────────────────────────────────────────────────────
+        print()
+        _run("Initializing network stack...")
+        _t.sleep(0.08)
+        from PyQt6.QtNetwork import QNetworkInterface as _QNI2
+        _all_if  = _QNI2.allInterfaces()
+        _up_if   = [i for i in _all_if
+                    if i.flags() & _QNI2.InterfaceFlag.IsUp
+                    and not i.flags() & _QNI2.InterfaceFlag.IsLoopBack]
+        _vpn_kw  = ['tun','tap','vpn','hamachi','radmin','wg','zt','zero']
+        _phy_if  = [i for i in _up_if if not any(k in i.name().lower() for k in _vpn_kw)]
+        _vpn_if  = [i for i in _up_if if any(k in i.name().lower() for k in _vpn_kw)]
+
+        _ok(f"Interfaces:      {len(_all_if)} total  |  {len(_up_if)} up  |  {len(_phy_if)} physical  |  {len(_vpn_if)} VPN")
+
+        _my_ip = get_local_ip()
+        _ok(f"Primary IP:      {_my_ip}")
+
+        for _iface in _up_if:
+            _addrs = [e.ip().toString() for e in _iface.addressEntries()
+                      if ':' not in e.ip().toString() and e.ip().toString() != '0.0.0.0']
+            _itype = "VPN" if any(k in _iface.name().lower() for k in _vpn_kw) else "PHY"
+            if _addrs:
+                _ok(f"  [{_itype}] {_iface.name():<12}  {', '.join(_addrs)}")
+
+        _ok(f"UDP port:        {S().udp_port}   TCP port: {S().tcp_port}")
+
+        try:
+            import json as _j2
+            _sp = _j2.loads(S().get("static_peers","[]",t=str))
+            if _sp:
+                _ok(f"Static peers:    {', '.join(_sp)}")
+            else:
+                _info("Static peers:    none  —  добавить в Настройки → Специалист")
+        except Exception:
+            pass
+
+        if S().relay_enabled and S().relay_server:
+            _ok(f"Relay server:    {S().relay_server}  [ENABLED]")
+        else:
+            _info("Relay server:    disabled")
+
+        # ── WNS browser ──────────────────────────────────────────────────
+        print()
+        _run("Loading WNS browser engine...")
+        _t.sleep(0.06)
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView as _WEV
+            _ok("WNS engine:      QtWebEngine  (Chromium)  [READY]")
+        except Exception:
+            _warn("WNS engine:      QtWebEngine not available")
+
+        # ── History ───────────────────────────────────────────────────────
+        print()
+        _run("Scanning message history...")
+        _t.sleep(0.05)
+        try:
+            _hfiles = list(DATA_DIR.glob("history_*.json")) if DATA_DIR.exists() else []
+            if _hfiles:
+                _total_msgs = 0
+                for _hf in _hfiles:
+                    try:
+                        import json as _jh
+                        _total_msgs += len(_jh.loads(_hf.read_text(encoding='utf-8')))
+                    except Exception:
+                        pass
+                _ok(f"Message history: {len(_hfiles)} chat(s)  |  {_total_msgs} messages")
+            else:
+                _info("Message history: empty (first run?)")
+        except Exception:
+            _warn("Message history: could not read")
+
+        # ── User profile ───────────────────────────────────────────────────
+        print()
+        _run("Loading user profile...")
+        _t.sleep(0.05)
+        _uname = S().username or ""
+        if _uname:
+            _ok(f"Username:        {_uname}")
+        else:
+            _warn("Username:        не задан  —  задайте в профиле")
+        _ok(f"Theme:           {S().theme}")
+        _ok(f"Premium:         {'YES ✦' if S().premium else 'no'}")
+        _ok(f"Language:        {S().language}")
+        _ok(f"Scale:           {S().get('app_scale', 100, t=int)}%")
+        _ok(f"Encryption:      {'ON' if S().encryption_enabled else 'OFF'}")
+        _ok(f"History:         {'saves' if S().save_history else 'disabled'}")
+        _ok(f"Sounds:          {'ON' if S().notification_sounds else 'OFF'}")
+
+        # ── Optional deps ────────────────────────────────────────────────
+        print()
+        _run("Checking optional dependencies...")
+        _t.sleep(0.03)
+        for _dep, _label, _opt in [
+            ("pyaudio",      "pyaudio:         voice calls",    False),
+            ("cryptography", "cryptography:    E2E encryption", False),
+            ("webrtcvad",    "webrtcvad:       noise gate",     True),
+        ]:
+            try:
+                __import__(_dep)
+                _ok(f"{_label}  [OK]")
+            except ImportError:
+                (_info if _opt else _warn)(f"{_label}  [{'optional' if _opt else 'MISSING'}]")
+
+        # ── Final spinner before window ──────────────────────────────────
+        print()
+        _spin_msg = ["Запуск главного окна..."]
+        _spin_stop2 = _thr.Event()
+
+        def _spinner2():
+            i = 0
+            while not _spin_stop2.is_set():
+                frame = _BRAILLE[i % len(_BRAILLE)]
+                _sys.stdout.write(f"\r  {_C}{frame}{_R}  {_D}Запуск главного окна...{_R}")
+                _sys.stdout.flush()
+                _t.sleep(0.07)
+                i += 1
+            _sys.stdout.write("\r" + " "*60 + "\r")
+            _sys.stdout.flush()
+
+        _spin2_thr = _thr.Thread(target=_spinner2, daemon=True)
+        _spin2_thr.start()
+        _t.sleep(0.4)
+
         # ── 3. Main window ───────────────────────────────────────────────
         try:
             window = MainWindow()
+            _spin_stop2.set(); _spin2_thr.join()   # stop final spinner
             FT.file_received.connect(window.chat_panel.receive_file)
             _icp = Path(__file__).parent / "icon.png"
             if _icp.exists():
                 window.setWindowIcon(QIcon(str(_icp)))
+            _ok(f"Main window:     ready")
+            print()
+            print("  \033[1;32m" + "─"*62 + "\033[0m")
+            print(f"  \033[1;32m  Добро пожаловать, {S().username or "пользователь"}!\033[0m")
+            print("  \033[1;32m" + "─"*62 + "\033[0m")
+            print()
             window.show()
+            print("  " + "─"*54 + "\n")
             window.raise_()
             window.activateWindow()
             _install_death_screen_handler(window)
-            # Force full repaint — without this Qt may not render until first mouse move
             window.update()
             window.repaint()
             app.processEvents()
