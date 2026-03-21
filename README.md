@@ -1,6 +1,5 @@
 <div align="center">
 
-<img src="icon.png" width="120" alt="GoidaPhone Logo" />
 
 # GoidaPhone NT Server 1.8
 
