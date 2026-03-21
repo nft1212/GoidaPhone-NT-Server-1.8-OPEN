@@ -1,119 +1,320 @@
-# 📞 GoidaPhone v1.8 `NT Server Edition`
+<div align="center">
 
-![Status](https://img.shields.io/badge/Status-In_Development-orange?style=for-the-badge&logo=git)
-![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)
-![UI](https://img.shields.io/badge/Interface-PyQt6-green?style=for-the-badge&logo=qt)
-![Platform](https://img.shields.io/badge/Platform-Linux_|_Windows-lightgrey?style=for-the-badge&logo=gentoo)
+<img src="icon.png" width="120" alt="GoidaPhone Logo" />
 
----
+# GoidaPhone NT Server 1.8
 
-### 🚀 Project Overview
-**GoidaPhone** is a high-performance communication suite specifically engineered for operation within local networks (LAN) and VPN tunnels. The project aims to provide a lightweight, secure alternative to modern Electron-based messengers by utilizing a native-feeling UI and a highly optimized Python backend.
+**Encrypted P2P LAN & VPN Messenger**
 
-> [!IMPORTANT]
-> This project is currently under active development. Some features may be experimental or in the testing phase.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-yellow.svg)](https://python.org)
+[![PyQt6](https://img.shields.io/badge/PyQt6-6.7%2B-green.svg)](https://pypi.org/project/PyQt6/)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey.svg)]()
+[![Status](https://img.shields.io/badge/Status-In%20Development-orange.svg)]()
+[![Release](https://img.shields.io/badge/Release-April%2011%202026-red.svg)]()
 
----
+*No servers. No cloud. No surveillance. Just your network.*
 
-## 🏗 Key Features
+[Features](#features) · [Screenshots](#screenshots) · [Installation](#installation) · [Usage](#usage) · [Security](#security) · [Roadmap](#roadmap)
 
-| Feature | Description |
-| :--- | :--- |
-| **Hybrid Networking** | Optimized stack: TCP for reliable messaging and UDP streams for low-latency VoIP. |
-| **Advanced Security** | End-to-End Encryption (E2EE) using **AES-256-CBC** with PBKDF2 key derivation. |
-| **Media Engine** | Integrated **Mewa 1-2-3** stack for seamless media processing and playback. |
-| **Legacy UI/UX** | Deep integration with **KDE Plasma 6** featuring a visual style inspired by classic NT Server systems. |
-| **System Resilience** | Custom **GoidaDeathScreen** handler for detailed diagnostics during system crashes. |
+</div>
 
 ---
 
-## 🛠 Technical Stack
+## What is GoidaPhone NT Server 1.8?
 
-* **Core Engine:** Python 3.10+ (over 19,000 lines of code)
-* **Frontend UI:** PyQt6 (Qt 6.x) with custom corporate-retro styling.
-* **Audio Processing:** WebRTC VAD (Voice Activity Detection) for silence suppression.
-* **Cryptography:** Implemented using standard libraries to ensure maximum portability.
+GoidaPhone NT Server 1.8 is a **fully encrypted, serverless peer-to-peer messenger** for local networks and VPN. Every message is end-to-end encrypted using modern cryptography. There are no central servers — your data never leaves your network.
 
----
+Built with Python and PyQt6, it runs on Linux and Windows with a polished, themeable interface that rivals commercial messengers.
 
-## 🗺 System Architecture (Class Diagram)
-The following diagram illustrates the internal structure, class inheritance, and module relationships of the GoidaPhone engine, automatically generated from the source code.
-
-<p align="center">
-  <a href="classes_GoidaPhone.png">
-    <img src="classes_GoidaPhone.png" alt="GoidaPhone Visual Structure" width="100%">
-  </a>
-</p>
-
-*Click the image to view it in full resolution.*
+> **NT Server 1.8 is a complete protocol rewrite.** It is **not compatible** with older GoidaPhone versions (0.1 – 1.7544). Those versions use a fundamentally different, unencrypted protocol. NT Server 1.8 is a new ecosystem.
 
 ---
 
+## Features
 
+### 💬 Messaging
+- Public channel for everyone on the network
+- Private encrypted 1-on-1 chats
+- Group chats with custom icons and member roles
+- Message reactions, replies, forwarding, pinning, editing, deletion
+- Disappearing messages (TTL)
+- Polls with live vote tracking
+- Stickers, GIFs, images, video with inline preview
+- File transfer up to any size on LAN
+- Emoji-only messages rendered large (1–3 emoji = big, 4+ = normal)
+- Drag & drop files and images into chat
+- Ctrl+V to paste screenshots directly
 
-## 💻 Plug & Play
+### 📞 Voice Calls
+- 1-on-1 encrypted voice calls
+- Group voice calls (multi-peer mixing)
+- Voice activity detection (VAD) — green ring lights up when speaking
+- Noise suppression via WebRTC VAD
+- Screen sharing
+- Camera support
+- Floating call window with avatar, timer, mute/speaker controls
 
- **dependencies and startup (Windows/Linux(GNU)**
-   ```bash
-   #WINDOWS
-   # 0. https://www.python.org/downloads/
-   
-   # 1. Clone the repository
-    git clone https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git
+### 🎵 Mewa Player
+- Full-featured music player with playlist support
+- 10-band equalizer with presets (Bass+, Rock, Classical…)
+- Online radio with 16 built-in stations (laut.fm, Antenne Bayern, Radio Paradise…)
+- Auto-reconnect on stream drop
+- Automatic lyrics fetching via lrclib.net (no API key needed)
+- Synced LRC lyrics with timestamp stripping
 
-    # 2. Navigate to project folder
-    cd GoidaPhone-NT-Server-1.8-OPEN
+### 🌐 WNS Browser
+- Built-in Chromium browser (QtWebEngine)
+- Full Chrome User-Agent — Chrome Web Store accessible
+- Tabs, bookmarks, history, incognito mode
+- Userscripts support (Tampermonkey-style)
+- GreasyFork integration
 
-    # 3. Create virtual environment (to keep system clean)
-    python -m venv venv
+### 🔐 Security — GoidaCRYPTO
+GoidaPhone NT Server 1.8 implements a **multi-layer security architecture**:
 
-    #  4. Activate virtual environment
-    venv\Scripts\activate
+| Layer | Description |
+|-------|-------------|
+| **Protocol** | X25519 ECDH key exchange + Ed25519 identity signatures |
+| **Encryption** | AES-256-GCM per-session keys, HKDF-SHA256 derivation |
+| **Replay protection** | HMAC-SHA256 nonce cache (5000 entries) |
+| **SecureVault** | AES-256-GCM local storage, PBKDF2-HMAC-SHA256 (600k iterations) |
+| **L2** | Encrypted chat history (vault key) |
+| **L3** | Secure RAM wipe on exit |
+| **L4** | Stealth Mode (no taskbar/Alt+Tab) |
+| **L5** | Screenshot blocking |
+| **L6** | Auto clipboard clear (30s) |
+| **L7** | Idle lock with PIN |
+| **L8** | Anti-keystroke timing analysis |
+| **L9** | Auto-expiring messages (TTL) |
+| **L10** | Decoy password (fake profile) |
+| **L11–L19** | Traffic padding, LAN-only mode, audit log, key rotation, PFS… |
+| **L20 🔴** | Paranoid mode — all layers active |
 
-    # 5. Install dependencies (Windows-specific)
-    pip install -r requirements-windows.txt
+### 🎨 Themes & Customization
+- 13 built-in themes including 5 gradient themes:
+  **Aurora, Sunset, Ocean, Neon, Sakura**
+- Custom theme slots (3 for Premium users)
+- Custom app icon and splash screen
+- Adjustable UI scale
+- Colored nicknames, custom emoji badges
 
-    # 6. Launch GoidaPhone!
-    python gdf.py
+### ⭐ Premium
+- 30-day license via 12-digit activation code
+- Gold ✦ badge in profile
+- Colored nickname
+- Custom emoji next to name
+- 3 custom theme slots
+- Purchase: [t.me/WinoraCompany](https://t.me/WinoraCompany)
 
-  #!!!-------------------!!!
-  #!!!---------END-------!!!
-  #!!!-------------------!!!
-  
-  #LINUX(GNU)
-  # 1. Clone the repository
+### 🛠 Power Features
+- **ZLink Terminal** — built-in admin terminal with `/help` commands
+- **Quick Setup Wizard** — guided first-run configuration
+- **Interactive Tutorial** — 12-step onboarding overlay
+- **Auto-updates** — checks GitHub Releases automatically
+- **BSOD Death Screen** — styled crash reporter with QR code and auto-restart
+- **systemd-style startup log** — Braille spinner, color-coded status lines
+- **Notes** — personal scratchpad built into the app
+- **Call log** — history of all voice calls with duration
+
+---
+
+## Installation
+
+### Requirements
+
+```
+Python 3.11+
+PyQt6 >= 6.7.0
+PyQt6-WebEngine >= 6.7.0
+pyaudio
+cryptography
+```
+
+### Quick Start
+
+```bash
+# Clone the repository
 git clone https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git
-
-# 2. Navigate to project folder
 cd GoidaPhone-NT-Server-1.8-OPEN
 
-# 3. Create virtual environment (to keep system clean)
-python3 -m venv venv
+# Install dependencies
+pip install PyQt6 PyQt6-WebEngine pyaudio cryptography
 
-# 4. Activate virtual environment
-source venv/bin/activate
+# Run
+python3 gdf.py
+```
 
-# 5. Install system dependencies (choose your distribution)
+### Linux (Gentoo / Arch / Debian)
 
-#!!!!CHOOSE WHAT DO YOU NEED!!!! #(Gentoo/Ubuntu/Debian/Fedora/Arch)
-# For Gentoo Linux:
-#sudo emerge --ask dev-python/pip dev-vcs/git media-libs/portaudio
+```bash
+# Gentoo
+sudo emerge -av dev-python/pyqt6 dev-python/cryptography portaudio
 
-# For Ubuntu/Debian:
-# sudo apt update && sudo apt install portaudio19-dev python3-pip git -y
+# Debian/Ubuntu
+sudo apt install portaudio19-dev python3-pip
+pip install PyQt6 PyQt6-WebEngine pyaudio cryptography --break-system-packages
 
-# For Fedora:
-# sudo dnf install portaudio-devel python3-pip git
+python3 gdf.py
+```
 
-# For Arch Linux:
-# sudo pacman -S portaudio python-pip git
+### Windows
 
-# 6. Install Python dependencies (Linux-specific)
-pip install -r requirements-linux.txt
-
-# 7. Launch GoidaPhone!
+```bash
+pip install PyQt6 PyQt6-WebEngine pyaudio cryptography
 python gdf.py
+```
 
-#!!!-------------------!!!
-#!!!---------END-------!!!
-#!!!-------------------!!!
+Or download the pre-built `.exe` from [Releases](https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN/releases).
+
+### Optional (enhances functionality)
+
+```bash
+# Better radio & audio streaming
+sudo emerge media-video/mpv   # Gentoo
+# or
+sudo apt install mpv          # Debian/Ubuntu
+
+# WebRTC noise suppression
+pip install webrtcvad --break-system-packages
+```
+
+---
+
+## Usage
+
+### Connecting to others
+
+GoidaPhone automatically discovers peers on the **same LAN or VPN**:
+
+- **Same Wi-Fi / LAN network** → peers appear automatically, no configuration needed
+- **Different networks** → use a VPN: [Radmin VPN](https://www.radmin-vpn.com/), [ZeroTier](https://www.zerotier.com/), [Hamachi](https://vpn.net/)
+
+### First Run
+
+1. Launch `gdf.py`
+2. Complete the **Quick Setup Wizard** (name, theme, sounds)
+3. Go through the **Tutorial** (or skip — it's available anytime in Help → Tutorial)
+4. Start chatting
+
+### Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/poll "Question?" Option1 Option2` | Create a live poll |
+| `/ttl 60` | Set message auto-delete timer (seconds) |
+| `/ttl 0` | Disable auto-delete |
+| `/me action` | Sends *username action* |
+| `/help` | Show all commands |
+
+---
+
+## Network Protocol
+
+```
+PROTOCOL_VERSION = 3
+COMPAT_VERSION   = 2   (minimum accepted)
+
+Transport:  UDP (broadcast discovery) + TCP (file transfer)
+Port:       17385 (UDP) / 17386 (TCP)  — configurable
+
+Handshake:  X25519 ECDH → HKDF-SHA256 → AES-256-GCM session key
+Signing:    Ed25519 identity key signs every packet
+Nonces:     12-byte random per message (2^96 space)
+Auth tag:   16-byte GCM tag (tampering → instant reject)
+```
+
+> **Compatibility note:** GoidaPhone 0.1 – 1.7544 use a completely different unencrypted protocol and **cannot communicate** with NT Server 1.8. NT Server 1.8 is a separate ecosystem.
+
+---
+
+## Project Structure
+
+```
+gdf.py              — main application (single file)
+icon.png            — application icon
+splashq.jpg         — splash screen image
+~/.config/GoidaPhone/
+    *.ini           — settings (QSettings)
+    vault.gcrypto   — GoidaCRYPTO SecureVault (AES-256-GCM)
+    received_files/ — received images, videos, files
+    history/        — chat history (JSON)
+```
+
+---
+
+
+### ✅ Completed in 1.8.0
+
+- [x] X25519 + Ed25519 + AES-256-GCM E2E encryption
+- [x] GoidaCRYPTO SecureVault (20 security layers)
+- [x] Voice calls with VAD
+- [x] Group calls
+- [x] Screen sharing
+- [x] Mewa player with EQ and radio
+- [x] WNS Chromium browser
+- [x] ZLink terminal
+- [x] 13 themes including 5 gradient themes
+- [x] Premium license system
+- [x] Auto-updates via GitHub Releases
+- [x] Quick Setup Wizard + 12-step Tutorial
+- [x] Polls with live voting
+- [x] Disappearing messages
+- [x] BSOD crash reporter
+
+### 📅 Release: April 11, 2026
+
+The official stable release of GoidaPhone NT Server 1.8 is scheduled for **April 11, 2026**.
+
+---
+
+## Contributing
+
+Contributions are welcome. Please open an issue before submitting a pull request for major changes.
+
+```bash
+git clone https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN.git
+cd GoidaPhone-NT-Server-1.8-OPEN
+# make your changes to gdf.py
+# test locally
+# open a pull request
+```
+
+---
+
+## License
+
+```
+GoidaPhone NT Server 1.8
+Copyright (C) 2026  Winora Company
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+```
+
+---
+
+## Contact
+
+- **Telegram:** [t.me/WinoraCompany](https://t.me/WinoraCompany)
+- **GitHub Issues:** [Open an issue](https://github.com/nft1212/GoidaPhone-NT-Server-1.8-OPEN/issues)
+
+---
+
+<div align="center">
+
+Made with ❤️ by **Winora Company** · © 2026
+
+*GoidaPhone NT Server 1.8 — Because your conversations are yours alone.*
+
+</div>
