@@ -14,7 +14,7 @@
 
 *No servers. No cloud. No surveillance. Just your network.*
 
-[Features](#features) · [Screenshots](#screenshots) · [Installation](#installation) · [Usage](#usage) · [Security](#security) 
+[Features](#features) · [Installation](#installation) · [Usage](#usage) · [Security](#security) 
 
 </div>
 
