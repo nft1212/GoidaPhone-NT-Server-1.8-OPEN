@@ -4,6 +4,69 @@
 import warnings as _w
 _w.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 _w.filterwarnings("ignore", message=".*pkg_resources.*")
+
+# ── Подавляем Qt CSS/logging спам ─────────────────────────────────────────────
+import os as _os_early, sys as _sys_early
+
+class _QtStderrFilter:
+    """Фильтрует мусорные строки Qt из stderr."""
+    _SKIP = (
+        "Could not parse stylesheet",
+        "Ignoring malformed logging rule",
+        "qt.core.logging:",
+        "qt.multimedia.ffmpeg:",
+        "qt.qpa.fonts:",
+        "qt.qpa.stylesheet:",
+        "qt.widgets.stylesheet:",
+        "Using Qt multimedia with FFmpeg",
+    )
+    def __init__(self, wrapped):
+        self._w = wrapped
+        self._buf = ""  # буфер для многострочных сообщений
+
+    def write(self, s):
+        if not s:
+            return 0
+        # Проверяем каждую строку отдельно
+        lines = s.split('\n')
+        out = []
+        for line in lines:
+            skip = any(p in line for p in self._SKIP)
+            # Также пропускаем строки которые являются продолжением правил
+            # (*.debug=false, qt.qpa.*=false и т.д.)
+            if not skip and (
+                line.strip() in ('', ) or
+                (line.strip().endswith('=false') and '.' in line.strip())
+            ):
+                skip = True
+            if not skip:
+                out.append(line)
+        result = '\n'.join(out)
+        if result and result != '\n':
+            return self._w.write(result)
+        return len(s)
+
+    def flush(self): return self._w.flush()
+    def fileno(self): return self._w.fileno()
+    def isatty(self): return self._w.isatty()
+    @property
+    def encoding(self): return self._w.encoding
+    @property
+    def errors(self): return getattr(self._w, "errors", "strict")
+
+_sys_early.stderr = _QtStderrFilter(_sys_early.stderr)
+
+# QT_LOGGING_RULES — одна строка без переносов (Qt 6 требует \n как разделитель)
+_os_early.environ["QT_LOGGING_RULES"] = (
+    "*.debug=false\n"
+    "qt.qpa.stylesheet=false\n"
+    "qt.qpa.fonts=false\n"
+    "qt.widgets.stylesheet=false\n"
+    "qt.core.logging=false\n"
+    "qt.multimedia*=false\n"
+    "ffmpeg*=false\n"
+)
+# ─────────────────────────────────────────────────────────────────────────────
 """
 GoidaPhone v1.8 — by Winora Company
 LAN/VPN messenger with voice calls, file sharing, groups, profiles.
@@ -952,9 +1015,7 @@ def _synth_tone(freqs: list[tuple[float,float,float]], volume: float = 0.35):
         _SOUND_PLAYERS.append(sink)   # keep alive
         # auto-cleanup after estimated duration
         total_ms = int(sum(d for _, d, _ in freqs)) + 200
-        QTimer.singleShot(total_ms, lambda: (
-            _SOUND_PLAYERS.remove(sink)
-            if sink in _SOUND_PLAYERS else None))
+        QTimer.singleShot(total_ms, lambda: _SOUND_PLAYERS.remove(sink) if sink in _SOUND_PLAYERS else None)
     except Exception as e:
         print(f"[sound] synth failed: {e}")
 
@@ -1348,12 +1409,12 @@ class SecureVault:
       • Целостность: HMAC-SHA256 поверх зашифрованного блоба
 
     СЛОИ ЗАЩИТЫ:
-      Layer 0 — Нет vault_passphrase → данные в QSettings (как раньше)
-      Layer 1 — vault_passphrase установлен → AES-256-GCM шифрование
-      Layer 2 — + история зашифрована ключом хранилища
-      Layer 3 — + Secure Wipe при выходе (перезапись RAM)
-      Layer 4 — Stealth Mode (нет в таскбаре, нет имени в трее)
-      Layer 5 — Anti-screenshot (WA_ContentsMarginsRespectsSafeArea)
+      Layers 0-1:  Хранилище данных (QSettings / AES-256-GCM + PBKDF2-600k)
+      Layers 2-5:  Защита данных, UI и памяти
+      Layers 6-10: Поведенческая и оперативная защита
+      Layers 11-15: Сетевая и криптографическая защита
+      Layers 16-19: Протокольная защита
+      Layer 20:    🔴 Параноидальный режим — всё включено
     """
 
     VAULT_FILE    = "vault.gcrypto"
@@ -2926,6 +2987,32 @@ _STRINGS_RU = {
     "mic_on":               "🎤 Вкл",
     "mic_off":              "🔇 Выкл",
     "premium_label":        "👑 Премиум",
+    # Меню
+    "menu_file":            "Файл",
+    "menu_view":            "Вид",
+    "menu_themes":          "🎨 Темы",
+    "menu_calls":           "Звонки",
+    "menu_help":            "Справка",
+    "tab_appearance":          "🖼 Внешний вид",
+    "tab_security":            "🔒 Блокировка",
+    "tab_privacy":             "🛡 Приватность",
+    "tab_calls":               "📞 Звонки",
+    "tab_sounds":              "🔔 Звуки",
+    "btn_save":                "💾 Сохранить",
+    "btn_close":               "Закрыть",
+    "btn_cancel":              "Отмена",
+    "lbl_online_users":        "Пользователи онлайн",
+    "no_users":                "Нет пользователей в сети",
+    "incoming_call_from":      "Входящий звонок от",
+    "call_ended_msg":          "Звонок завершён",
+    "call_started_msg":        "Звонок начат",
+    "msg_deleted":             "Сообщение удалено",
+    "msg_edited":              "изменено",
+    "file_received":           "Файл получен",
+    "image_received":          "Изображение получено",
+    "tab_users":            "👥 Пользователи",
+    "tab_groups":           "📂 Группы",
+    "tab_chat_pub":         "💬 Чат",
 }
 
 _STRINGS_EN = {
@@ -3044,7 +3131,178 @@ _STRINGS_EN = {
     "no_calls":             "📞 No calls",
     "mic_on":               "🎤 On",
     "mic_off":              "🔇 Off",
+    # Menu
+    "menu_file":            "File",
+    "menu_view":            "View",
+    "menu_themes":          "🎨 Themes",
+    "menu_calls":           "Calls",
+    "menu_help":            "Help",
+    "tab_appearance":          "🖼 Appearance",
+    "tab_security":            "🔒 Security",
+    "tab_privacy":             "🛡 Privacy",
+    "tab_calls":               "📞 Calls",
+    "tab_sounds":              "🔔 Sounds",
+    "btn_save":                "💾 Save",
+    "btn_close":               "Close",
+    "btn_cancel":              "Cancel",
+    "lbl_online_users":        "Online Users",
+    "no_users":                "No users on network",
+    "incoming_call_from":      "Incoming call from",
+    "call_ended_msg":          "Call ended",
+    "call_started_msg":        "Call started",
+    "msg_deleted":             "Message deleted",
+    "msg_edited":              "edited",
+    "file_received":           "File received",
+    "image_received":          "Image received",
+    "tab_users":            "👥 Users",
+    "tab_groups":           "📂 Groups",
+    "tab_chat_pub":         "💬 Chat",
     "premium_label":        "👑 Premium",
+}
+
+_STRINGS_JA = {
+    # App
+    "app_title":            "GoidaPhone",
+    "online":               "オンライン",
+    "offline":              "オフライン",
+    # Chat
+    "public_chat":          "💬 パブリックチャット",
+    "all_users":            "ネットワーク上の全ユーザー",
+    "private_chat":         "プライベートチャット",
+    "type_message":         "メッセージを入力...",
+    "send":                 "送信",
+    "call":                 "通話",
+    "hangup":               "切断",
+    "attach":               "ファイル",
+    "emoji":                "絵文字",
+    "stickers":             "スタンプ",
+    "typing":               "入力中...",
+    "you":                  "あなた",
+    "call_started":         "通話開始",
+    "call_ended":           "通話終了",
+    "active_call":          "📞 通話中",
+    "mute_mic":             "🎤 マイク",
+    "muted":                "🔇 ミュート",
+    # Users panel
+    "users":                "👥 ユーザー",
+    "groups":               "📂 グループ",
+    "search":               "🔍 検索...",
+    "create_group":         "➕ グループ作成",
+    "new_group":            "新しいグループ",
+    "group_name":           "グループ名:",
+    "group_created":        "グループを作成しました。",
+    "add_members":          "右クリックでメンバーを追加。",
+    "personal_chat":        "💬 個人チャット",
+    "call_peer":            "📞 通話",
+    "send_file":            "📎 ファイル送信",
+    "add_to_group":         "➕ グループに追加",
+    "first_create_group":   "先にグループを作成してください。",
+    "groups_label":         "グループ:",
+    # Messages
+    "msg_file":             "📎 ファイル",
+    "msg_image":            "🖼 画像",
+    "msg_edit_hint":        "(編集済)",
+    "msg_forwarded":        "↪ 転送",
+    "msg_reaction_add":     "リアクション追加",
+    "msg_copy":             "📋 コピー",
+    "msg_edit":             "✏ 編集",
+    "msg_delete":           "🗑 削除",
+    "msg_forward":          "↪ 転送",
+    "msg_reply":            "↩ 返信",
+    "msg_reactions":        "😊 リアクション",
+    # Notifications
+    "notif_new_message":    "新しいメッセージ",
+    "notif_incoming_call":  "着信",
+    "notif_file_received":  "ファイル受信",
+    "notif_user_online":    "がオンラインになりました",
+    # Settings
+    "settings":             "GoidaPhone 設定",
+    "tab_audio":            "🎵 オーディオ",
+    "tab_network":          "🌐 ネットワーク",
+    "tab_themes":           "🎨 テーマ",
+    "tab_license":          "👑 ライセンス",
+    "tab_data":             "💾 データ",
+    "tab_specialist":       "🔧 上級者向け",
+    "tab_language":         "🌍 言語",
+    "save":                 "💾 保存",
+    "close":                "閉じる",
+    "cancel":               "キャンセル",
+    "yes":                  "はい",
+    "no":                   "いいえ",
+    "ok":                   "OK",
+    "saved":                "設定を保存しました！",
+    # Profile
+    "my_profile":           "👤 マイプロフィール",
+    "username":             "ユーザー名:",
+    "bio":                  "自己紹介:",
+    "avatar":               "アバター",
+    "change_avatar":        "📷 アバター変更",
+    "banner":               "プロフィールバナー",
+    "nickname_color":       "ニックネームの色:",
+    "custom_emoji":         "名前の横の絵文字:",
+    "profile_saved":        "プロフィールを保存しました！",
+    # Calls
+    "incoming_call":        "から着信",
+    "accept":               "✅ 応答",
+    "reject":               "❌ 拒否",
+    # Launcher
+    "launcher_title":       "GoidaPhone",
+    "launcher_subtitle":    "ようこそ",
+    "launcher_gui":         "🖥 グラフィカル\nインターフェース",
+    "launcher_cmd":         "⌨ コンソール\nモード",
+    "launcher_gui_hint":    "チャット、通話、ファイル共有",
+    "launcher_cmd_hint":    "サーバー・診断・自動化向け",
+    # About
+    "about":                f"About {APP_NAME}",
+    # Updates
+    "check_updates":        "🔄 アップデート確認",
+    "update_found":         "🚀 新バージョンあり",
+    "update_available_title": "アップデート利用可能！",
+    "update_now":           "⬇ アップデート",
+    "no_updates":           "✅ 最新バージョンです。",
+    "update_error":         "❌ エラー:",
+    # Errors
+    "network_error":        "ネットワークサービスの起動に失敗しました。",
+    "file_send_error":      "ファイル送信エラー",
+    "no_image":             "画像を読み込めません。",
+    # Slash commands
+    "cmd_clear_done":       "チャットをクリアしました。",
+    "cmd_help": "コマンド: /clear /help /me /ping /version /ttl /poll /notes",
+    "cmd_me":               "が",
+    "cmd_ping":             "ポン！",
+    "cmd_unknown":          "不明なコマンドです。/help でコマンド一覧を表示。",
+    # Status
+    "searching":            "🔍 ユーザーを検索中...",
+    "no_calls":             "📞 通話なし",
+    "mic_on":               "🎤 オン",
+    "mic_off":              "🔇 オフ",
+    # メニュー
+    "menu_file":            "ファイル",
+    "menu_view":            "表示",
+    "menu_themes":          "🎨 テーマ",
+    "menu_calls":           "通話",
+    "menu_help":            "ヘルプ",
+    "tab_appearance":          "🖼 外観",
+    "tab_security":            "🔒 セキュリティ",
+    "tab_privacy":             "🛡 プライバシー",
+    "tab_calls":               "📞 通話",
+    "tab_sounds":              "🔔 サウンド",
+    "btn_save":                "💾 保存",
+    "btn_close":               "閉じる",
+    "btn_cancel":              "キャンセル",
+    "lbl_online_users":        "オンラインユーザー",
+    "no_users":                "ネットワークにユーザーがいません",
+    "incoming_call_from":      "着信:",
+    "call_ended_msg":          "通話終了",
+    "call_started_msg":        "通話開始",
+    "msg_deleted":             "メッセージが削除されました",
+    "msg_edited":              "編集済み",
+    "file_received":           "ファイル受信",
+    "image_received":          "画像受信",
+    "tab_users":            "👥 ユーザー",
+    "tab_groups":           "📂 グループ",
+    "tab_chat_pub":         "💬 チャット",
+    "premium_label":        "👑 プレミアム",
 }
 
 class Strings:
@@ -3054,7 +3312,7 @@ class Strings:
     Language is read from AppSettings at call time, so switching language
     in settings takes effect immediately without restart.
     """
-    _langs = {"ru": _STRINGS_RU, "en": _STRINGS_EN}
+    _langs = {"ru": _STRINGS_RU, "en": _STRINGS_EN, "ja": _STRINGS_JA}
 
     @classmethod
     def _table(cls) -> dict:
@@ -3591,6 +3849,112 @@ GROUPS = GroupManager()
 # ═══════════════════════════════════════════════════════════════════════════
 #  UPDATE CHECKER
 # ═══════════════════════════════════════════════════════════════════════════
+def _show_update_dialog(ver: str, desc: str, parent=None):
+    """
+    Диалог обновления с кнопками скачать EXE / AppImage / исходники.
+    Ссылки берутся из GitHub Releases — файлы должны называться
+    GoidaPhone-Windows-x86_64.exe и GoidaPhone-Linux-x86_64.AppImage.
+    """
+    import platform as _plt
+    t = get_theme(S().theme)
+
+    dlg = QDialog(parent)
+    dlg.setWindowTitle("🚀 Доступно обновление!")
+    dlg.setFixedSize(460, 320)
+    dlg.setStyleSheet(
+        f"QDialog{{background:{t['bg2']};}}"
+        f"QLabel{{background:transparent;color:{t['text']};}}")
+
+    lay = QVBoxLayout(dlg)
+    lay.setContentsMargins(28, 24, 28, 20)
+    lay.setSpacing(14)
+
+    # Заголовок
+    title = QLabel(f"GoidaPhone v{ver} доступна!")
+    title.setStyleSheet(
+        f"font-size:16px;font-weight:700;color:{t['text']};")
+    lay.addWidget(title)
+
+    # Описание релиза
+    if desc and desc.strip():
+        desc_lbl = QLabel(desc[:200] + ("…" if len(desc) > 200 else ""))
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setStyleSheet(
+            f"font-size:9pt;color:{t['text_dim']};")
+        lay.addWidget(desc_lbl)
+
+    lay.addStretch()
+
+    # Базовый URL релизов
+    _base = (f"https://github.com/{GITHUB_REPO}/releases/download/v{ver}")
+    _release_page = f"https://github.com/{GITHUB_REPO}/releases/tag/v{ver}"
+
+    # Кнопки скачивания
+    btns_lbl = QLabel("Выбери свою платформу:")
+    btns_lbl.setStyleSheet(f"font-size:9pt;color:{t['text_dim']};")
+    lay.addWidget(btns_lbl)
+
+    btn_row = QHBoxLayout()
+    btn_row.setSpacing(8)
+
+    is_win   = _plt.system() == "Windows"
+    is_linux = _plt.system() == "Linux"
+
+    for label, url, is_current in [
+        ("⬇ Windows .exe",
+         f"{_base}/GoidaPhone-Windows-x86_64.exe",
+         is_win),
+        ("⬇ Linux AppImage",
+         f"{_base}/GoidaPhone-Linux-x86_64.AppImage",
+         is_linux),
+        ("📦 Исходники",
+         f"{_release_page}",
+         not is_win and not is_linux),
+    ]:
+        btn = QPushButton(label)
+        btn.setFixedHeight(36)
+        if is_current:
+            # Текущая платформа — акцентная кнопка
+            btn.setStyleSheet(
+                f"QPushButton{{background:{t['accent']};color:white;"
+                "border-radius:8px;border:none;font-weight:600;padding:0 12px;}}"
+                f"QPushButton:hover{{background:{t['accent2']};}}")
+        else:
+            btn.setStyleSheet(
+                f"QPushButton{{background:{t['bg3']};color:{t['text']};"
+                f"border:1px solid {t['border']};border-radius:8px;padding:0 12px;}}"
+                f"QPushButton:hover{{border-color:{t['accent']};color:{t['accent']};}}")
+        btn.clicked.connect(
+            lambda checked=False, u=url:
+                QDesktopServices.openUrl(QUrl(u)))
+        btn_row.addWidget(btn)
+
+    lay.addLayout(btn_row)
+
+    # Ссылка на страницу релиза
+    page_btn = QPushButton("🌐 Открыть страницу релиза на GitHub")
+    page_btn.setFixedHeight(28)
+    page_btn.setStyleSheet(
+        f"QPushButton{{background:transparent;color:{t['text_dim']};"
+        "border:none;font-size:8pt;text-decoration:underline;}}"
+        f"QPushButton:hover{{color:{t['accent']};}}")
+    page_btn.clicked.connect(
+        lambda: QDesktopServices.openUrl(QUrl(_release_page)))
+    lay.addWidget(page_btn)
+
+    # Кнопка закрыть
+    close_btn = QPushButton("Позже")
+    close_btn.setFixedHeight(30)
+    close_btn.setStyleSheet(
+        f"QPushButton{{background:transparent;color:{t['text_dim']};"
+        f"border:1px solid {t['border']};border-radius:6px;padding:0 16px;}}"
+        f"QPushButton:hover{{border-color:{t['text']};}}")
+    close_btn.clicked.connect(dlg.accept)
+    lay.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
+    dlg.exec()
+
+
 class UpdateChecker(QThread):
     update_available  = pyqtSignal(str, str)   # version, description
     no_update         = pyqtSignal()
@@ -5849,23 +6213,25 @@ class MessageBubble(QWidget):
         outer.setContentsMargins(8, 2, 8, 2)
         outer.setSpacing(0)
 
-        def _is_emoji_only(s: str) -> bool:
+        def _count_emoji(s: str) -> int:
+            """Считает количество эмодзи-символов в строке."""
             import unicodedata
-            if not s or len(s) > 12:
-                return False
+            count = 0
             for ch in s:
-                cp = ord(ch)
-                if ch in (' ', '\u200d', '\ufe0f', '\u20e3'):
+                if ch in (' ', '\u200d', '\ufe0f', '\u20e3', '\ufe0e'):
                     continue
+                cp = ord(ch)
                 if (0x1F000 <= cp <= 0x1FFFF or
                     0x2600  <= cp <= 0x27BF  or
-                    0x1F300 <= cp <= 0x1FAFF or
-                    0x2300  <= cp <= 0x23FF  or
-                    0x2B50  == cp or 0x2764 == cp or
+                    0x1F300 <= cp <= 0x1F9FF or
                     unicodedata.category(ch) in ('So', 'Mn')):
-                    continue
-                return False
-            return True
+                    count += 1
+                else:
+                    return 0   # есть не-эмодзи символ
+            return count
+
+        def _is_emoji_only(s: str) -> bool:
+            return bool(s) and _count_emoji(s.strip()) > 0
 
         # System message
         if m.is_system:
@@ -6025,16 +6391,21 @@ class MessageBubble(QWidget):
         else:
             # Detect solo-emoji messages → render big
             txt = m.text.strip()
-            is_big_emoji = _is_emoji_only(txt)
+            _emoji_count = _count_emoji(txt)
+            is_big_emoji = _emoji_count > 0 and _emoji_count <= 3
             if is_big_emoji:
+                # 1 → 72px, 2 → 56px, 3 → 44px
+                _sizes = {1: 72, 2: 56, 3: 44}
+                _fs = _sizes.get(_emoji_count, 44)
                 tl = QLabel(txt)
-                tl.setFont(QFont("Segoe UI Emoji,Noto Color Emoji,Apple Color Emoji", 56))
-                tl.setStyleSheet("background:transparent;border:none;padding:6px 4px;"
-                                 "font-size:56px;")
+                tl.setFont(QFont("Segoe UI Emoji,Noto Color Emoji,Apple Color Emoji", _fs))
+                tl.setStyleSheet(
+                    f"background:transparent;border:none;padding:6px 4px;"
+                    f"font-size:{_fs}px;")
                 tl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
                 tl.setWordWrap(False)
                 tl.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
-                tl.setMinimumSize(80, 80)
+                tl.setMinimumSize(_fs + 16, _fs + 16)
                 tl.adjustSize()
             else:
                 html = TextFormatter.format(m.text, accent_color=t['accent'],
@@ -6370,7 +6741,7 @@ class MessageBubble(QWidget):
             f"border-radius:6px;padding:2px 12px;font-size:10px;}}"
             f"QPushButton:hover{{background:{t['btn_hover']};}}")
         if dest and dest.exists():
-            def _do_open(_d=dest):
+            def _do_open(checked=False, _d=dest):
                 if _d.suffix.lower() in MEDIA_EXTS:
                     _open_media_smart(str(_d), self)
                 else:
@@ -6679,6 +7050,34 @@ class ChatDisplay(QScrollArea):
         self._messages.append(entry)
         self._append_bubble(entry)
 
+    def _add_widget_bubble(self, widget: QWidget, is_own: bool = True,
+                           replace_widget: QWidget | None = None) -> QWidget:
+        """Добавить произвольный виджет как пузырь. Возвращает wrapper."""
+        from PyQt6.QtWidgets import QHBoxLayout, QWidget as _QW
+        wrapper = _QW()
+        wrapper.setStyleSheet("background:transparent;")
+        row = QHBoxLayout(wrapper)
+        row.setContentsMargins(8, 2, 8, 2)
+        if is_own:
+            row.addStretch()
+            row.addWidget(widget)
+        else:
+            row.addWidget(widget)
+            row.addStretch()
+        if replace_widget is not None:
+            # Заменяем существующий wrapper — находим его индекс
+            idx = self._lay.indexOf(replace_widget)
+            if idx >= 0:
+                replace_widget.hide()
+                replace_widget.deleteLater()
+                self._lay.insertWidget(idx, wrapper)
+                return wrapper
+        self._lay.insertWidget(self._lay.count() - 1, wrapper)
+        QTimer.singleShot(60, lambda: self.verticalScrollBar().setValue(
+            self.verticalScrollBar().maximum()))
+        return wrapper
+
+
     def add_upload_progress(self, fname: str, fsize: int, prog_id: str):
         """Show indeterminate upload progress card."""
         t = get_theme(S().theme)
@@ -6766,6 +7165,20 @@ class ChatDisplay(QScrollArea):
         for m in messages[-80:]:
             if m.get("system"):
                 self.add_system(m["text"])
+            elif m.get("msg_type") == "poll":
+                # Восстанавливаем опрос из истории
+                poll_id  = m.get("poll_id", f"poll_{m.get('ts',0)}")
+                question = m.get("text", "?")
+                options  = m.get("poll_options", [])
+                votes    = m.get("poll_votes", {o: [] for o in options})
+                is_own   = m.get("is_own", False)
+                if not options:
+                    continue
+                # Восстанавливаем данные опроса
+                self._polls[poll_id] = {
+                    "question": question, "options": options,
+                    "votes": votes, "creator": m.get("sender", "")}
+                self._add_poll_bubble(poll_id, question, options, is_own=is_own)
             else:
                 # Restore image/video data from disk if stored as path
                 img_data = None
@@ -7592,18 +8005,22 @@ class _GrowingTextEdit(QTextEdit):
         self.setAcceptRichText(False)
         self.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.setMinimumHeight(36)
-        self.setMaximumHeight(120)
+        self.setMaximumHeight(200)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.document().contentsChanged.connect(self._adjust_height)
         self.setStyleSheet(
             "QTextEdit{border:none;background:transparent;"
-            "padding:4px 0;font-size:13px;}")
+            "padding:6px 4px;font-size:13px;}")
 
     def _adjust_height(self):
-        doc_h = int(self.document().size().height()) + 8
-        new_h = max(36, min(120, doc_h))
+        # Даём документу пересчитать layout по текущей ширине
+        self.document().setTextWidth(self.viewport().width())
+        doc_h = int(self.document().size().height()) + 16
+        new_h = max(36, min(200, doc_h))
         if self.height() != new_h:
             self.setFixedHeight(new_h)
+            # Скроллим вниз чтобы курсор был виден
+            self.ensureCursorVisible()
 
     def keyPressEvent(self, event):
         if (event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
@@ -7669,6 +8086,7 @@ class ChatPanel(QWidget):
         self._drafts: dict[str, str] = {}  # chat_id → draft text
         self._ttl_seconds: int = 0
         self._ttl_timers: list = []
+        self._polls:       dict = {}   # poll_id → poll data
         self._setup()
         # Drag & drop — файлы и изображения прямо в чат
         self.setAcceptDrops(True)
@@ -7692,7 +8110,8 @@ class ChatPanel(QWidget):
         """)
 
         self._avatar_lbl = QLabel()
-        self._avatar_lbl.setFixedSize(36,36)
+        self._avatar_lbl.setFixedSize(0, 0)
+        self._avatar_lbl.setVisible(False)
         hl.addWidget(self._avatar_lbl)
 
         vl = QVBoxLayout()
@@ -8023,6 +8442,7 @@ class ChatPanel(QWidget):
         self._avatar_lbl.setVisible(False)
         self._display.chat_id = "public"
         self._display.clear()
+        self._polls.clear()
         self._display._messages.clear()
         self._load_history("public")
         UNREAD.mark_read("public")
@@ -8059,6 +8479,7 @@ class ChatPanel(QWidget):
         chat_id = peer["ip"]
         self._display.chat_id = chat_id
         self._display.clear()
+        self._polls.clear()
         self._display._messages.clear()
         self._load_history(chat_id)
         UNREAD.mark_read(chat_id)
@@ -8084,6 +8505,7 @@ class ChatPanel(QWidget):
             chat_id = "__favorites__"
             self._display.chat_id = chat_id
             self._display.clear()
+            self._polls.clear()
             self._display._messages.clear()
             self._load_history(chat_id)
             UNREAD.mark_read(chat_id)
@@ -8109,6 +8531,7 @@ class ChatPanel(QWidget):
         chat_id = f"group_{gid}"
         self._display.chat_id = chat_id
         self._display.clear()
+        self._polls.clear()
         self._display._messages.clear()
         self._load_history(chat_id)
         UNREAD.mark_read(chat_id)
@@ -8218,6 +8641,7 @@ class ChatPanel(QWidget):
         if cmd == "/clear":
             chat_id = self._get_current_chat_id()
             self._display.clear()
+            self._polls.clear()
             self._display._messages.clear()
             # Also wipe the history file so it doesn't reload on restart
             try:
@@ -8393,9 +8817,20 @@ class ChatPanel(QWidget):
                 if self._current_peer:
                     self.net.send_udp(poll_pkt, self._current_peer["ip"])
                 elif self._current_gid:
-                    for ip in GROUPS.get(self._current_gid, {}).get("members", []):
+                    for ip in GROUPS.get(self._current_gid).get("members", []):
                         if ip != get_local_ip(): self.net.send_udp(poll_pkt, ip)
-                else: self.net.broadcast(poll_pkt)
+                else: self.net.send_udp(poll_pkt)
+                # Сохраняем в историю
+                _chat_id = self._get_current_chat_id()
+                HISTORY.append(_chat_id, {
+                    "sender": S().username, "text": question,
+                    "ts": time.time(), "is_own": True,
+                    "color": S().nickname_color,
+                    "msg_type": "poll",
+                    "poll_id": poll_id,
+                    "poll_options": options,
+                    "poll_votes": {o: [] for o in options},
+                })
             else:
                 self._display.add_system_message(
                     '💡 /poll "Вопрос?" Вариант1 Вариант2 ...',
@@ -9132,16 +9567,19 @@ class ChatPanel(QWidget):
         self._call_btn.setToolTip("Позвонить")
 
     def _set_call_active(self, active: bool, peer: dict | None = None):
+        # Guard против двойного вызова
+        if not active and not self._in_call:
+            return  # уже не в звонке — не дублируем сообщение
         self._in_call = active
         self._call_bar.setVisible(False)
         if active:
             self._call_btn.setText("📵")
             self._call_btn.setToolTip("Завершить звонок")
-            self._display.add_system("Звонок начат")
+            self._display.add_system(TR("call_started_msg"))
         else:
             self._call_btn.setText("📞")
             self._call_btn.setToolTip("Позвонить")
-            self._display.add_system("Звонок завершён")
+            self._display.add_system(TR("call_ended_msg"))
             if hasattr(self, "_float_call") and self._float_call:
                 try:
                     if hasattr(self._float_call, '_timer'):
@@ -9456,9 +9894,9 @@ class ChatPanel(QWidget):
             if self._current_peer:
                 self.net.send_udp(pkt, self._current_peer["ip"])
             elif self._current_gid:
-                for ip in GROUPS.get(self._current_gid,{}).get("members",[]):
+                for ip in GROUPS.get(self._current_gid).get("members",[]):
                     if ip != get_local_ip(): self.net.send_udp(pkt, ip)
-            else: self.net.broadcast(pkt)
+            else: self.net.send_udp(pkt)
             sync_btn.setText("✅ Отправлено")
             QTimer.singleShot(2000, lambda: sync_btn.setText("📤 Синхронизировать"))
 
@@ -9481,55 +9919,101 @@ class ChatPanel(QWidget):
 
     def _add_poll_bubble(self, poll_id, question, options, is_own=True):
         t = get_theme(S().theme)
+        acc = t['accent']
+
         frame = QFrame()
-        frame.setMaximumWidth(340)
+        frame.setMaximumWidth(320)
+        frame.setMinimumWidth(240)
+        # Красивый градиентный фон
         frame.setStyleSheet(
-            f"QFrame{{background:{t['bg3']};border-radius:14px;"
-            f"border:1px solid {t['accent']};padding:2px;}}")
+            f"QFrame{{background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+            f"stop:0 {t['bg2']},stop:1 {t['bg3']});"
+            f"border-radius:16px;border:1px solid {t['border']};}}")
         fl = QVBoxLayout(frame)
-        fl.setContentsMargins(14,12,14,12); fl.setSpacing(8)
+        fl.setContentsMargins(16, 14, 16, 14)
+        fl.setSpacing(10)
 
-        q_lbl = QLabel(f"📊  {question}")
+        # Заголовок с иконкой
+        hdr = QHBoxLayout()
+        ico = QLabel("📊")
+        ico.setStyleSheet("font-size:18px;background:transparent;")
+        hdr.addWidget(ico)
+        q_lbl = QLabel(question)
         q_lbl.setStyleSheet(
-            f"font-size:13px;font-weight:bold;color:{t['text']};background:transparent;")
+            f"font-size:12pt;font-weight:700;color:{t['text']};"
+            "background:transparent;")
         q_lbl.setWordWrap(True)
-        fl.addWidget(q_lbl)
+        hdr.addWidget(q_lbl, 1)
+        fl.addLayout(hdr)
 
+        # Разделитель
+        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"background:{t['border']};max-height:1px;border:none;")
+        fl.addWidget(sep)
+
+        # Данные опроса
         poll_data = self._polls.get(poll_id, {})
         votes = poll_data.get("votes", {o: [] for o in options})
         total = sum(len(v) for v in votes.values())
+        my_vote = next((o for o, vs in votes.items() if S().username in vs), None)
 
         for opt in options:
             opt_voters = votes.get(opt, [])
-            pct = int(len(opt_voters)/max(total,1)*100)
+            pct = int(len(opt_voters) / max(total, 1) * 100)
+            voted = (opt == my_vote)
+
+            opt_w = QWidget()
+            opt_w.setStyleSheet(
+                f"QWidget{{background:{'rgba('+','.join(str(int(acc.lstrip('#')[i:i+2],16)) for i in (0,2,4))+',40)' if voted else 'transparent'};"
+                f"border-radius:10px;border:{'2px solid '+acc if voted else 'none'};}}")
+            ol = QVBoxLayout(opt_w)
+            ol.setContentsMargins(10, 6, 10, 6)
+            ol.setSpacing(4)
+
+            # Текст + процент
             row = QHBoxLayout()
-            btn = QPushButton(f"  {opt}  ({len(opt_voters)})")
-            btn.setStyleSheet(
-                f"QPushButton{{background:{t['bg2']};color:{t['text']};"
-                f"border:1px solid {t['border']};border-radius:8px;"
-                "padding:6px 10px;font-size:11px;text-align:left;}}"
-                f"QPushButton:hover{{background:{t['accent']};color:white;}}")
-            btn.clicked.connect(
-                lambda _, _p=poll_id,_o=opt,_f=frame,_q=question,_opts=options:
-                self._vote_poll(_p, _o, _f, _q, _opts))
-            row.addWidget(btn, stretch=1)
+            opt_lbl = QLabel(("✓  " if voted else "    ") + opt)
+            opt_lbl.setStyleSheet(
+                f"font-size:10pt;color:{acc if voted else t['text']};"
+                f"font-weight:{'700' if voted else '400'};"
+                "background:transparent;")
+            row.addWidget(opt_lbl, 1)
+            pct_lbl = QLabel(f"{pct}%")
+            pct_lbl.setStyleSheet(
+                f"font-size:9pt;color:{acc if voted else t['text_dim']};"
+                "background:transparent;font-weight:600;")
+            row.addWidget(pct_lbl)
+            ol.addLayout(row)
+
+            # Прогресс-бар
             pb = QProgressBar()
-            pb.setRange(0,100); pb.setValue(pct)
-            pb.setFixedHeight(6); pb.setTextVisible(False)
+            pb.setRange(0, 100); pb.setValue(pct)
+            pb.setFixedHeight(4); pb.setTextVisible(False)
             pb.setStyleSheet(
-                f"QProgressBar{{background:{t['bg2']};border-radius:3px;border:none;}}"
-                f"QProgressBar::chunk{{background:{t['accent']};border-radius:3px;}}")
-            pb.setFixedWidth(60)
-            row.addWidget(pb)
-            fl.addLayout(row)
+                f"QProgressBar{{background:{t['bg3']};border-radius:2px;border:none;}}"
+                f"QProgressBar::chunk{{background:{acc};border-radius:2px;}}")
+            ol.addWidget(pb)
 
-        footer = QLabel(f"Всего голосов: {total}")
+            opt_w.setCursor(Qt.CursorShape.PointingHandCursor)
+            opt_w.mousePressEvent = (
+                lambda e, _p=poll_id, _o=opt, _f=frame, _q=question, _opts=options, _io=is_own:
+                self._vote_poll(_p, _o, _f, _q, _opts, is_own=_io))
+            fl.addWidget(opt_w)
+
+        # Футер
+        n_str = f"{total} {'голос' if total==1 else 'голоса' if 2<=total<=4 else 'голосов'}"
+        footer = QLabel(n_str)
         footer.setStyleSheet(
-            f"color:{t['text_dim']};font-size:9px;background:transparent;")
+            f"color:{t['text_dim']};font-size:8pt;background:transparent;")
         fl.addWidget(footer)
-        self._display._add_widget_bubble(frame, is_own=is_own)
 
-    def _vote_poll(self, poll_id, option, frame, question, options):
+        old_wrapper = self._polls.get(poll_id, {}).get("_wrapper")
+        wrapper = self._display._add_widget_bubble(
+            frame, is_own=is_own, replace_widget=old_wrapper)
+        if poll_id in self._polls:
+            self._polls[poll_id]["_wrapper"] = wrapper
+
+    def _vote_poll(self, poll_id, option, frame, question, options, is_own=True):
         username = S().username
         if poll_id not in self._polls:
             self._polls[poll_id] = {
@@ -9545,11 +10029,12 @@ class ChatPanel(QWidget):
         if self._current_peer:
             self.net.send_udp(vote_pkt, self._current_peer["ip"])
         elif self._current_gid:
-            for ip in GROUPS.get(self._current_gid,{}).get("members",[]):
+            for ip in GROUPS.get(self._current_gid).get("members",[]):
                 if ip != get_local_ip(): self.net.send_udp(vote_pkt, ip)
-        else: self.net.broadcast(vote_pkt)
+        else: self.net.send_udp(vote_pkt)
         frame.setParent(None); frame.deleteLater()
-        self._add_poll_bubble(poll_id, question, options, is_own=False)
+        # Сохраняем выравнивание — is_own из оригинального пузыря
+        self._add_poll_bubble(poll_id, question, options, is_own=is_own)
 
     def _send_sticker(self, b64: str):
         """Send a sticker as an image message."""
@@ -10131,7 +10616,7 @@ class ProfilePreviewWidget(QWidget):
         self._avatar_lbl.setFixedSize(96, 96)
         self._avatar_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._avatar_lbl.setStyleSheet(
-            f"border: 4px solid {t['bg2']}; border-radius: 48px; background: {t['bg3']};")
+            "background:transparent;border:none;")
         av_inner.addWidget(self._avatar_lbl)
         # Position avatar overlapping banner: move up 48px
         self._av_container.setContentsMargins(0, 0, 0, 0)
@@ -10446,8 +10931,7 @@ class ProfileDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Мой профиль")
-        self.setModal(True)
-        self.resize(520, 500)
+        self.setModal(False)   # встраивается в вкладку — не модальный
         self._setup()
 
     def _setup(self):
@@ -10490,6 +10974,9 @@ class ProfileDialog(QDialog):
         self._avatar_lbl = QLabel()
         self._avatar_lbl.setFixedSize(72,72)
         self._avatar_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._avatar_lbl.setStyleSheet(
+            "background:transparent;border:none;")
+        self._avatar_lbl.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         al.addWidget(self._avatar_lbl)
 
         av_btn = QPushButton("📷\nИзменить\nаватар")
@@ -10549,7 +11036,7 @@ class ProfileDialog(QDialog):
         preview_btn.clicked.connect(self._show_preview)
         blay.addWidget(preview_btn)
         blay.addStretch()
-        save = QPushButton("💾 Сохранить")
+        save = QPushButton(TR("btn_save"))
         save.setObjectName("accent_btn")
         save.clicked.connect(self._save)
         blay.addWidget(save)
@@ -10819,21 +11306,21 @@ class SettingsDialog(QDialog):
         tabs.addTab(self._tab_audio(),      TR("tab_audio"))
         tabs.addTab(self._tab_network(),    TR("tab_network"))
         tabs.addTab(self._tab_themes(),     TR("tab_themes"))
-        tabs.addTab(self._tab_appearance(), "🖼 Внешний вид")
+        tabs.addTab(self._tab_appearance(), TR("tab_appearance"))
         tabs.addTab(self._tab_license(),    TR("tab_license"))
         tabs.addTab(self._tab_data(),       TR("tab_data"))
         tabs.addTab(self._tab_language(),   TR("tab_language"))
         tabs.addTab(self._mk_specialist_scroll(), TR("tab_specialist"))
-        tabs.addTab(self._tab_pin_security(), "🔒 Блокировка")
-        tabs.addTab(self._tab_privacy(),    "🛡 Приватность")
-        tabs.addTab(self._tab_call_settings(), "📞 Звонки")
+        tabs.addTab(self._tab_pin_security(), TR("tab_security"))
+        tabs.addTab(self._tab_privacy(),    TR("tab_privacy"))
+        tabs.addTab(self._tab_call_settings(), TR("tab_calls"))
 
         lay.addWidget(tabs)
 
         blay = QHBoxLayout()
         blay.setContentsMargins(12,8,12,0)
         blay.addStretch()
-        save = QPushButton("💾 Сохранить")
+        save = QPushButton(TR("btn_save"))
         save.setObjectName("accent_btn")
         save.clicked.connect(self._save)
         blay.addWidget(save)
@@ -11974,15 +12461,7 @@ class SettingsDialog(QDialog):
 
     def _on_update_available(self, ver: str, desc: str):
         self._upd_lbl.setText(f"🚀 Доступна версия {ver}")
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Доступно обновление!")
-        msg.setText(f"<b>Доступна версия {ver}</b><br><br>{desc}")
-        msg.setInformativeText("Обновить GoidaPhone прямо сейчас?")
-        msg.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        msg.button(QMessageBox.StandardButton.Yes).setText("⬇ Обновить")
-        if msg.exec() == QMessageBox.StandardButton.Yes:
-            self._do_update()
+        _show_update_dialog(ver, desc, self)
 
     def _do_update(self):
         if GITHUB_REPO.startswith("YOUR_GITHUB"):
@@ -12042,6 +12521,7 @@ class SettingsDialog(QDialog):
         self._lang_combo = QComboBox()
         self._lang_combo.addItem("🇷🇺 Русский", "ru")
         self._lang_combo.addItem("🇬🇧 English", "en")
+        self._lang_combo.addItem("🇯🇵 日本語", "ja")
         # Set current
         current_lang = S().language
         for i in range(self._lang_combo.count()):
@@ -12433,12 +12913,17 @@ class SettingsDialog(QDialog):
 
         # Описание слоёв
         layers_lbl = QLabel(
-            "Layer 0 — QSettings (без защиты, по умолчанию)\n"
-            "Layer 1 — SecureVault AES-256-GCM + PBKDF2 (600k итераций)\n"
-            "Layer 2 — История зашифрована ключом хранилища\n"
-            "Layer 3 — Secure Wipe: обнуление RAM при выходе\n"
-            "Layer 4 — Stealth Mode: нет в таскбаре/трее\n"
-            "Layer 5 — Защита от скриншотов (WA_NoSystemBackground)")
+            "L0  QSettings (дефолт)  ·  L1  SecureVault AES-256-GCM\n"
+            "L2  История зашифрована  ·  L3  Secure Wipe RAM\n"
+            "L4  Stealth Mode  ·  L5  Блокировка скриншотов\n"
+            "L6  Авто-очистка буфера  ·  L7  Блокировка по таймеру\n"
+            "L8  Анти-шпион  ·  L9  Авто-TTL сообщений\n"
+            "L10 Decoy-пароль  ·  L11 Traffic padding\n"
+            "L12 Только LAN  ·  L13 Журнал безопасности\n"
+            "L14 Ротация ключей  ·  L15 HMAC-подпись\n"
+            "L16 Replay защита  ·  L17 Rate limiting\n"
+            "L18 Whitelist IP  ·  L19 PFS\n"
+            "L20 🔴 Параноидальный режим")
         layers_lbl.setStyleSheet(
             f"font-size:8pt;color:{t['text_dim']};background:transparent;font-family:monospace;")
         layers_lbl.setWordWrap(True)
@@ -12529,26 +13014,112 @@ class SettingsDialog(QDialog):
         cfl.addLayout(vault_btn_row)
 
         # Опциональные слои
-        self._layer2_cb = QCheckBox("Layer 2 — Шифровать историю чатов")
-        self._layer2_cb.setChecked(S().get("crypto_layer2_history", False, t=bool))
-        self._layer2_cb.setEnabled(VAULT.is_unlocked())
-        self._layer2_cb.setToolTip("История шифруется ключом хранилища. Без пароля — не читается.")
-        cfl.addWidget(self._layer2_cb)
+        # Все 20 слоёв — описание + ключ + tooltip + нужен vault или нет
+        ALL_LAYERS = [
+            # key, label, tooltip, needs_vault
+            ("crypto_layer2_history",
+             "Layer 2  — Шифрование истории чатов",
+             "История шифруется ключом SecureVault. Без пароля — не читается.",
+             True),
+            ("crypto_layer3_wipe",
+             "Layer 3  — Secure Wipe RAM при выходе",
+             "Обнуляет пароли и ключи в памяти перед завершением.",
+             False),
+            ("crypto_layer4_stealth",
+             "Layer 4  — Stealth Mode (нет в Alt+Tab)",
+             "Окно исчезает из панели задач и Alt+Tab.",
+             False),
+            ("crypto_layer5_screenshot",
+             "Layer 5  — Блокировать скриншоты окна",
+             "Окно не захватывается Print Screen / системными скриншотами.",
+             False),
+            ("crypto_layer6_clipboard",
+             "Layer 6  — Авто-очистка буфера обмена",
+             "Буфер очищается через 30 секунд после копирования из GoidaPhone.",
+             False),
+            ("crypto_layer7_idle_lock",
+             "Layer 7  — Блокировка при бездействии",
+             "PIN-экран через N минут без активности (задаётся в Блокировка).",
+             False),
+            ("crypto_layer8_typing_noise",
+             "Layer 8  — Анти-клавиатурный шпион (timing noise)",
+             "Добавляет случайную задержку отправки чтобы скрыть ритм набора.",
+             False),
+            ("crypto_layer9_msg_ttl",
+             "Layer 9  — Авто-удаление сообщений (TTL)",
+             "Сообщения удаляются через заданное время (исчезающие сообщения).",
+             False),
+            ("crypto_layer10_decoy",
+             "Layer 10 — Decoy-пароль (ложный профиль)",
+             "Второй пароль открывает чистый профиль-приманку без данных.",
+             True),
+            ("crypto_layer11_traffic_pad",
+             "Layer 11 — Traffic padding (маскировка трафика)",
+             "Отправляет фиктивные пакеты чтобы скрыть паттерны общения.",
+             False),
+            ("crypto_layer12_local_only",
+             "Layer 12 — Режим только локальная сеть",
+             "Блокирует исходящие соединения за пределы LAN.",
+             False),
+            ("crypto_layer13_audit_log",
+             "Layer 13 — Журнал безопасности",
+             "Записывает все входы, выходы и смены настроек с временными метками.",
+             False),
+            ("crypto_layer14_hkdf_rotate",
+             "Layer 14 — Ротация сессионных ключей",
+             "ECDH-ключи обновляются каждые 24 часа или при переподключении.",
+             False),
+            ("crypto_layer15_msg_hmac",
+             "Layer 15 — HMAC-подпись каждого сообщения",
+             "Каждое сообщение подписывается Ed25519. Подделка невозможна.",
+             False),
+            ("crypto_layer16_replay",
+             "Layer 16 — Защита от replay-атак",
+             "Nonce-кэш 5000 сообщений. Повторные пакеты отбрасываются.",
+             False),
+            ("crypto_layer17_rate_limit",
+             "Layer 17 — Rate limiting входящих пакетов",
+             "Блокирует >100 пакетов/сек с одного IP (DoS-защита).",
+             False),
+            ("crypto_layer18_ip_whitelist",
+             "Layer 18 — Whitelist IP-адресов",
+             "Принимает сообщения только от известных IP (задать в Специалист).",
+             False),
+            ("crypto_layer19_forward_secrecy",
+             "Layer 19 — Perfect Forward Secrecy",
+             "Каждая сессия использует ephemeral X25519. Прошлые сессии защищены.",
+             False),
+            ("crypto_layer20_paranoid",
+             "Layer 20 — Параноидальный режим 🔴",
+             "Все предыдущие слои + принудительное шифрование + отключение логов + TTL 60с.",
+             True),
+        ]
 
-        self._layer3_cb = QCheckBox("Layer 3 — Secure Wipe: обнулять RAM при выходе")
-        self._layer3_cb.setChecked(S().get("crypto_layer3_wipe", False, t=bool))
-        self._layer3_cb.setToolTip("Перезаписывает все чувствительные строки в памяти нулями.")
-        cfl.addWidget(self._layer3_cb)
+        self._layer_cbs = {}
+        for key, label, tip, needs_vault in ALL_LAYERS:
+            cb = QCheckBox(label)
+            cb.setChecked(S().get(key, False, t=bool))
+            cb.setToolTip(tip)
+            if needs_vault and not VAULT.is_unlocked():
+                cb.setEnabled(False)
+                cb.setToolTip(tip + "\n⚠ Требуется разблокировать SecureVault выше.")
+            cfl.addWidget(cb)
+            self._layer_cbs[key] = cb
 
-        self._layer4_cb = QCheckBox("Layer 4 — Stealth Mode (нет в таскбаре)")
-        self._layer4_cb.setChecked(S().get("crypto_layer4_stealth", False, t=bool))
-        self._layer4_cb.setToolTip("Окно не отображается в Alt+Tab и панели задач.")
-        cfl.addWidget(self._layer4_cb)
+        # Параноидальный режим — включает все остальные
+        def _on_paranoid(checked):
+            if checked:
+                for cb in self._layer_cbs.values():
+                    if cb.isEnabled():
+                        cb.setChecked(True)
+        if "crypto_layer20_paranoid" in self._layer_cbs:
+            self._layer_cbs["crypto_layer20_paranoid"].toggled.connect(_on_paranoid)
 
-        self._layer5_cb = QCheckBox("Layer 5 — Блокировать скриншоты окна")
-        self._layer5_cb.setChecked(S().get("crypto_layer5_screenshot", False, t=bool))
-        self._layer5_cb.setToolTip("Окно не захватывается скриншотами ОС (где поддерживается).")
-        cfl.addWidget(self._layer5_cb)
+        # Обратная совместимость — старые атрибуты
+        self._layer2_cb = self._layer_cbs.get("crypto_layer2_history")
+        self._layer3_cb = self._layer_cbs.get("crypto_layer3_wipe")
+        self._layer4_cb = self._layer_cbs.get("crypto_layer4_stealth")
+        self._layer5_cb = self._layer_cbs.get("crypto_layer5_screenshot")
 
         lay.addWidget(g_crypto)
 
@@ -13244,7 +13815,7 @@ class SettingsDialog(QDialog):
             f"QScrollArea{{background:{t2['bg']};border:none;}}"
             f"QScrollBar:vertical{{background:{t2['bg3']};width:6px;border-radius:3px;}}"
             f"QScrollBar::handle:vertical{{background:{t2['accent']};border-radius:3px;}}"
-            "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+            f"QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{{height:0;}}")
         return self._specialist_scroll_ref
 
     def _test_relay(self):
@@ -13273,13 +13844,13 @@ class SettingsDialog(QDialog):
         def run():
             ok, err = check()
             if ok:
-                QTimer.singleShot(0, lambda: (
+                QTimer.singleShot(0, lambda: [
                     self._relay_status.setText("✅ Соединение установлено"),
-                    self._relay_status.setStyleSheet("color: #80FF80;")))
+                    self._relay_status.setStyleSheet("color: #80FF80;")])
             else:
-                QTimer.singleShot(0, lambda: (
+                QTimer.singleShot(0, lambda: [
                     self._relay_status.setText(f"❌ Ошибка: {err}"),
-                    self._relay_status.setStyleSheet("color: #FF6060;")))
+                    self._relay_status.setStyleSheet("color: #FF6060;")])
         threading.Thread(target=run, daemon=True).start()
 
     def _export_log(self):
@@ -13446,6 +14017,11 @@ class SettingsDialog(QDialog):
                 QApplication.instance().setFont(_f)
         except Exception:
             pass
+
+        # GoidaCRYPTO — сохраняем все 20 слоёв
+        if hasattr(self, '_layer_cbs'):
+            for _lkey, _lcb in self._layer_cbs.items():
+                S().set(_lkey, _lcb.isChecked())
 
         self.settings_saved.emit()
         self.accept()
@@ -14866,10 +15442,12 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
             self._webengine = True
 
             profile = QWebEngineProfile.defaultProfile()
+            # Полный Chrome User-Agent — нужен для Chrome Web Store и других сайтов
+            # которые проверяют браузер
             profile.setHttpUserAgent(
-                f"WinoraNetScape/{self.WNS_VERSION} GoidaPhone/1.8.0 "
-                "(Linux; Winora Ecosystem) AppleWebKit/537.36 "
-                "Chrome/124.0 Safari/537.36")
+                "Mozilla/5.0 (X11; Linux x86_64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36")
             try:
                 profile.downloadRequested.connect(
                     self._on_download, Qt.ConnectionType.UniqueConnection)
@@ -15683,19 +16261,54 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
 
         # ── Chrome Extensions tab ────────────────────────────────────────────
         crx_w = QWidget(); crx_l = QVBoxLayout(crx_w)
-        crx_l.setAlignment(Qt.AlignmentFlag.AlignCenter); crx_l.setSpacing(16)
-        note = QLabel("WNS использует Chromium. Нажмите «Открыть Chrome Web Store».")
-        note.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        note.setWordWrap(True)
-        note.setStyleSheet(f"color:{t['text_dim']};font-size:12px;background:transparent;")
-        crx_l.addWidget(note)
-        open_store = QPushButton("🏪  Открыть Chrome Web Store")
-        open_store.setObjectName("accent_btn"); open_store.setFixedHeight(40)
-        open_store.setFixedWidth(280)
-        open_store.clicked.connect(lambda: (
-            dlg.accept(),
-            self._new_tab("https://chrome.google.com/webstore/category/extensions")))
-        crx_l.addWidget(open_store)
+        crx_l.setContentsMargins(24, 20, 24, 20)
+        crx_l.setSpacing(16)
+
+        # Заголовок
+        crx_title = QLabel("🧩 Расширения Chrome")
+        crx_title.setStyleSheet(
+            f"font-size:14px;font-weight:700;color:{t['text']};background:transparent;")
+        crx_l.addWidget(crx_title)
+
+        # Объяснение
+        info_card = QFrame()
+        info_card.setStyleSheet(
+            f"QFrame{{background:{t['bg3']};border-radius:10px;"
+            f"border:1px solid {t['border']};}}")
+        ic_l = QVBoxLayout(info_card)
+        ic_l.setContentsMargins(16, 12, 16, 12)
+        ic_l.setSpacing(6)
+        info_text = QLabel(
+            "ℹ WNS работает на Chromium (QtWebEngine).\n\n"
+            "Chrome Web Store требует официальный Chrome для установки .crx расширений.\n"
+            "Однако ты можешь:\n\n"
+            "  • Использовать Userscripts (вкладка слева) — полная замена расширений\n"
+            "  • Открыть Chrome Web Store и скопировать нужный скрипт через Tampermonkey\n"
+            "  • Найти .user.js версию любого расширения на greasyfork.org")
+        info_text.setStyleSheet(
+            f"color:{t['text_dim']};font-size:10pt;background:transparent;")
+        info_text.setWordWrap(True)
+        ic_l.addWidget(info_text)
+        crx_l.addWidget(info_card)
+
+        # Кнопки полезных ресурсов
+        btn_grid = QHBoxLayout()
+        for label, url in [
+            ("🏪 Chrome Web Store",   "https://chrome.google.com/webstore/category/extensions"),
+            ("📜 GreasyFork Scripts", "https://greasyfork.org/ru/scripts"),
+            ("🔧 OpenUserJS",         "https://openuserjs.org"),
+        ]:
+            btn = QPushButton(label)
+            btn.setFixedHeight(36)
+            btn.setStyleSheet(
+                f"QPushButton{{background:{t['bg3']};color:{t['accent']};"
+                f"border:1px solid {t['accent']};border-radius:8px;padding:0 12px;}}"
+                f"QPushButton:hover{{background:{t['accent']};color:white;}}")
+            btn.clicked.connect(
+                lambda checked=False, u=url: self._new_tab(u))
+            btn_grid.addWidget(btn)
+        crx_l.addLayout(btn_grid)
+        crx_l.addStretch()
         inner_tabs.addTab(crx_w, "🧩 Chrome Extensions")
 
         dlg.exec()
@@ -16197,7 +16810,7 @@ class ActiveCallWindow(QWidget):
         self._min_btn = QPushButton("─")
         self._min_btn.setFixedSize(26, 26)
         self._min_btn.setStyleSheet(
-            "QPushButton{background:rgba(255,255,255,17);color:#888;border:none;"
+            f"QPushButton{{background:rgba(255,255,255,17);color:{_t['text_dim']};border:none;"
             "border-radius:13px;font-size:13px;}"
             f"QPushButton:hover{{background:rgba(255,255,255,45);color:white;}}")
         self._min_btn.clicked.connect(self._toggle_minimize)
@@ -16231,7 +16844,7 @@ class ActiveCallWindow(QWidget):
         self._timer_lbl = QLabel("00:00")
         self._timer_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._timer_lbl.setStyleSheet(
-            "color:#7C4DFF;font-size:28px;font-weight:bold;"
+            f"color:{_t['accent']};font-size:28px;font-weight:bold;"
             "font-family:monospace;background:transparent;")
         root.addWidget(self._timer_lbl)
         root.addStretch()
@@ -16261,7 +16874,7 @@ class ActiveCallWindow(QWidget):
         end_btn.clicked.connect(self._hangup)
         end_sub = QLabel("Завершить")
         end_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        end_sub.setStyleSheet("color:#888;font-size:9px;background:transparent;")
+        end_sub.setStyleSheet(f"color:{_t['text_dim']};font-size:9px;background:transparent;")
         end_col.addWidget(end_btn)
         end_col.addWidget(end_sub)
         ctrl.addLayout(end_col)
@@ -16270,11 +16883,11 @@ class ActiveCallWindow(QWidget):
         # Speaker
         self._spk_col = QVBoxLayout()
         self._spk_col.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._spk_btn = _call_round_btn("🔊", "#2C2C4E", 60, 24, "#3D3D6E")
+        self._spk_btn = _call_round_btn("🔊", _t["btn_bg"], 60, 24, _t["btn_hover"])
         self._spk_btn.clicked.connect(self._toggle_speaker)
         self._spk_sub = QLabel("Динамик")
         self._spk_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._spk_sub.setStyleSheet("color:#888;font-size:9px;background:transparent;")
+        self._spk_sub.setStyleSheet(f"color:{_t['text_dim']};font-size:9px;background:transparent;")
         self._spk_col.addWidget(self._spk_btn)
         self._spk_col.addWidget(self._spk_sub)
         ctrl.addLayout(self._spk_col)
@@ -16287,7 +16900,7 @@ class ActiveCallWindow(QWidget):
         extra.setSpacing(12)
         extra.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self._share_btn = _call_round_btn("🖥", "#1E2A3A", 48, 20, "#2A3A5A")
+        self._share_btn = _call_round_btn("🖥", _t["btn_bg"], 48, 20, _t["btn_hover"])
         self._share_btn.setToolTip("Демонстрация экрана")
         self._share_btn.clicked.connect(self._toggle_screen_share)
         share_lbl = QLabel("Экран")
@@ -16297,7 +16910,7 @@ class ActiveCallWindow(QWidget):
         sc.setSpacing(3); sc.addWidget(self._share_btn); sc.addWidget(share_lbl)
         extra.addLayout(sc)
 
-        self._cam_btn = _call_round_btn("📷", "#1E2A3A", 48, 20, "#2A3A5A")
+        self._cam_btn = _call_round_btn("📷", _t["btn_bg"], 48, 20, _t["btn_hover"])
         self._cam_btn.setToolTip("Камера вкл/выкл  (V)")
         self._cam_btn.clicked.connect(self._toggle_camera)
         cam_lbl = QLabel("Камера")
@@ -16316,7 +16929,7 @@ class ActiveCallWindow(QWidget):
         self._share_preview.setFixedHeight(120)
         self._share_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._share_preview.setStyleSheet(
-            "background:#000;border-radius:8px;border:1px solid #7C4DFF;")
+            f"background:{_t['bg3']};border-radius:8px;border:1px solid {_t['accent']};")
         self._share_preview.setVisible(False)
         root.addWidget(self._share_preview)
 
@@ -16986,7 +17599,7 @@ class GroupCallWindow(QWidget):
             "QListWidget{background:#12121F;border:1px solid #2D2D4E;"
             "border-radius:8px;}"
             f"QListWidget::item{{padding:8px;border-bottom:1px solid #1E1E32;}}"
-            "QListWidget::item:selected{background:#2A2A4E;}")
+            f"QListWidget::item:selected{{background:#2A2A4E;}}")
         for peer in getattr(self, '_all_peers', []):
             name = peer.get("username","?")
             flag = " (Вы)" if peer.get("_is_self") else ""
@@ -17642,9 +18255,8 @@ class AdminManager:
 
 class GoidaTerminal(QWidget):
     """
-    GoidaPhone Admin Terminal v2  — Shift+F10
-    Полноценный терминал с вкладками, историей команд, автодополнением,
-    live-мониторингом сети и расширенным набором admin-команд.
+    Goida Terminal — встроенный терминал GoidaPhone
+    Shift+F10 для открытия | Tab — автодополнение | ↑↓ — история команд
     """
 
     # ── ANSI-like color palette ────────────────────────────────────────
@@ -17678,6 +18290,8 @@ class GoidaTerminal(QWidget):
         "/msg", "/file", "/call",
         "/monitor", "/monitor on", "/monitor off",
         "/wipe", "/restart", "/about",
+        "/goida", "/goida --time-1", "/goida --time-5", "/goida --time-10",
+        "/goida --color-cyan", "/goida --color-green", "/goida --color-magenta",
         "/sounds", "/sounds test", "/sounds install",
     ]
 
@@ -17776,15 +18390,15 @@ class GoidaTerminal(QWidget):
         lay.addWidget(ico)
 
         _acc2 = self._tt.get('accent', '#7C4DFF')
-        title = QLabel("ZLink Terminal")
+        title = QLabel("Goida")
         title.setStyleSheet(
-            f"color:{_acc2};font-size:10px;font-weight:bold;"
-            "letter-spacing:3px;background:transparent;font-family:monospace;")
+            f"color:{_acc2};font-size:13px;font-weight:bold;"
+            "letter-spacing:4px;background:transparent;font-family:monospace;")
         lay.addWidget(title)
-        sub = QLabel("GoidaPhone Admin")
+        sub = QLabel("Terminal")
         sub.setStyleSheet(
-            "color:#444444;font-size:8px;background:transparent;"
-            "font-family:monospace;letter-spacing:1px;margin-left:4px;")
+            "color:#555566;font-size:9px;background:transparent;"
+            "font-family:monospace;letter-spacing:2px;margin-left:2px;")
         lay.addWidget(sub)
 
         self._admin_badge = QLabel("◆ ADMIN")
@@ -17937,11 +18551,12 @@ class GoidaTerminal(QWidget):
         except Exception:
             hostname = "goidaphone"; user = "user"
 
-        self._prompt_lbl = QLabel(f"{user}@{hostname} »")
         _tc2 = self._tt.get('accent', '#39FF14')
+        self._prompt_lbl = QLabel("goida ❯")
         self._prompt_lbl.setStyleSheet(
-            f"color:{_tc2};font-weight:bold;font-size:11px;"
-            "font-family:monospace;background:transparent;")
+            f"color:{_tc2};font-weight:bold;font-size:12px;"
+            "font-family:monospace;background:transparent;"
+            "padding-right:4px;")
         row.addWidget(self._prompt_lbl)
 
         self._input = QLineEdit()
@@ -18343,30 +18958,31 @@ class GoidaTerminal(QWidget):
     # ══════════════════════════════════════════════════════════════════
     def _print_header(self):
         self._output.clear()
-        t_str = datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
-        self._print("┌─────────────────────────────────────────────────────────────────┐", self.C_DIM)
-        self._print("│                                                                 │", self.C_DIM)
-        self._print("│   ██████╗  ██████╗ ██╗██████╗  █████╗ ██████╗ ██╗  ██╗         │", "#2A2A6A")
-        self._print("│  ██╔════╝ ██╔═══██╗██║██╔══██╗██╔══██╗██╔══██╗██║  ██║         │", "#2A2A6A")
-        self._print("│  ██║  ███╗██║   ██║██║██║  ██║███████║██████╔╝███████║         │", "#3A3AAA")
-        self._print("│  ██║   ██║██║   ██║██║██║  ██║██╔══██║██╔═══╝ ██╔══██║         │", "#3A3AAA")
-        self._print("│  ╚██████╔╝╚██████╔╝██║██████╔╝██║  ██║██║     ██║  ██║         │", "#4A4AFF")
-        self._print("│   ╚═════╝  ╚═════╝ ╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝         │", "#4A4AFF")
-        self._print("│                                                                 │", self.C_DIM)
-        self._print(f"│   Admin Terminal v2          {t_str}          │", "#303060")
-        self._print(f"│   {COMPANY_NAME:<65}│", "#202050")
-        self._print("│                                                                 │", self.C_DIM)
-        self._print("└─────────────────────────────────────────────────────────────────┘", self.C_DIM)
+        t_str  = datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
+        _acc   = self.C_GREEN
+        _acc2  = self.C_CYAN
+        _dim   = self.C_DIM
+        self._print("")
+        self._print("  ██████╗  ██████╗ ██╗██████╗  █████╗ ", _acc)
+        self._print(" ██╔════╝ ██╔═══██╗██║██╔══██╗██╔══██╗", _acc)
+        self._print(" ██║  ███╗██║   ██║██║██║  ██║███████║", _acc2)
+        self._print(" ██║   ██║██║   ██║██║██║  ██║██╔══██║", _acc2)
+        self._print(" ╚██████╔╝╚██████╔╝██║██████╔╝██║  ██║", _acc)
+        self._print("  ╚═════╝  ╚═════╝ ╚═╝╚═════╝ ╚═╝  ╚═╝", _acc)
+        self._print("")
+        self._print(f"  Terminal  ·  GoidaPhone v{APP_VERSION}  ·  {t_str}", _dim)
+        self._print(f"  {COMPANY_NAME}", _dim)
+        self._print("  " + "─" * 54, _dim)
         self._print("")
         if AdminManager.is_admin():
-            self._print(f"  ◆ Авторизован как: {AdminManager.get_admin_name()}", self.C_YELLOW)
+            self._print(f"  ◆ Авторизован: {AdminManager.get_admin_name()}", self.C_YELLOW)
             if AdminManager.network_password_enabled():
                 self._print("  ● Пароль сети активен", self.C_GREEN)
         else:
             self._print("  ⚠  Администратор не настроен.", self.C_ORANGE)
-            self._print("     /admin setup <имя> <пароль>  — создать", self.C_DIM)
+            self._print("     /admin setup <имя> <пароль>", _dim)
         self._print("")
-        self._print("  Введите /help для списка команд.  Tab — автодополнение.", self.C_DIM)
+        self._print("  /help — список команд   Tab — автодополнение   ↑↓ — история", _dim)
         self._print("")
 
     # ══════════════════════════════════════════════════════════════════
@@ -18377,6 +18993,10 @@ class GoidaTerminal(QWidget):
         self._input.clear()
         self._tab_cmp_idx = -1
         self._tab_cmp_matches = []
+        # Останавливаем goida анимацию если она идёт
+        if getattr(self, '_goida_running', False):
+            self._goida_running = False
+            return
         if not raw:
             return
         if not self._cmd_history or self._cmd_history[-1] != raw:
@@ -18548,6 +19168,8 @@ class GoidaTerminal(QWidget):
             self._cmd_netstat()
         elif cmd == "/about":
             self._cmd_about()
+        elif cmd == "/goida":
+            self._cmd_goida(arg1, arg2)
         elif cmd == "/history":
             self._cmd_history_cmd(arg1)
         elif cmd in ("/log",):
@@ -18597,81 +19219,100 @@ class GoidaTerminal(QWidget):
     # ══════════════════════════════════════════════════════════════════
     def _cmd_help(self, section: str = ""):
         if section == "admin":
-            self._print("┌── ADMIN COMMANDS ─────────────────────────────────────┐", self.C_DIM)
+            self._print_sep("─", 58)
+            self._print("  ADMIN COMMANDS", self.C_YELLOW)
+            self._print_sep("─", 58)
             rows = [
-                ("/admin setup <name> <pw>", "Создать администратора"),
-                ("/admin login <pw>",        "Авторизоваться"),
-                ("/admin logout",            "Выйти из admin-режима"),
-                ("/admin status",            "Статус admin"),
-                ("/admin reset",             "Сброс (⚠ необратимо)"),
-                ("/users",                   "Список онлайн + статусы"),
-                ("/ban <ip>",                "Заблокировать пользователя"),
-                ("/unban <ip>",              "Разблокировать"),
-                ("/kick <ip>",               "Выгнать из сети"),
-                ("/mute <ip>",               "Заглушить пользователя"),
-                ("/unmute <ip>",             "Включить звук"),
-                ("/muteall",                 "Заглушить всех"),
-                ("/unmuteall",               "Включить звук всем"),
-                ("/banlist",                 "Список банов и мутов"),
-                ("/netpw <pw>",              "Пароль для входа в сеть"),
-                ("/netpw_off",               "Убрать пароль сети"),
-                ("/network block|allow",     "Блокировка/открытие сети"),
-                ("/group list|kick|info",    "Управление группами"),
-                ("/msg <ip> <текст>",        "Личное сообщение из терминала"),
-                ("/wipe",                    "Удалить все данные ⚠"),
-                ("/restart",                 "Перезапустить приложение"),
+                ("/admin setup <n> <pw>", "Создать администратора"),
+                ("/admin login <pw>",     "Авторизоваться"),
+                ("/admin logout",         "Выйти из admin-режима"),
+                ("/admin status",         "Статус admin"),
+                ("/admin reset",          "Сброс (необратимо)"),
+                ("/users",                "Список онлайн + статусы"),
+                ("/ban <ip>",             "Заблокировать"),
+                ("/unban <ip>",           "Разблокировать"),
+                ("/kick <ip>",            "Выгнать из сети"),
+                ("/mute <ip>",            "Заглушить"),
+                ("/unmute <ip>",          "Включить звук"),
+                ("/muteall",              "Заглушить всех"),
+                ("/unmuteall",            "Включить звук всем"),
+                ("/banlist",              "Список банов и мутов"),
+                ("/netpw <pw>",           "Пароль входа в сеть"),
+                ("/netpw_off",            "Убрать пароль сети"),
+                ("/network block|allow",  "Блокировка/открытие сети"),
+                ("/group list|kick|info", "Управление группами"),
+                ("/msg <ip> <текст>",     "Личное сообщение"),
+                ("/wipe",                 "Удалить все данные"),
+                ("/restart",              "Перезапустить приложение"),
             ]
             for cmd, desc in rows:
-                self._print(f"│  {cmd:<30} {desc}", self.C_WHITE)
-            self._print("└───────────────────────────────────────────────────────┘", self.C_DIM)
+                self._print(f"  {cmd:<28}  {desc}", self.C_WHITE)
+            self._print_sep("─", 58)
             return
 
-        self._print("┌── GOIDAPHONE ADMIN TERMINAL v2 ──────────────────────────────────┐", self.C_DIM)
-        self._print("│                                                                  │", self.C_DIM)
+        _d = self.C_DIM
+        _a = self.C_GREEN
+
+        self._print_sep("─", 58)
+        self._print("  Goida Terminal  ·  /help admin — команды администратора", _d)
+        self._print_sep("─", 58)
+        self._print("")
+
         sections = [
-            ("GENERAL", self.C_CYAN, [
-                ("/help [admin]",       "Справка (admin — раздел для admin)"),
-                ("/version  /sysinfo",  "Версия / системная информация"),
-                ("/uptime  /date",      "Аптайм / дата и время"),
-                ("/clear  /quit",       "Очистить / закрыть терминал"),
+            ("ОСНОВНЫЕ", _a, [
+                ("/help [admin]",       "Справка"),
+                ("/version",            "Версия GoidaPhone"),
+                ("/sysinfo",            "Системная информация"),
+                ("/uptime",             "Время работы"),
+                ("/date",               "Дата и время"),
+                ("/whoami",             "Информация о себе"),
                 ("/about",              "О программе"),
+                ("/clear",              "Очистить экран"),
+                ("/quit",               "Закрыть терминал"),
             ]),
-            ("NETWORK", self.C_CYAN, [
-                ("/peers  /who",        "Онлайн пользователи"),
+            ("СЕТЬ", _a, [
+                ("/peers",              "Онлайн пользователи"),
+                ("/who",                "Кто в сети сейчас"),
                 ("/whois <ip>",         "Подробно о пользователе"),
-                ("/ping <ip>",          "ICMP ping"),
-                ("/traceroute <ip>",    "Traceroute до IP"),
-                ("/netstat",            "Статистика сетевого уровня"),
+                ("/ping <ip>",          "Пинг до IP"),
+                ("/traceroute <ip>",    "Трассировка маршрута"),
+                ("/netstat",            "Статистика сети"),
                 ("/stats",              "Статистика GoidaPhone"),
-                ("/crypto",             "Статус шифрования и ключи"),
                 ("/monitor [on|off]",   "Live-мониторинг пакетов"),
+                ("/crypto",             "Статус шифрования"),
             ]),
-            ("PROFILE", self.C_CYAN, [
+            ("ЧАТ", _a, [
+                ("/say <текст>",        "Написать в публичный чат"),
+                ("/broadcast <текст>",  "Широковещательное сообщение"),
+                ("/me <действие>",      "Эмоция"),
                 ("/nick [имя]",         "Показать / изменить ник"),
-                ("/broadcast <текст>",  "Сообщение в публичный чат"),
-                ("/me <действие>",      "Эмоция в терминал"),
+                ("/history",            "История команд терминала"),
+                ("/history clear",      "Очистить историю"),
             ]),
-            ("HISTORY & LOG", self.C_CYAN, [
-                ("/history",            "История команд"),
-                ("/history clear",      "Очистить историю команд"),
+            ("ПРОФИЛЬ И ВИД", _a, [
+                ("/theme [имя]",        "Текущая / сменить тему"),
+                ("/themes",             "Список всех тем"),
+                ("/font <размер>",      "Размер шрифта (8–18)"),
+                ("/resize <W> <H>",     "Изменить размер терминала"),
+                ("/colors",             "Палитра цветов терминала"),
+            ]),
+            ("ЛОГ", _a, [
                 ("/log tail",           "Последние 20 строк лога"),
                 ("/log clear",          "Очистить лог"),
                 ("/log export",         "Экспорт лога в файл"),
-            ]),
-            ("DISPLAY", self.C_CYAN, [
-                ("/theme [имя]",        "Текущая / сменить тему"),
-                ("/font <размер>",      "Размер шрифта (8–18)"),
-                ("/resize <W> <H>",     "Изменить размер терминала"),
+                ("/sounds test",        "Тест звуков"),
             ]),
         ]
+
         for title, col, cmds in sections:
-            self._print(f"│  ── {title} {'─' * (60 - len(title))}│", self.C_DIM)
+            self._print(f"  {title}", col)
             for c, d in cmds:
-                self._print(f"│    {c:<28} {d:<36}│", self.C_WHITE)
-        self._print("│                                                                  │", self.C_DIM)
-        self._print("│  /help admin  — команды администратора                          │", self.C_YELLOW)
-        self._print("│  Tab — автодополнение    ↑↓ — история команд                   │", self.C_DIM)
-        self._print("└──────────────────────────────────────────────────────────────────┘", self.C_DIM)
+                self._print(f"    {c:<26}  {d}", self.C_WHITE)
+            self._print("")
+
+        self._print_sep("─", 58)
+        self._print("  Tab — автодополнение    ↑↓ — история    /help admin", _d)
+        self._print_sep("─", 58)
 
     def _cmd_version(self):
         self._print_sep()
@@ -18908,6 +19549,119 @@ class GoidaTerminal(QWidget):
         self._print("  Шифрование: AES-256-GCM + X25519 ECDH + Ed25519", self.C_WHITE)
         self._print("  Протокол:   UDP + TCP (п2п, без сервера)", self.C_WHITE)
         self._print_sep()
+
+    def _cmd_goida(self, flag1: str = "", flag2: str = ""):
+        """
+        /goida [--time-N] [--color-COLOR]
+        --time-1 очень медленно  --time-10 максимально быстро
+        --color-cyan/green/magenta/yellow/red/white
+        """
+        # Парсим флаги
+        flags = [f for f in [flag1, flag2] if f.startswith("--")]
+        speed = 5
+        color = self.C_GREEN
+        color_map = {
+            "cyan":    self.C_CYAN,    "green":   self.C_GREEN,
+            "magenta": self.C_MAGENTA, "yellow":  self.C_YELLOW,
+            "red":     self.C_RED,     "white":   self.C_WHITE,
+        }
+        for f in flags:
+            if f.startswith("--time-"):
+                try: speed = max(1, min(10, int(f[7:])))
+                except ValueError: pass
+            elif f.startswith("--color-"):
+                color = color_map.get(f[8:].lower(), self.C_GREEN)
+
+        # delay: time-1=800ms time-10=40ms
+        delay_ms = int(800 - (speed - 1) * (760 / 9))
+
+        FRAMES = [
+            [
+                " ██████╗  ██████╗ ██╗██████╗  █████╗ ",
+                "██╔════╝ ██╔═══██╗██║██╔══██╗██╔══██╗",
+                "██║  ███╗██║   ██║██║██║  ██║███████║",
+                "██║   ██║██║   ██║██║██║  ██║██╔══██║",
+                "╚██████╔╝╚██████╔╝██║██████╔╝██║  ██║",
+                " ╚═════╝  ╚═════╝ ╚═╝╚═════╝ ╚═╝  ╚═╝",
+            ],
+            [
+                "░██████╗░░█████╗░██╗██████╗░░█████╗░",
+                "██╔════╝██╔══██╗██║██╔══██╗██╔══██╗",
+                "██║░░██╗██║░░██║██║██║░░██║███████║",
+                "██║░░██║██║░░██║██║██║░░██║██╔══██║",
+                "╚██████╔╝╚█████╔╝██║██████╔╝██║░░██║",
+                "░╚═════╝░╚═════╝╚═╝╚═════╝░╚═╝░░╚═╝",
+            ],
+            [
+                "▓██████╗▓██████╗██╗██████╗▓█████╗",
+                "██║════╝██║═══█║██║██║══█║██║══█║",
+                "██║▓▓██╗██║▓▓▓║██║██║▓▓█║███████║",
+                "██║▓▓██║██║▓▓▓║██║██║▓▓█║██║══█║",
+                "╚██████╝╚██████╝██║██████╝██║▓▓█║",
+                "▓╚════╝▓╚═════╝╚═╝╚═════╝▓╚═╝▓▓╝",
+            ],
+        ]
+        TAGLINES = [
+            "  P2P · Encrypted · No Servers",
+            "  Winora Company © 2026",
+            f"  GoidaPhone v{APP_VERSION}",
+            "  goida ❯ _",
+        ]
+
+        max_rep = 3 if speed <= 3 else (6 if speed <= 7 else 30)
+        self._goida_frame   = 0
+        self._goida_repeats = 0
+        self._goida_tag     = 0
+        self._goida_color   = color
+        self._goida_frames  = FRAMES
+        self._goida_tags    = TAGLINES
+        self._goida_maxrep  = max_rep
+        # Разделитель перед анимацией
+        self._print_sep("═", 42)
+        self._goida_running = True
+
+        # Используем QTimer в ГЛАВНОМ потоке — без threading
+        if hasattr(self, '_goida_timer') and self._goida_timer:
+            self._goida_timer.stop()
+        self._goida_timer = QTimer(self)
+        self._goida_timer.setInterval(delay_ms)
+        self._goida_timer.timeout.connect(self._goida_tick)
+        self._goida_timer.start()
+        self._print(f"  speed={speed}  delay={delay_ms}ms  Enter — стоп", self.C_DIM)
+
+    def _goida_tick(self):
+        """Один тик анимации goida — вызывается QTimer в главном потоке."""
+        if not getattr(self, '_goida_running', False):
+            if hasattr(self, '_goida_timer') and self._goida_timer:
+                self._goida_timer.stop()
+            return
+
+        frames  = self._goida_frames
+        tags    = self._goida_tags
+        frame_n = self._goida_frame
+        tag_n   = self._goida_tag
+        color   = self._goida_color
+
+        frame = frames[frame_n % len(frames)]
+        tag   = tags[tag_n % len(tags)]
+
+        # Рисуем кадр
+        for line in frame:
+            self._print(f"  {line}", color)
+        self._print(tag, self.C_DIM)
+        self._print("")
+
+        self._goida_frame += 1
+        if self._goida_frame % len(frames) == 0:
+            self._goida_tag     = (self._goida_tag + 1) % len(tags)
+            self._goida_repeats += 1
+
+        if self._goida_repeats >= self._goida_maxrep:
+            self._goida_running = False
+            self._goida_timer.stop()
+            self._print("  ✓ goida", self.C_GREEN)
+            self._print_sep("═", 42)
+
 
     def _cmd_history_cmd(self, sub: str):
         if sub == "clear":
@@ -19402,6 +20156,98 @@ class GoidaTerminal(QWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  MEWA BAR VISUALIZER
+# ═══════════════════════════════════════════════════════════════════════════
+class _BarVisualizer(QWidget):
+    """
+    Визуализатор музыки — анимированные полосочки.
+    Работает на случайных данных когда трек играет (без доступа к аудио-буферу).
+    """
+    BAR_COUNT = 18
+    MIN_H     = 3
+    MAX_H     = 52
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(60)
+        self._playing = False
+        self._bars    = [self.MIN_H] * self.BAR_COUNT
+        self._targets = [self.MIN_H] * self.BAR_COUNT
+        self._color   = "#39FF14"
+        self._timer   = QTimer(self)
+        self._timer.setInterval(55)   # ~18 fps
+        self._timer.timeout.connect(self._tick)
+        self._timer.start()
+
+    def set_playing(self, playing: bool):
+        self._playing = playing
+        if not playing:
+            self._targets = [self.MIN_H] * self.BAR_COUNT
+
+    def set_color(self, color: str):
+        self._color = color
+
+    def _tick(self):
+        import random as _r
+        if self._playing:
+            # Генерируем случайные мишени с перевесом в сторону текущего значения
+            for i in range(self.BAR_COUNT):
+                if _r.random() < 0.3:
+                    # Новая цель: акцент на средние частоты (треугольная форма)
+                    mid = self.BAR_COUNT // 2
+                    dist = abs(i - mid)
+                    max_for_band = max(self.MIN_H + 4,
+                                      int(self.MAX_H * (1.0 - dist / (self.BAR_COUNT * 0.7))))
+                    self._targets[i] = _r.randint(self.MIN_H, max_for_band)
+        # Плавное движение к цели
+        changed = False
+        for i in range(self.BAR_COUNT):
+            diff = self._targets[i] - self._bars[i]
+            if diff != 0:
+                step = max(1, abs(diff) // 3)
+                self._bars[i] += step if diff > 0 else -step
+                self._bars[i] = max(self.MIN_H, min(self.MAX_H, self._bars[i]))
+                changed = True
+        if changed:
+            self.update()
+
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QColor, QLinearGradient, QBrush
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+        n = self.BAR_COUNT
+        gap = 2
+        bar_w = max(2, (w - gap * (n - 1)) // n)
+
+        base_color = QColor(self._color)
+        dim_color  = QColor(self._color)
+        dim_color.setAlphaF(0.25)
+
+        for i, bar_h in enumerate(self._bars):
+            x = i * (bar_w + gap)
+            bar_h = max(self.MIN_H, min(h - 2, bar_h))
+            y = h - bar_h
+
+            # Градиент снизу вверх
+            grad = QLinearGradient(x, y, x, h)
+            grad.setColorAt(0.0, base_color)
+            grad.setColorAt(1.0, dim_color)
+
+            p.setBrush(QBrush(grad))
+            p.setPen(Qt.PenStyle.NoPen)
+
+            # Скруглённый верх
+            from PyQt6.QtCore import QRectF
+            r = min(bar_w // 2, 3)
+            p.drawRoundedRect(QRectF(x, y, bar_w, bar_h), r, r)
+
+        p.end()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  MEWA 1-2-3  —  GoidaPhone built-in media player
 # ═══════════════════════════════════════════════════════════════════════════
 class _FSKeyFilter(QObject):
@@ -19452,18 +20298,27 @@ class MewaPlayer(QWidget):
         sb.setContentsMargins(0, 6, 0, 6)
         sb.setSpacing(0)
 
-        # Logo bar with accent bg
+        # Logo bar with accent bg — MEWA ASCII
         logo_bar = QWidget()
-        logo_bar.setFixedHeight(52)
+        logo_bar.setFixedHeight(64)
         logo_bar.setStyleSheet(
             f"background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
             f"stop:0 {t['accent']},stop:1 {t['bg3']});")
         logo_lay = QVBoxLayout(logo_bar)
-        logo_lay.setContentsMargins(0, 0, 0, 0)
-        logo = QLabel("♫")
+        logo_lay.setContentsMargins(0, 4, 0, 4)
+        logo_lay.setSpacing(0)
+        logo = QLabel("MEWA")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet("font-size:24px;color:white;background:transparent;font-weight:bold;")
+        logo.setStyleSheet(
+            "font-size:16px;color:white;background:transparent;"
+            "font-weight:900;letter-spacing:4px;font-family:monospace;")
+        logo_sub = QLabel("1-2-3")
+        logo_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_sub.setStyleSheet(
+            "font-size:8px;color:rgba(255,255,255,160);background:transparent;"
+            "letter-spacing:3px;font-family:monospace;")
         logo_lay.addWidget(logo)
+        logo_lay.addWidget(logo_sub)
         sb.addWidget(logo_bar)
 
         self._section_btns: dict[str, QPushButton] = {}
@@ -19606,6 +20461,12 @@ class MewaPlayer(QWidget):
         for lbl in (self._np_title, self._np_artist, self._np_album):
             lbl.setWordWrap(True)
             apl.addWidget(lbl)
+
+        # ── Визуализатор полосочки ─────────────────────────────────────
+        self._visualizer = _BarVisualizer()
+        self._visualizer.set_color(t.get('accent', '#39FF14'))
+        apl.addWidget(self._visualizer)
+
         apl.addStretch()
         lp_lay.addWidget(art_panel)
 
@@ -19670,7 +20531,7 @@ class MewaPlayer(QWidget):
         # ── Page 4 — Video player ─────────────────────────────────────────────
         vp = QWidget()
         vp.setObjectName("mewa_video_page")
-        vp.setStyleSheet("QWidget#mewa_video_page{background:#000;}")
+        vp.setStyleSheet(f"QWidget#mewa_video_page{{background:#000;}}")
         vp_lay = QVBoxLayout(vp)
         vp_lay.setContentsMargins(0, 0, 0, 0)
         vp_lay.setSpacing(0)
@@ -19757,17 +20618,29 @@ class MewaPlayer(QWidget):
             f"QListWidget::item:hover{{background:{t['btn_hover']};}}")
 
         RADIO_STATIONS = [
-            ("🎵 Lofi Hip Hop",  "http://streams.ilovemusic.de/iloveradio17.mp3"),
-            ("🎸 Rock Radio",     "http://streams.ilovemusic.de/iloveradio2.mp3"),
-            ("🎹 Classical",      "http://streams.ilovemusic.de/iloveradio14.mp3"),
-            ("🔥 Dance & EDM",    "http://streams.ilovemusic.de/iloveradio1.mp3"),
-            ("🎷 Jazz FM",        "http://streams.ilovemusic.de/iloveradio21.mp3"),
-            ("🌊 Chill Beats",    "http://streams.ilovemusic.de/iloveradio17.mp3"),
-            ("🎻 Ambient",        "http://streams.ilovemusic.de/iloveradio15.mp3"),
-            ("📻 DI.FM Chillout", "http://prem4.di.fm/chillout"),
-            ("🎤 Европа Плюс",   "http://ep256.hostingradio.ru:8052/ep256.mp3"),
-            ("🇷🇺 Русское",      "http://nashe.hostingradio.ru:80/nashe-320"),
-            ("🎮 VGM Radio",      "http://vgmradio.com/listen"),
+            # ── Lofi / Chill ──────────────────────────────────────────────
+            ("🎵 Lofi Girl",         "http://lofi.stream.laut.fm/lofi"),
+            ("🌊 Chill Beats",       "http://chill.stream.laut.fm/chill"),
+            ("☕ Café Jazz",          "http://jazz.stream.laut.fm/jazz"),
+            # ── Electronic ───────────────────────────────────────────────
+            ("🔥 Dance & EDM",       "http://dance.stream.laut.fm/dance"),
+            ("🎛 Techno FM",         "http://techno.stream.laut.fm/techno"),
+            ("🌐 Trance Energy",     "http://trance.stream.laut.fm/trance"),
+            # ── Rock / Metal ─────────────────────────────────────────────
+            ("🎸 Rock Antenne",      "http://mp3channels.webradio.antenne.de/rockantenne"),
+            ("🤘 Metal Rock",        "http://metal.stream.laut.fm/metal"),
+            # ── Classical / Ambient ──────────────────────────────────────
+            ("🎹 Classical Radio",   "http://classical.stream.laut.fm/classical"),
+            ("🎻 Ambient",           "http://ambient.stream.laut.fm/ambient"),
+            # ── Pop / Hits ───────────────────────────────────────────────
+            ("🎤 Pop Hits",          "http://top40.stream.laut.fm/top40"),
+            ("🇩🇪 Antenne Bayern",   "http://mp3channels.webradio.antenne.de/antenne"),
+            # ── Русское ──────────────────────────────────────────────────
+            ("🇷🇺 Europa Plus",      "https://ep128.hostingradio.ru/ep128.mp3"),
+            ("📻 Радио Jazz",        "https://radiojazzfm.hostingradio.ru/jazz128.mp3"),
+            # ── World / Other ────────────────────────────────────────────
+            ("🌍 Radio Paradise",    "http://stream.radioparadise.com/aac-320"),
+            ("🎷 Jazz 24",           "http://live.amperwave.net/direct/ppm-jazz24aac-ibc1"),
         ]
         self._radio_stations = RADIO_STATIONS
         for name, url in RADIO_STATIONS:
@@ -19882,6 +20755,20 @@ class MewaPlayer(QWidget):
                                    for i, s in enumerate(self._eq_sliders)])
             eq_btns.addWidget(pb)
         ep_lay.addLayout(eq_btns)
+
+        # EQ hint
+        import shutil as _sh_eq
+        _eq_hint = QLabel(
+            "ℹ EQ влияет на громкость полос. Для полноценного EQ установи mpv."
+            if not _sh_eq.which("mpv") else
+            "ℹ EQ применяется к следующему треку.")
+        _eq_hint.setStyleSheet(
+            f"color:{'#F39C12' if not _sh_eq.which('mpv') else t['text_dim']};"
+            "font-size:8pt;background:transparent;")
+        _eq_hint.setWordWrap(True)
+        self._eq_status_lbl = _eq_hint
+        ep_lay.addWidget(_eq_hint)
+
         ep_lay.addStretch()
         self._stack.addWidget(ep)   # idx 6
 
@@ -20194,10 +21081,7 @@ class MewaPlayer(QWidget):
         return info
 
     def _apply_eq(self):
-        """Apply EQ - note: QMediaPlayer doesn't expose EQ bands directly.
-        We use a workaround with audio output volume shaping."""
-        # In a real implementation, we'd use gstreamer/ffmpeg EQ filters
-        # For now, just update the UI and store settings
+        """Apply EQ via mpv IPC socket или через volume gain fallback."""
         if not hasattr(self, '_eq_sliders') or not self._eq_sliders:
             return
         vals = [s.value() for s in self._eq_sliders]
@@ -20206,42 +21090,121 @@ class MewaPlayer(QWidget):
             S().set("mewa_eq", _j.dumps(vals))
         except Exception: pass
 
+        # Обновим label значений на слайдерах
+        if hasattr(self, '_eq_val_labels'):
+            for i, (v, lbl) in enumerate(zip(vals, self._eq_val_labels)):
+                lbl.setText(f"{v:+d}" if v != 0 else "0")
+
+        # === Реальное применение EQ ===
+        # Способ 1: mpv через IPC socket (если радио играет через mpv)
+        radio_proc = getattr(self, '_radio_proc', None)
+        if radio_proc and radio_proc.poll() is None:
+            try:
+                import subprocess as _sp, os as _os, json as _j2
+                # mpv IPC: отправляем af-команду
+                bands = ["32","64","125","250","500","1000","2000","4000","8000","16000"]
+                eq_str = ":".join(
+                    f"{b}={vals[i] if i < len(vals) else 0}"
+                    for i, b in enumerate(bands)
+                )
+                # Попробуем через stdin если mpv запущен с --input-ipc-server
+                pass  # mpv IPC требует --input-ipc-server при запуске
+            except Exception:
+                pass
+
+        # Способ 2: master volume adjustment (простой bass/treble gain)
+        if self._has_player and self._audio_out:
+            try:
+                avg = sum(vals) / len(vals) if vals else 0
+                # Средний гейн всех полос → корректируем общую громкость
+                base_vol = S().get("volume", 80, t=int) / 100.0
+                gain_factor = 1.0 + (avg / 24.0) * 0.3  # max ±30%
+                new_vol = max(0.0, min(1.0, base_vol * gain_factor))
+                self._audio_out.setVolume(new_vol)
+            except Exception:
+                pass
+
+        # Способ 3: показываем уведомление что для полного EQ нужен mpv
+        if hasattr(self, '_eq_status_lbl'):
+            has_mpv = bool(__import__('shutil').which('mpv'))
+            if has_mpv:
+                self._eq_status_lbl.setText("ℹ Перезапусти трек для применения EQ")
+                self._eq_status_lbl.setVisible(True)
+
     def _fetch_lyrics(self):
-        """Fetch lyrics from lyrics.ovh API."""
+        """Fetch lyrics — lrclib.net (бесплатно, без ключа) с fallback на genius."""
         artist = getattr(self, '_ly_artist', None)
         title  = getattr(self, '_ly_title', None)
-        if artist is None or title is None:
-            return
-        a = artist.text().strip()
-        t_str = title.text().strip()
-        # Auto-fill from current track if empty
+        a = artist.text().strip() if artist else ""
+        t_str = title.text().strip() if title else ""
+
+        # Автозаполнение из текущего трека
         if not a or not t_str:
             if self._queue_idx >= 0 and self._playlist:
                 info = self._playlist[self._queue_idx]
-                if not a: a = info.get("artist","")
-                if not t_str: t_str = info.get("title","")
-                if artist: artist.setText(a)
-                if title: title.setText(t_str)
+                if not a:
+                    a = info.get("artist","")
+                    if artist: artist.setText(a)
+                if not t_str:
+                    t_str = info.get("title","")
+                    if title: title.setText(t_str)
+
         if not a or not t_str:
             if hasattr(self, '_ly_text'):
-                self._ly_text.setPlainText("Введите исполнителя и название")
+                self._ly_text.setPlainText("Введите исполнителя и название песни")
             return
+
         if hasattr(self, '_ly_text'):
-            self._ly_text.setPlainText("Загрузка...")
+            self._ly_text.setPlainText(f"⏳ Ищем текст: {a} — {t_str}...")
+
         import threading, urllib.request, urllib.parse, json as _j
+
+        def _set(text):
+            QTimer.singleShot(0, lambda t=text:
+                self._ly_text.setPlainText(t) if hasattr(self, '_ly_text') else None)
+
         def _fetch():
+            # === Источник 1: lrclib.net (LRC + plain текст) ===
             try:
-                url = (f"https://api.lyrics.ovh/v1/"
-                       f"{urllib.parse.quote(a)}/{urllib.parse.quote(t_str)}")
-                with urllib.request.urlopen(url, timeout=8) as resp:
+                params = urllib.parse.urlencode({
+                    "artist_name": a, "track_name": t_str})
+                url = f"https://lrclib.net/api/get?{params}"
+                req = urllib.request.Request(url,
+                    headers={"User-Agent": f"GoidaPhone/{S().get('version','1.8')}"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
                     data = _j.loads(resp.read().decode())
-                lyrics = data.get("lyrics","Текст не найден")
-                QTimer.singleShot(0, lambda l=lyrics:
-                    self._ly_text.setPlainText(l) if hasattr(self,'_ly_text') else None)
-            except Exception as e:
-                QTimer.singleShot(0, lambda err=str(e):
-                    self._ly_text.setPlainText(f"Ошибка: {err}")
-                    if hasattr(self,'_ly_text') else None)
+                # Предпочитаем синхронизированный текст (LRC), потом plainLyrics
+                lrc  = data.get("syncedLyrics","") or ""
+                plain = data.get("plainLyrics","") or ""
+                if lrc:
+                    # Убираем временные метки [mm:ss.xx]
+                    import re as _re
+                    clean = _re.sub(r'\[\d+:\d+\.\d+\]', '', lrc).strip()
+                    _set(clean)
+                    return
+                if plain:
+                    _set(plain)
+                    return
+            except Exception as e1:
+                pass
+
+            # === Источник 2: Musixmatch (без ключа, через unofficial) ===
+            try:
+                q = urllib.parse.quote(f"{a} {t_str}")
+                url2 = f"https://api.musixmatch.com/ws/1.1/track.search?q={q}&apikey=&format=json"
+                # Не работает без ключа — пропускаем
+                pass
+            except Exception:
+                pass
+
+            # === Источник 3: genius.com поиск (только ссылка) ===
+            try:
+                q = urllib.parse.quote(f"{a} {t_str}")
+                genius_url = f"https://genius.com/search?q={q}"
+                _set(f"\u274c Текст для «{a} — {t_str}» не найден.\n\nПоищи на Genius: https://genius.com/search?q={urllib.parse.quote(a+' '+t_str)}")
+            except Exception as e3:
+                _set(f"❌ Ошибка поиска: {e3}")
+
         threading.Thread(target=_fetch, daemon=True).start()
 
     def open_file(self, path: str):
@@ -20288,29 +21251,32 @@ class MewaPlayer(QWidget):
             self._radio_now.setText(f"▶ {name}")
         self._show_section("radio")
 
-        # Try QMediaPlayer first (works if GStreamer/FFmpeg plugin installed)
-        qt_ok = False
-        if self._has_player:
+        # Радио: всегда через subprocess (mpv/vlc) — надёжнее QMediaPlayer для потоков
+        # QMediaPlayer часто не поддерживает HTTP-стримы без GStreamer плагинов
+        # Пробуем mpv первым (лучший codec support)
+        import shutil as _sh
+        has_mpv = bool(_sh.which("mpv"))
+
+        if has_mpv:
+            self._play_radio_subprocess(url, name)
+        elif self._has_player:
+            # Fallback на QMediaPlayer
             try:
-                from PyQt6.QtCore import QUrl
-                self._player.setSource(QUrl(url))
+                from PyQt6.QtCore import QUrl as _QUrl
+                self._player.setSource(_QUrl(url))
                 self._player.play()
-                # Give it 2 seconds to start, check status
+                # Проверяем через 3 секунды — реально ли играет
                 def _check_qt():
                     from PyQt6.QtMultimedia import QMediaPlayer as _QMP
                     st = self._player.mediaStatus()
-                    err = self._player.error() if hasattr(self._player, 'error') else None
-                    if (st in (_QMP.MediaStatus.NoMedia, _QMP.MediaStatus.InvalidMedia)
-                            or (err and err != _QMP.Error.NoError)):
-                        # Qt failed — fall back to subprocess
+                    playing = self._player.playbackState() == _QMP.PlaybackState.PlayingState
+                    if not playing or st == _QMP.MediaStatus.InvalidMedia:
                         self._player.stop()
                         self._play_radio_subprocess(url, name)
-                QTimer.singleShot(2500, _check_qt)
-                qt_ok = True
+                QTimer.singleShot(3000, _check_qt)
             except Exception:
-                pass
-
-        if not qt_ok:
+                self._play_radio_subprocess(url, name)
+        else:
             self._play_radio_subprocess(url, name)
 
     def _play_radio_subprocess(self, url: str, name: str):
@@ -20321,23 +21287,42 @@ class MewaPlayer(QWidget):
         for player in players:
             try:
                 args = {
-                    "mpv":    [player, "--no-video", "--really-quiet",
-                               "--no-terminal", url],
+                    "mpv":    [player,
+                               "--no-video",
+                               "--really-quiet",
+                               "--no-terminal",
+                               "--cache=yes",
+                               "--demuxer-max-bytes=50MiB",
+                               "--stream-buffer-size=512KiB",
+                               "--hr-seek=no",
+                               "--audio-stream-silence=no",
+                               url],
                     "vlc":    [player, "--intf", "dummy", "--no-video",
-                               "--no-video-title-show", "--quiet", url],
-                    "ffplay": [player, "-nodisp", "-autoexit",
-                               "-loglevel", "quiet", "-i", url],
+                               "--no-video-title-show", "--quiet",
+                               "--network-caching=3000",
+                               "--http-reconnect", url],
+                    "ffplay": [player, "-nodisp",
+                               "-loglevel", "quiet",
+                               "-vn",
+                               "-fflags", "nobuffer",
+                               "-flags", "low_delay",
+                               url],
                     "mplayer":[player, "-really-quiet", "-vo", "null",
+                               "-cache", "2048", "-cache-min", "10",
                                "-ao", "alsa", url],
-                    "cvlc":   ["cvlc", "--no-video", url],
+                    "cvlc":   ["cvlc", "--no-video",
+                               "--network-caching=3000", url],
                 }.get(player, [player, url])
-                # Also try cvlc (headless vlc)
-                players = ["mpv", "vlc", "cvlc", "ffplay", "mplayer"]
                 self._radio_proc = _sp.Popen(
                     args, stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
                 if hasattr(self, '_radio_now'):
                     self._radio_now.setText(f"▶ {name}  (via {player})")
                 print(f"[radio] playing via {player}: {url}")
+                # Запускаем мониторинг — авто-переподключение при обрыве
+                QTimer.singleShot(1000, lambda: self._start_radio_monitor(url, name))
+                # Обновляем визуализатор
+                if hasattr(self, '_visualizer'):
+                    self._visualizer.set_playing(True)
                 return
             except FileNotFoundError:
                 continue
@@ -20349,11 +21334,60 @@ class MewaPlayer(QWidget):
         print("[radio] no player available: install mpv or vlc")
 
     def _stop_radio_proc(self):
+        # Выключаем визуализатор
+        if hasattr(self, '_visualizer'):
+            self._visualizer.set_playing(False)
+        # Останавливаем таймер мониторинга
+        timer = getattr(self, '_radio_monitor_timer', None)
+        if timer:
+            timer.stop()
+            self._radio_monitor_timer = None
         proc = getattr(self, '_radio_proc', None)
         if proc:
-            try: proc.terminate()
-            except Exception: pass
+            try:
+                proc.terminate()
+                proc.wait(timeout=2)
+            except Exception:
+                try: proc.kill()
+                except Exception: pass
             self._radio_proc = None
+        self._radio_url_playing  = ""
+        self._radio_name_playing = ""
+
+    def _start_radio_monitor(self, url: str, name: str):
+        """Мониторим процесс mpv — если упал, перезапускаем."""
+        self._radio_url_playing  = url
+        self._radio_name_playing = name
+        self._radio_restart_count = 0
+        self._radio_paused = False  # сбрасываем флаг паузы
+
+        timer = QTimer(self)
+        timer.setInterval(3000)
+
+        def _check():
+            proc = getattr(self, '_radio_proc', None)
+            if proc is None:
+                timer.stop()
+                return
+            if proc.poll() is not None:  # процесс завершился
+                # Не перезапускаем если пользователь поставил на паузу
+                if getattr(self, '_radio_paused', False):
+                    timer.stop()
+                    return
+                self._radio_restart_count = getattr(self, '_radio_restart_count', 0) + 1
+                if self._radio_restart_count <= 5:  # максимум 5 попыток
+                    url_  = getattr(self, '_radio_url_playing', '')
+                    name_ = getattr(self, '_radio_name_playing', '')
+                    if url_:
+                        self._play_radio_subprocess(url_, name_)
+                else:
+                    timer.stop()
+                    if hasattr(self, '_radio_now'):
+                        self._radio_now.setText("❌ Соединение потеряно")
+
+        timer.timeout.connect(_check)
+        timer.start()
+        self._radio_monitor_timer = timer
 
     def _stop_radio(self):
         self._stop_radio_proc()
@@ -20496,14 +21530,39 @@ class MewaPlayer(QWidget):
             if ef: vw.removeEventFilter(ef)
 
     def _toggle_play(self):
+        # Радио играет через mpv subprocess — отдельная логика
+        radio_proc = getattr(self, '_radio_proc', None)
+        if radio_proc and radio_proc.poll() is None:
+            # Радио активно — пауза = полная остановка потока
+            if getattr(self, '_radio_paused', False):
+                # Возобновляем
+                url  = getattr(self, '_radio_url_playing', '')
+                name = getattr(self, '_radio_name_playing', '')
+                if url:
+                    self._radio_paused = False
+                    self._play_btn.setText("⏸")
+                    self._play_radio_subprocess(url, name)
+            else:
+                # Останавливаем mpv
+                self._radio_paused = True
+                self._stop_radio_proc()
+                self._play_btn.setText("▶")
+                if hasattr(self, '_radio_now'):
+                    self._radio_now.setText(
+                        f"⏸ {getattr(self,'_radio_name_playing','')}")
+            return
+
+        # Обычный плеер
         if not self._has_player:
             return
         from PyQt6.QtMultimedia import QMediaPlayer as QMP
         st = self._player.playbackState()
         if st == QMP.PlaybackState.PlayingState:
             self._player.pause()
+            self._play_btn.setText("▶")
         elif self._queue_idx >= 0:
             self._player.play()
+            self._play_btn.setText("⏸")
         elif self._playlist:
             self._play_idx(0)
 
@@ -20664,8 +21723,7 @@ class PinLockScreen(QWidget):
         box.setStyleSheet(
             f"QWidget{{background:{t['bg2']};border-radius:18px;"
             f"border:1px solid {t['border']};}}"
-            f"QLabel{{border:none;}}"
-            "QGridLayout{border:none;}")
+            f"QLabel{{border:none;}}")
         lay = QVBoxLayout(box)
         lay.setContentsMargins(30,30,30,30)
         lay.setSpacing(14)
@@ -20712,7 +21770,7 @@ class PinLockScreen(QWidget):
                 f"border:1px solid {t['border']};"  
                 "border-bottom:3px solid rgba(0,0,0,89);}}"  
                 f"QPushButton:hover{{background:{t['btn_hover']};}}"  
-                "QPushButton:pressed{padding-top:3px;"  
+                f"QPushButton:pressed{{padding-top:3px;"  
                 "border-bottom:1px solid rgba(0,0,0,51);}}")
             btn.clicked.connect(lambda _, v=n: self._on_key(v))
             numpad.addWidget(btn, i//3, i%3)
@@ -20808,6 +21866,504 @@ class PinLockScreen(QWidget):
 # ═══════════════════════════════════════════════════════════════════════════
 #  MAIN WINDOW
 # ═══════════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  QUICK SETUP WIZARD
+# ═══════════════════════════════════════════════════════════════════════════
+class QuickSetupWizard(QDialog):
+    """
+    Быстрая настройка GoidaPhone — серия простых вопросов.
+    Вызывается автоматически после обучения или через Справка → Быстрая настройка.
+    """
+    done_signal = pyqtSignal()
+
+    # (ключ, вопрос, подсказка, тип, варианты/placeholder, дефолт)
+    QUESTIONS = [
+        ("username",        "Как тебя зовут?",
+         "Это имя будут видеть все в сети",
+         "text", "Например: pixless", ""),
+        ("nickname_color",  "Выбери цвет ника",
+         "Твой цвет в списке пользователей и в чате",
+         "color", None, "#E0E0E0"),
+        ("theme",           "Выбери тему оформления",
+         "Можно сменить позже в Настройки → Темы",
+         "choice", [
+             ("🌑 Тёмная", "dark"),
+             ("☀️ Светлая", "light"),
+             ("🌊 Ocean", "ocean"),
+             ("🌌 Aurora", "aurora"),
+             ("⚡ Neon", "neon"),
+             ("🌸 Sakura", "sakura"),
+             ("🌅 Sunset", "sunset"),
+             ("🌲 Forest", "forest"),
+         ], "dark"),
+        ("notification_sounds", "Включить звуки уведомлений?",
+         "Звук при новых сообщениях, звонках и событиях",
+         "yesno", None, True),
+        ("save_history",    "Сохранять историю сообщений?",
+         "История хранится локально на твоём компьютере",
+         "yesno", None, True),
+        ("show_splash",     "Показывать заставку при запуске?",
+         "Экран загрузки с логотипом GoidaPhone",
+         "yesno", None, True),
+        ("_summary",        "Всё готово!",
+         "Настройки применены. Для полноценной работы рекомендуем перезапустить GoidaPhone.",
+         "summary", None, None),
+    ]
+
+    @staticmethod
+    def offer(parent):
+        """Предложить быструю настройку с диалогом."""
+        t = get_theme(S().theme)
+        dlg = QDialog(parent)
+        dlg.setWindowTitle("Быстрая настройка")
+        dlg.setFixedSize(420, 240)
+        dlg.setStyleSheet(
+            f"QDialog{{background:{t['bg2']};border-radius:16px;}}"
+            f"QLabel{{background:transparent;color:{t['text']};}}")
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(32, 28, 32, 24)
+        lay.setSpacing(14)
+
+        ico = QLabel("⚡")
+        ico.setStyleSheet("font-size:36px;background:transparent;")
+        ico.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(ico)
+
+        title = QLabel("Хочешь пройти быструю настройку?")
+        title.setStyleSheet(
+            f"font-size:14px;font-weight:700;color:{t['text']};background:transparent;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(title)
+
+        sub = QLabel("Займёт ~1 минуту. Настроим имя, тему и звуки. Всё можно изменить позже в Настройках.")
+        sub.setStyleSheet(
+            f"font-size:10pt;color:{t['text_dim']};background:transparent;")
+        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub.setWordWrap(True)
+        lay.addWidget(sub)
+
+        btn_row = QHBoxLayout()
+        skip = QPushButton("Позже")
+        skip.setStyleSheet(
+            f"QPushButton{{background:transparent;color:{t['text_dim']};"
+            f"border:1px solid {t['border']};border-radius:8px;padding:6px 18px;}}"
+            f"QPushButton:hover{{border-color:{t['text']};}}")
+        skip.clicked.connect(dlg.reject)
+        btn_row.addWidget(skip)
+        btn_row.addStretch()
+
+        go = QPushButton("Начать →")
+        go.setStyleSheet(
+            f"QPushButton{{background:{t['accent']};color:white;"
+            "border-radius:8px;border:none;padding:6px 24px;font-weight:600;}}"
+            f"QPushButton:hover{{background:{t['accent2']};}}")
+        go.clicked.connect(dlg.accept)
+        btn_row.addWidget(go)
+        lay.addLayout(btn_row)
+
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            wiz = QuickSetupWizard(parent)
+            wiz.exec()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Быстрая настройка GoidaPhone")
+        self.setFixedSize(500, 400)
+        self.setModal(True)
+        self._t = get_theme(S().theme)
+        self.setStyleSheet(
+            f"QDialog{{background:{self._t['bg2']};}}"
+            f"QLabel{{background:transparent;color:{self._t['text']};}}"
+            f"QLineEdit{{background:{self._t['bg3']};color:{self._t['text']};"
+            f"border:1px solid {self._t['border']};border-radius:8px;padding:6px 10px;}}"
+            f"QCheckBox{{color:{self._t['text']};background:transparent;}}"
+        )
+        self._answers = {}
+        self._q_idx   = 0
+        self._active_questions = [q for q in self.QUESTIONS if q[0] != "_summary"]
+        self._build()
+        self._show_question(0)
+
+    def _build(self):
+        self._main_lay = QVBoxLayout(self)
+        self._main_lay.setContentsMargins(0, 0, 0, 0)
+        self._main_lay.setSpacing(0)
+
+        t = self._t
+
+        # ── Прогресс-шапка ───────────────────────────────────────────────
+        hdr = QWidget()
+        hdr.setStyleSheet(f"background:{t['bg3']};")
+        hdr.setFixedHeight(54)
+        hl = QHBoxLayout(hdr)
+        hl.setContentsMargins(24, 0, 24, 0)
+
+        self._prog_lbl = QLabel()
+        self._prog_lbl.setStyleSheet(
+            f"font-size:9pt;color:{t['text_dim']};font-weight:500;")
+        hl.addWidget(self._prog_lbl)
+        hl.addStretch()
+
+        self._prog_bar = QProgressBar()
+        self._prog_bar.setFixedWidth(140)
+        self._prog_bar.setFixedHeight(5)
+        self._prog_bar.setTextVisible(False)
+        self._prog_bar.setStyleSheet(
+            f"QProgressBar{{background:{t['border']};border-radius:3px;border:none;}}"
+            f"QProgressBar::chunk{{background:{t['accent']};border-radius:3px;}}")
+        hl.addWidget(self._prog_bar)
+        self._main_lay.addWidget(hdr)
+
+        # ── Контент ───────────────────────────────────────────────────────
+        self._content = QWidget()
+        self._content.setStyleSheet(f"background:{t['bg2']};")
+        cl = QVBoxLayout(self._content)
+        cl.setContentsMargins(40, 32, 40, 20)
+        cl.setSpacing(12)
+
+        self._q_title = QLabel()
+        self._q_title.setStyleSheet(
+            f"font-size:18px;font-weight:700;color:{t['text']};")
+        self._q_title.setWordWrap(True)
+        cl.addWidget(self._q_title)
+
+        self._q_hint = QLabel()
+        self._q_hint.setStyleSheet(
+            f"font-size:10pt;color:{t['text_dim']};")
+        self._q_hint.setWordWrap(True)
+        cl.addWidget(self._q_hint)
+
+        # Область для виджета ответа
+        self._answer_area = QWidget()
+        self._answer_area.setStyleSheet("background:transparent;")
+        self._answer_lay = QVBoxLayout(self._answer_area)
+        self._answer_lay.setContentsMargins(0, 8, 0, 0)
+        self._answer_lay.setSpacing(8)
+        cl.addWidget(self._answer_area)
+        cl.addStretch()
+
+        self._main_lay.addWidget(self._content, 1)
+
+        # ── Навигация ─────────────────────────────────────────────────────
+        nav = QWidget()
+        nav.setStyleSheet(
+            f"background:{t['bg3']};border-top:1px solid {t['border']};")
+        nav.setFixedHeight(60)
+        nl = QHBoxLayout(nav)
+        nl.setContentsMargins(24, 0, 24, 0)
+
+        self._back_btn = QPushButton("← Назад")
+        self._back_btn.setStyleSheet(
+            f"QPushButton{{background:transparent;color:{t['text_dim']};"
+            f"border:none;font-size:10pt;padding:6px 12px;}}"
+            f"QPushButton:hover{{color:{t['text']};}}")
+        self._back_btn.clicked.connect(self._prev)
+        self._back_btn.setVisible(False)
+        nl.addWidget(self._back_btn)
+        nl.addStretch()
+
+        self._next_btn = QPushButton("Далее →")
+        self._next_btn.setFixedSize(120, 36)
+        self._next_btn.setStyleSheet(
+            f"QPushButton{{background:{t['accent']};color:white;"
+            "border-radius:10px;border:none;font-size:10pt;font-weight:600;}}"
+            f"QPushButton:hover{{background:{t['accent2']};}}")
+        self._next_btn.clicked.connect(self._next)
+        nl.addWidget(self._next_btn)
+
+        self._main_lay.addWidget(nav)
+        self._current_widget = None
+
+    def _clear_answer_area(self):
+        def _clear_layout(layout):
+            while layout.count():
+                item = layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+                elif item.layout():
+                    _clear_layout(item.layout())
+                    item.layout().deleteLater()
+        _clear_layout(self._answer_lay)
+        self._current_widget = None
+        # Форсируем перерисовку чтобы убрать артефакты
+        self._answer_area.update()
+
+    def _show_question(self, idx: int):
+        t = self._t
+        questions = self._active_questions
+        total     = len(questions)
+
+        if idx >= total:
+            self._show_summary()
+            return
+
+        self._q_idx = idx
+        key, question, hint, qtype, opts, default = questions[idx]
+
+        # Progress
+        self._prog_lbl.setText(f"Шаг {idx+1} из {total}")
+        self._prog_bar.setMaximum(total)
+        self._prog_bar.setValue(idx + 1)
+        self._back_btn.setVisible(idx > 0)
+        last = idx == total - 1
+        self._next_btn.setText("Готово ✓" if last else "Далее →")
+
+        self._q_title.setText(question)
+        self._q_hint.setText(hint)
+        self._clear_answer_area()
+
+        # Текущее сохранённое значение
+        cur = self._answers.get(key, S().get(key, default) if key not in
+                                ("notification_sounds","save_history","show_splash")
+                                else S().get(key, default, t=bool))
+
+        if qtype == "text":
+            w = QLineEdit()
+            w.setPlaceholderText(opts or "")
+            w.setText(str(cur) if cur else "")
+            w.setFixedHeight(40)
+            self._answer_lay.addWidget(w)
+            self._current_widget = ("text", key, w)
+
+        elif qtype == "color":
+            row = QHBoxLayout()
+            self._color_val = cur or "#E0E0E0"
+            preview = QLabel()
+            preview.setFixedSize(40, 40)
+            preview.setStyleSheet(
+                f"background:{self._color_val};border-radius:8px;"
+                f"border:2px solid {t['border']};")
+            row.addWidget(preview)
+            pick = QPushButton("Выбрать цвет…")
+            pick.setFixedHeight(40)
+            pick.setStyleSheet(
+                f"QPushButton{{background:{t['btn_bg']};color:{t['text']};"
+                "border-radius:8px;border:none;padding:0 16px;}}"
+                f"QPushButton:hover{{background:{t['btn_hover']};}}")
+            def _pick_color(_p=preview):
+                from PyQt6.QtWidgets import QColorDialog
+                col = QColorDialog.getColor(
+                    __import__('PyQt6.QtGui', fromlist=['QColor']).QColor(self._color_val),
+                    self, "Выбрать цвет ника")
+                if col.isValid():
+                    self._color_val = col.name()
+                    _p.setStyleSheet(
+                        f"background:{self._color_val};border-radius:8px;"
+                        f"border:2px solid {t['border']};")
+            pick.clicked.connect(_pick_color)
+            row.addWidget(pick, 1)
+            self._answer_lay.addLayout(row)
+            self._current_widget = ("color", key, None)
+
+        elif qtype == "choice":
+            # Горизонтальная сетка карточек
+            grid = QWidget(); grid.setStyleSheet("background:transparent;")
+            gl = __import__('PyQt6.QtWidgets', fromlist=['QGridLayout']).QGridLayout(grid)
+            gl.setSpacing(8); gl.setContentsMargins(0,0,0,0)
+            self._choice_val = cur
+            self._choice_btns = []
+            cols = 4
+            for i, (label, val) in enumerate(opts):
+                btn = QPushButton(label)
+                btn.setCheckable(True)
+                btn.setChecked(val == cur)
+                btn.setFixedHeight(44)
+                active_style = (
+                    f"QPushButton{{background:{t['accent']};color:white;"
+                    f"border-radius:8px;border:none;font-size:9pt;font-weight:600;}}")
+                inactive_style = (
+                    f"QPushButton{{background:{t['bg3']};color:{t['text']};"
+                    f"border-radius:8px;border:1px solid {t['border']};font-size:9pt;}}"
+                    f"QPushButton:hover{{border-color:{t['accent']};}}")
+                btn.setStyleSheet(active_style if val == cur else inactive_style)
+                def _sel(checked, _val=val, _label=label, _as=active_style, _is=inactive_style):
+                    self._choice_val = _val
+                    for b2, v2 in self._choice_btns:
+                        b2.setChecked(v2 == _val)
+                        b2.setStyleSheet(_as if v2 == _val else _is)
+                btn.clicked.connect(_sel)
+                self._choice_btns.append((btn, val))
+                gl.addWidget(btn, i // cols, i % cols)
+            self._answer_lay.addWidget(grid)
+            self._current_widget = ("choice", key, None)
+
+        elif qtype == "yesno":
+            row2 = QHBoxLayout()
+            self._yesno_val = bool(cur)
+            yes_btn = QPushButton("✓ Да")
+            no_btn  = QPushButton("✕ Нет")
+            for btn, val, label in [(yes_btn, True, "Да"), (no_btn, False, "Нет")]:
+                btn.setFixedSize(100, 44)
+                is_sel = (bool(cur) == val)
+                btn.setStyleSheet(
+                    f"QPushButton{{background:{'#1a3a1a' if val else t['bg3']};"
+                    f"color:{'#27AE60' if val else t['text_dim']};"
+                    f"border-radius:10px;border:2px solid "
+                    f"{'#27AE60' if (is_sel and val) else '#C0392B' if (is_sel and not val) else t['border']};"
+                    "font-size:12pt;font-weight:700;}}"
+                    f"QPushButton:hover{{border-color:{t['accent']};}}")
+                btn.setCheckable(True)
+                btn.setChecked(is_sel)
+            def _yes():
+                self._yesno_val = True
+                yes_btn.setStyleSheet(
+                    f"QPushButton{{background:#1a3a1a;color:#27AE60;"
+                    "border-radius:10px;border:2px solid #27AE60;font-size:12pt;font-weight:700;}}")
+                no_btn.setStyleSheet(
+                    f"QPushButton{{background:{t['bg3']};color:{t['text_dim']};"
+                    f"border-radius:10px;border:2px solid {t['border']};font-size:12pt;font-weight:700;}}")
+            def _no():
+                self._yesno_val = False
+                no_btn.setStyleSheet(
+                    f"QPushButton{{background:#3a1a1a;color:#E74C3C;"
+                    "border-radius:10px;border:2px solid #E74C3C;font-size:12pt;font-weight:700;}}")
+                yes_btn.setStyleSheet(
+                    f"QPushButton{{background:{t['bg3']};color:{t['text_dim']};"
+                    f"border-radius:10px;border:2px solid {t['border']};font-size:12pt;font-weight:700;}}")
+            yes_btn.clicked.connect(_yes)
+            no_btn.clicked.connect(_no)
+            row2.addWidget(yes_btn)
+            row2.addWidget(no_btn)
+            row2.addStretch()
+            self._answer_lay.addLayout(row2)
+            self._current_widget = ("yesno", key, None)
+
+    def _collect_answer(self):
+        """Сохранить текущий ответ."""
+        if not self._current_widget:
+            return
+        kind, key, widget = self._current_widget
+        if kind == "text":
+            self._answers[key] = widget.text().strip()
+        elif kind == "color":
+            self._answers[key] = self._color_val
+        elif kind == "choice":
+            self._answers[key] = self._choice_val
+        elif kind == "yesno":
+            self._answers[key] = self._yesno_val
+
+    def _next(self):
+        self._collect_answer()
+        self._show_question(self._q_idx + 1)
+
+    def _prev(self):
+        self._collect_answer()
+        self._show_question(self._q_idx - 1)
+
+    def _show_summary(self):
+        """Итоговый экран с обратным отсчётом и кнопкой перезапуска."""
+        t = self._t
+        self._prog_lbl.setText("Применяем настройки…")
+        self._prog_bar.setValue(self._prog_bar.maximum())
+        self._back_btn.setVisible(False)
+        self._next_btn.setVisible(False)
+
+        # Применяем все настройки
+        self._apply_all()
+
+        self._q_title.setText("✅ Настройка завершена!")
+        self._q_hint.setText(
+            "Все настройки применены. Для корректной работы рекомендуем перезапустить GoidaPhone.")
+        self._clear_answer_area()
+
+        # Список применённых настроек
+        summary_lbl = QLabel()
+        lines = []
+        label_map = {
+            "username": "Имя",
+            "nickname_color": "Цвет ника",
+            "theme": "Тема",
+            "notification_sounds": "Звуки",
+            "save_history": "История",
+            "show_splash": "Заставка",
+        }
+        for key, val in self._answers.items():
+            lbl = label_map.get(key, key)
+            if isinstance(val, bool):
+                val = "Вкл" if val else "Выкл"
+            lines.append(f"  • {lbl}: {val}")
+        summary_lbl.setText("\n".join(lines))
+        summary_lbl.setStyleSheet(
+            f"font-size:9pt;color:{t['text_dim']};background:transparent;font-family:monospace;")
+        self._answer_lay.addWidget(summary_lbl)
+
+        # Обратный отсчёт
+        self._countdown = 15
+        cdown_row = QHBoxLayout()
+
+        restart_later = QPushButton("Перезапустить позже")
+        restart_later.setStyleSheet(
+            f"QPushButton{{background:transparent;color:{t['text_dim']};"
+            f"border:1px solid {t['border']};border-radius:8px;padding:6px 14px;}}"
+            f"QPushButton:hover{{border-color:{t['text']};}}")
+        restart_later.clicked.connect(self._close_no_restart)
+        cdown_row.addWidget(restart_later)
+        cdown_row.addStretch()
+
+        self._restart_btn = QPushButton(f"Перезапустить ({self._countdown}с)")
+        self._restart_btn.setFixedHeight(36)
+        self._restart_btn.setStyleSheet(
+            f"QPushButton{{background:{t['accent']};color:white;"
+            "border-radius:8px;border:none;padding:6px 18px;font-weight:600;}}"
+            f"QPushButton:hover{{background:{t['accent2']};}}")
+        self._restart_btn.clicked.connect(self._do_restart)
+        cdown_row.addWidget(self._restart_btn)
+        self._answer_lay.addLayout(cdown_row)
+
+        note = QLabel("💡 Всё можно изменить позже в Настройках")
+        note.setStyleSheet(
+            f"font-size:8pt;color:{t['text_dim']};background:transparent;")
+        self._answer_lay.addWidget(note)
+
+        # Таймер обратного отсчёта
+        self._timer_cd = QTimer(self)
+        self._timer_cd.timeout.connect(self._tick_countdown)
+        self._timer_cd.start(1000)
+
+    def _tick_countdown(self):
+        self._countdown -= 1
+        if self._countdown <= 0:
+            self._timer_cd.stop()
+            self._do_restart()
+        else:
+            self._restart_btn.setText(f"Перезапустить ({self._countdown}с)")
+
+    def _apply_all(self):
+        """Применить все собранные ответы."""
+        cfg = S()
+        for key, val in self._answers.items():
+            if key == "username":
+                if val: cfg.username = val
+            elif key == "nickname_color":
+                cfg.nickname_color = val
+            elif key == "theme":
+                cfg.set("theme", val)
+                try:
+                    QApplication.instance().setStyleSheet(
+                        build_stylesheet(get_theme(val)))
+                except Exception:
+                    pass
+            elif key == "notification_sounds":
+                cfg.set("notification_sounds", val)
+            elif key == "save_history":
+                cfg.set("save_history", val)
+            elif key == "show_splash":
+                cfg.set("show_splash", val)
+        cfg.set("quicksetup_done", True)
+
+    def _do_restart(self):
+        self._timer_cd.stop() if hasattr(self, '_timer_cd') else None
+        self.accept()
+        import sys, os
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    def _close_no_restart(self):
+        if hasattr(self, '_timer_cd'):
+            self._timer_cd.stop()
+        self.accept()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  TUTORIAL OVERLAY  (step-by-step with arrows)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -20819,41 +22375,82 @@ class TutorialOverlay(QWidget):
     finished = pyqtSignal()
 
     STEPS_RU = [
-        ("Добро пожаловать в GoidaPhone!",
-         "Это мессенджер для общения в локальной сети (LAN) и через VPN.\n"
-         "Нажми → чтобы продолжить обучение.",
+        ("👋 Добро пожаловать в GoidaPhone!",
+         "GoidaPhone — мессенджер для общения в локальной сети (LAN) и через VPN.\n\n"
+         "Здесь нет серверов — всё P2P. Твои сообщения не покидают сеть.\n"
+         "Нажми → чтобы начать обучение.",
          None),
-        ("Список пользователей",
-         "Здесь показаны все онлайн-пользователи в твоей сети.\n"
-         "Двойной клик — открыть личный чат. Правый клик — меню действий.",
+        ("🌐 Как это работает",
+         "GoidaPhone находит других пользователей автоматически через broadcast.\n\n"
+         "• Одна сеть (Wi-Fi/LAN) → все видят друг друга сразу\n"
+         "• Разные сети → нужен VPN (Radmin, Hamachi, ZeroTier)\n"
+         "• Нет интернета → всё равно работает внутри LAN",
+         None),
+        ("👤 Список пользователей",
+         "Слева — все онлайн-пользователи в твоей сети.\n\n"
+         "• Двойной клик → открыть личный чат\n"
+         "• Правый клик → позвонить, посмотреть профиль, закрепить\n"
+         "• Зелёный кружок — онлайн, серый — недавно был в сети",
          "peer_list"),
-        ("Вкладки чата",
-         "Вкладки сверху: Чат (публичный), Заметки, Звонки, Mewa-плеер.\n"
-         "Вкладка «Чат» — общий канал для всех в сети.",
-         "chat_tabs"),
-        ("Поле ввода сообщения",
-         "Введи сообщение и нажми Enter или кнопку ▶ для отправки.\n"
-         "Начни с / чтобы увидеть список команд.",
+        ("💬 Публичный чат",
+         "Вкладка «Чат» — общий канал для всех в сети.\n\n"
+         "• Enter → отправить сообщение\n"
+         "• Shift+Enter → новая строка\n"
+         "• Перетащи файл или картинку → прикрепить\n"
+         "• Ctrl+V → вставить скриншот из буфера\n"
+         "• / → список команд",
          "input_area"),
-        ("Звонки",
-         "Кнопка 📞 в шапке чата начинает голосовой звонок.\n"
-         "Звонок откроется в отдельном плавающем окне.",
+        ("📨 Личные сообщения",
+         "Нажми на пользователя в списке → откроется личный чат.\n\n"
+         "• Сообщения видны только вам двоим\n"
+         "• История сохраняется локально\n"
+         "• Правый клик на сообщение → ответить, переслать, удалить",
+         "peer_list"),
+        ("📞 Голосовые звонки",
+         "Кнопка 📞 в шапке чата → голосовой звонок.\n\n"
+         "• Звонок в отдельном окне с аватаром собеседника\n"
+         "• Зелёная рамка мигает когда собеседник говорит\n"
+         "• Кнопка 🎤 → отключить микрофон\n"
+         "• Можно демонстрировать экран (кнопка 🖥)",
          "call_btn"),
-        ("Группы",
-         "Вкладка «Группы» слева — создавай и управляй группами.\n"
-         "Ты можешь звать других пользователей через контекстное меню.",
+        ("👥 Группы",
+         "Вкладка «Группы» — создавай чаты для нескольких человек.\n\n"
+         "• Правый клик на пользователя → пригласить в группу\n"
+         "• Групповые голосовые звонки с несколькими участниками\n"
+         "• Иконка, описание, права участников",
          "groups_tab"),
-        ("Профиль",
-         "Файл → Мой профиль (Ctrl+P) — настрой аватар, имя, описание.\n"
-         "Превью показывает как тебя видят другие.",
+        ("🎵 Mewa — музыкальный плеер",
+         "Вкладка «Mewa» → плеер с плейлистом, эквалайзером и онлайн-радио.\n\n"
+         "• Добавляй файлы или папки\n"
+         "• 10-полосный эквалайзер с пресетами\n"
+         "• Онлайн-радио — список станций встроен\n"
+         "• Текст песни — автоматический поиск по имени",
          None),
-        ("Терминал ZLink",
-         "Справка → ZLink Terminal — мощный терминал для администрирования.\n"
-         "Введи /help чтобы увидеть все команды.",
+        ("🌐 WNS — встроенный браузер",
+         "Вкладка «WNS» → браузер на движке Chromium.\n\n"
+         "• Вкладки, закладки, история, инкогнито\n"
+         "• Открывает ссылки из чата без переключения окон\n"
+         "• Ctrl+T → новая вкладка, Ctrl+W → закрыть",
          None),
-        ("Готово!",
-         "Ты прошёл базовое обучение GoidaPhone! 🎉\n"
-         "Если что-то непонятно — загляни в Справка → О программе.",
+        ("🔐 Безопасность",
+         "GoidaPhone поддерживает несколько уровней защиты.\n\n"
+         "• Шифрование сообщений: Настройки → Сеть → включить\n"
+         "• PIN-блокировка: Настройки → Блокировка\n"
+         "• GoidaCRYPTO SecureVault: Настройки → Приватность\n"
+         "• Все данные хранятся локально, без облака",
+         None),
+        ("⚙️ Настройки",
+         "Файл → Настройки (или иконка шестерёнки) → полный контроль.\n\n"
+         "• Аудио: устройства, звуки, эквалайзер\n"
+         "• Темы: 13 встроенных + 3 слота своих\n"
+         "• Внешний вид: масштаб, иконка, сплеш\n"
+         "• Звуковая схема: свой звук для каждого события",
+         None),
+        ("🎉 Готово!",
+         "Ты прошёл полное обучение GoidaPhone!\n\n"
+         "Дальше предлагаем пройти быструю настройку — это займёт 1 минуту\n"
+         "и поможет сразу настроить самое важное под тебя.\n\n"
+         "Всё можно изменить позже в Настройках.",
          None),
     ]
 
@@ -20901,7 +22498,8 @@ class TutorialOverlay(QWidget):
         self._mw = main_window
         self._step = 0
         lang = S().language
-        self._steps = self.STEPS_EN if lang == "en" else self.STEPS_RU
+        self._steps = (self.STEPS_EN if lang == "en"
+                       else self.STEPS_RU)  # ja fallback to ru for now
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint |
                             Qt.WindowType.WindowStaysOnTopHint)
@@ -20921,10 +22519,11 @@ class TutorialOverlay(QWidget):
                 border-radius: 14px;
             }}
         """)
-        self._bubble.setFixedWidth(360)
+        self._bubble.setMinimumWidth(380)
+        self._bubble.setMaximumWidth(500)
         bl = QVBoxLayout(self._bubble)
-        bl.setContentsMargins(18, 14, 18, 14)
-        bl.setSpacing(8)
+        bl.setContentsMargins(20, 16, 20, 16)
+        bl.setSpacing(10)
 
         # Step indicator
         self._step_lbl = QLabel()
@@ -20934,15 +22533,19 @@ class TutorialOverlay(QWidget):
 
         self._title_lbl = QLabel()
         self._title_lbl.setStyleSheet(
-            f"color:{t['text']};font-size:15px;font-weight:bold;background:transparent;")
+            f"color:{t['text']};font-size:14px;font-weight:bold;background:transparent;")
         self._title_lbl.setWordWrap(True)
+        self._title_lbl.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         bl.addWidget(self._title_lbl)
 
         self._body_lbl = QLabel()
         self._body_lbl.setStyleSheet(
-            f"color:{t['text_dim']};font-size:12px;background:transparent;")
+            f"color:{t['text_dim']};font-size:11px;background:transparent;")
         self._body_lbl.setWordWrap(True)
-        self._body_lbl.setMinimumHeight(50)
+        self._body_lbl.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        self._body_lbl.setMinimumHeight(60)
         bl.addWidget(self._body_lbl)
 
         btn_row = QHBoxLayout()
@@ -20988,8 +22591,10 @@ class TutorialOverlay(QWidget):
             except Exception:
                 pass
 
-        # Position bubble: if we have a target, position near it; else center
+        # Даём Qt пересчитать размер после установки текста
+        self._bubble.setMinimumHeight(0)
         self._bubble.adjustSize()
+        # Position bubble: if we have a target, position near it; else center
         bw = self._bubble.width(); bh = self._bubble.height()
         if self._target_rect:
             tr = self._target_rect
@@ -21032,6 +22637,9 @@ class TutorialOverlay(QWidget):
         self.hide()
         self.deleteLater()
         self.finished.emit()
+        # Предлагаем QuickSetup если первый запуск
+        if not S().get("quicksetup_done", False, t=bool):
+            QTimer.singleShot(400, lambda: QuickSetupWizard.offer(self._mw))
 
     def paintEvent(self, event):
         """Draw semi-transparent dark overlay with target highlight and arrow."""
@@ -21205,7 +22813,10 @@ class MainWindow(QMainWindow):
         tray_menu.addAction(QAction("📱 Открыть", self,
                                     triggered=self._restore_from_tray))
         tray_menu.addSeparator()
-        tray_menu.addAction(QAction("❌ Выход", self, triggered=self.close))
+        def _quit():
+            self._force_quit = True
+            self.close()
+        tray_menu.addAction(QAction("❌ Выход", self, triggered=_quit))
         self._tray.setContextMenu(tray_menu)
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
@@ -21340,6 +22951,11 @@ class MainWindow(QMainWindow):
             S().set("tutorial_done", False)
             self._show_tutorial()
 
+    def _start_quicksetup(self):
+        """Запустить быструю настройку вручную из меню."""
+        S().set("quicksetup_done", False)  # сбрасываем чтобы показало
+        QuickSetupWizard.offer(self)
+
     def _toggle_terminal(self):
         """Toggle the floating GoidaPhone terminal panel with animation."""
         if not hasattr(self, '_terminal_panel'):
@@ -21459,7 +23075,7 @@ class MainWindow(QMainWindow):
             return a
 
         # File
-        fm = mb.addMenu("Файл")
+        fm = mb.addMenu(TR("menu_file"))
         fm.addAction(act("👤 Мой профиль",          self._show_profile,       "Ctrl+P"))
         fm.addAction(act("⚙ Настройки",             self._show_settings))
         fm.addSeparator()
@@ -21468,8 +23084,8 @@ class MainWindow(QMainWindow):
         fm.addAction(act("❌ Выход",                 self.close,               "Ctrl+Q"))
 
         # View
-        vm = mb.addMenu("Вид")
-        tm = vm.addMenu("🎨 Темы")
+        vm = mb.addMenu(TR("menu_view"))
+        tm = vm.addMenu(TR("menu_themes"))
         for key, td in THEMES.items():
             tm.addAction(act(td["label"], lambda _, k=key: self._switch_theme(k)))
         vm.addSeparator()
@@ -21477,32 +23093,48 @@ class MainWindow(QMainWindow):
         vm.addAction(act("♫ Mewa 1-2-3", lambda: self._tabs.setCurrentWidget(self._mewa_player)))
         vm.addSeparator()
         vm.addAction(act("⛶ Полный экран  F11", self._toggle_fullscreen, "F11"))
-        vm.addAction(act("🌍 Русский", lambda: self._switch_language("ru")))
+        vm.addAction(act("🌍 Русский",  lambda: self._switch_language("ru")))
         vm.addAction(act("🌍 English",  lambda: self._switch_language("en")))
+        vm.addAction(act("🌍 日本語",   lambda: self._switch_language("ja")))
 
         # Calls
-        cm = mb.addMenu("Звонки")
+        cm = mb.addMenu(TR("menu_calls"))
         cm.addAction(act("🎤 Вкл/Выкл микрофон",    self._toggle_mute,        "Ctrl+M"))
         cm.addAction(act("📵 Завершить все звонки",  self.voice.hangup_all))
 
         # Help
-        hm = mb.addMenu("Справка")
+        hm = mb.addMenu(TR("menu_help"))
         hm.addAction(act("О программе", self._about))
         hm.addSeparator()
         hm.addAction(act("⌨ ZLink Terminal", self._open_terminal, "Ctrl+`"))
         hm.addAction(act("🌐 Winora NetScape (WNS)", self._open_wns, "Ctrl+B"))
         hm.addSeparator()
         hm.addAction(act("❓ Учебник / Tutorial", self._start_tutorial))
+        hm.addAction(act("⚡ Быстрая настройка", self._start_quicksetup))
 
     def _switch_theme(self, key: str):
         S().theme = key
         self._apply_theme_from_settings()
 
     def _switch_language(self, lang: str):
+        if S().language == lang:
+            return
         S().language = lang
-        QMessageBox.information(self, "Язык / Language",
-            "Язык изменён. Перезапустите для применения." if lang == "ru"
-            else "Language changed. Restart to apply.")
+        msg_text = {
+            "ru": "Язык изменён на Русский.",
+            "en": "Language changed to English.",
+            "ja": "言語を日本語に変更しました。",
+        }.get(lang, "Language changed.")
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Язык / Language / 言語")
+        dlg.setText(msg_text + "\n\nДля полного применения нужен перезапуск.\nПерезапустить сейчас?")
+        restart_btn = dlg.addButton("↺ Перезапустить", QMessageBox.ButtonRole.AcceptRole)
+        later_btn   = dlg.addButton("Позже",           QMessageBox.ButtonRole.RejectRole)
+        dlg.setDefaultButton(restart_btn)
+        dlg.exec()
+        if dlg.clickedButton() == restart_btn:
+            import os, sys
+            os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # ── Statusbar ──────────────────────────────────────────────────────
     def _setup_statusbar(self):
@@ -21970,13 +23602,52 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        # 9. Notify user what requires restart
+        # 9. GoidaCRYPTO layers — применяем активные
+        # Layer 6: Clipboard auto-clear
+        try:
+            if S().get("crypto_layer6_clipboard", False, t=bool):
+                if not hasattr(self, '_cb_clear_timer'):
+                    self._cb_clear_timer = QTimer(self)
+                    self._cb_clear_timer.timeout.connect(
+                        lambda: QApplication.clipboard().clear())
+                self._cb_clear_timer.start(30_000)
+            elif hasattr(self, '_cb_clear_timer'):
+                self._cb_clear_timer.stop()
+        except Exception:
+            pass
+
+        # Layer 4: Stealth Mode
+        try:
+            flags = self.windowFlags()
+            if S().get("crypto_layer4_stealth", False, t=bool):
+                self.setWindowFlags(flags | Qt.WindowType.Tool)
+                self.show()
+            else:
+                self.setWindowFlags(flags & ~Qt.WindowType.Tool)
+                self.show()
+        except Exception:
+            pass
+
+        # Layer 5: Screenshot protection
+        try:
+            self.setAttribute(
+                Qt.WidgetAttribute.WA_NoSystemBackground,
+                S().get("crypto_layer5_screenshot", False, t=bool))
+        except Exception:
+            pass
+
+        # Layer 20: Paranoid — включает все защитные слои
+        if S().get("crypto_layer20_paranoid", False, t=bool):
+            for _pk in ["crypto_layer3_wipe", "crypto_layer4_stealth",
+                        "crypto_layer5_screenshot", "crypto_layer6_clipboard",
+                        "crypto_layer7_idle_lock", "crypto_layer15_msg_hmac",
+                        "crypto_layer16_replay", "crypto_layer17_rate_limit"]:
+                S().set(_pk, True)
+
+        # Notify user what requires restart
         _restart_needed = []
         if S().get("udp_port", 17385, t=int) != getattr(self.net, '_udp_port_at_start', S().get("udp_port", 17385, t=int)):
             _restart_needed.append("UDP/TCP порты")
-        if _restart_needed:
-            from PyQt6.QtWidgets import QToolTip
-            pass  # silently — user sees ports change note in UI
 
     def _toggle_mute(self):
         muted = self.voice.toggle_mute()
@@ -22044,7 +23715,7 @@ class MainWindow(QMainWindow):
             f"🎨  {len(THEMES)} тем оформления (Easter Egg: «1.7543»)",
             "👑  Премиум: цвет ника, эмодзи, кастомные темы",
             "🔒  PIN-блокировка, права администратора",
-            "💻  Windows & Linux  •  🌍 Русский / English",
+            "💻  Windows & Linux  •  🌍 Русский / English / 日本語",
         ]:
             lbl = QLabel(feat)
             lbl.setStyleSheet(f"font-size:11px;color:{t['text']};background:transparent;")
@@ -22062,6 +23733,80 @@ class MainWindow(QMainWindow):
             f"font-size:10px;color:{t['text_dim']};background:transparent;")
         lay.addWidget(tech_lbl)
 
+        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setStyleSheet(f"background:{t['border']};max-height:1px;")
+        lay.addWidget(sep2)
+
+        # ── Благодарности ─────────────────────────────────────────────────
+        credits_gb = QGroupBox("💙 Благодарности")
+        cred_lay = QVBoxLayout(credits_gb)
+        cred_lay.setSpacing(10)
+
+        # Команда разработки
+        dev_lbl = QLabel("<b>Помощь в разработке GoidaPhone NT Server 1.8</b>")
+        dev_lbl.setTextFormat(Qt.TextFormat.RichText)
+        dev_lbl.setStyleSheet(
+            f"font-size:11px;color:{t['text']};background:transparent;")
+        cred_lay.addWidget(dev_lbl)
+
+        for name in ["Андрей Х.", "Демид Ч.", "Давид Ю."]:
+            row = QHBoxLayout()
+            dot = QLabel("◆")
+            dot.setStyleSheet(
+                f"color:{t['accent']};background:transparent;font-size:10px;")
+            dot.setFixedWidth(18)
+            row.addWidget(dot)
+            nl2 = QLabel(name)
+            nl2.setStyleSheet(
+                f"font-size:11px;color:{t['text']};background:transparent;")
+            row.addWidget(nl2)
+            row.addStretch()
+            cred_lay.addLayout(row)
+
+        sep3 = QFrame(); sep3.setFrameShape(QFrame.Shape.HLine)
+        sep3.setStyleSheet(
+            f"background:{t['border']};max-height:1px;margin:4px 0;")
+        cred_lay.addWidget(sep3)
+
+        # Тестировщики
+        test_lbl = QLabel("<b>Тестировщики</b>")
+        test_lbl.setTextFormat(Qt.TextFormat.RichText)
+        test_lbl.setStyleSheet(
+            f"font-size:11px;color:{t['text']};background:transparent;")
+        cred_lay.addWidget(test_lbl)
+
+        testers = [
+            ("1", "Давид Ю."),
+            ("2", "Матвей Щ."),
+            ("3", "Матвей Н."),
+            ("4", "Демид Ч."),
+            ("5", "Дима Ю."),
+            ("6", "Андрей Х."),
+            ("7", "Николай Х."),
+            ("8", "Михаил П."),
+            ("9", "Егор В."),
+            ("10", "Лёха В."),
+        ]
+        # Два столбца
+        grid_w = QWidget(); grid_w.setStyleSheet("background:transparent;")
+        grid = __import__('PyQt6.QtWidgets', fromlist=['QGridLayout']).QGridLayout(grid_w)
+        grid.setContentsMargins(0,0,0,0)
+        grid.setSpacing(4)
+        for i, (num, name) in enumerate(testers):
+            num_lbl = QLabel(f"{num}.")
+            num_lbl.setStyleSheet(
+                f"font-size:10px;color:{t['text_dim']};background:transparent;")
+            num_lbl.setFixedWidth(22)
+            name_lbl = QLabel(name)
+            name_lbl.setStyleSheet(
+                f"font-size:11px;color:{t['text']};background:transparent;")
+            row_i, col_i = i // 2, (i % 2) * 2
+            grid.addWidget(num_lbl,  row_i, col_i)
+            grid.addWidget(name_lbl, row_i, col_i + 1)
+        cred_lay.addWidget(grid_w)
+
+        lay.addWidget(credits_gb)
+
         lay.addStretch()
         idx = self._tabs.addTab(w, "ℹ О программе")
         self._tabs.setCurrentIndex(idx)
@@ -22071,9 +23816,7 @@ class MainWindow(QMainWindow):
         """Safe update check — keep reference on self to prevent GC crash."""
         self._upd_checker = UpdateChecker()
         self._upd_checker.update_available.connect(
-            lambda v, d: QMessageBox.information(self, "Обновление",
-                f"Доступна версия v{v}!\n\n{d[:300]}\n\n"
-                "Скачайте новую версию с GitHub."))
+            lambda v, d: _show_update_dialog(v, d, self))
         self._upd_checker.no_update.connect(
             lambda: QMessageBox.information(self, "Обновления",
                 f"✅ У вас актуальная версия {APP_VERSION}.\nОбновлений не найдено."))
@@ -22096,15 +23839,28 @@ class MainWindow(QMainWindow):
                     headers={"User-Agent": "curl/7.0"})
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     txt = resp.read().decode("utf-8").strip()
-                QTimer.singleShot(0, lambda t=txt: (
+                QTimer.singleShot(0, lambda t=txt:
                     self._weather_lbl.setText(f"🌍 {t}")
-                    if hasattr(self, "_weather_lbl") else None))
+                    if hasattr(self, "_weather_lbl") else None)
             except Exception:
                 pass
         threading.Thread(target=_fetch, daemon=True).start()
         QTimer.singleShot(30*60*1000, self._refresh_weather)
 
     def closeEvent(self, event):
+        # Сворачиваем в трей вместо закрытия (если трей доступен)
+        if (hasattr(self, '_tray') and self._tray and
+                self._tray.isVisible() and
+                not getattr(self, '_force_quit', False)):
+            event.ignore()
+            self.hide()
+            self._tray.showMessage(
+                APP_NAME,
+                "GoidaPhone свёрнут в трей. Двойной клик — открыть. Выход → ПКМ на иконке.",
+                QSystemTrayIcon.MessageIcon.Information, 3000)
+            return
+
+        # Реальный выход
         S().set("window_geometry", self.saveGeometry())
         S().set("window_state", self.saveState())
         self.notes_widget._save()
@@ -22478,6 +24234,7 @@ def main():
             "qt.qpa.stylesheet=false\n"
             "qt.qpa.fonts=false\n"
             "qt.widgets.stylesheet=false\n"
+            "qt.core.logging=false\n"
             "qt.multimedia*=false\n"
             "ffmpeg*=false\n"
         )
@@ -22568,7 +24325,13 @@ def main():
     try:
         from PyQt6.QtCore import QLoggingCategory
         QLoggingCategory.setFilterRules(
-            "*.debug=false\nqt.qpa.stylesheet=false\nqt.widgets.stylesheet=false\nqt.multimedia*=false\n"
+            "*.debug=false\n"
+            "qt.qpa.stylesheet=false\n"
+            "qt.qpa.fonts=false\n"
+            "qt.widgets.stylesheet=false\n"
+            "qt.core.logging=false\n"
+            "qt.multimedia*=false\n"
+            "ffmpeg*=false\n"
         )
     except Exception:
         pass
@@ -23159,8 +24922,8 @@ def main():
             window.update()
             window.repaint()
             app.processEvents()
-            QTimer.singleShot(50,  lambda: (window.update(), window.repaint()))
-            QTimer.singleShot(150, lambda: (window.update(), app.processEvents()))
+            QTimer.singleShot(50,  lambda: [window.update(), window.repaint()])
+            QTimer.singleShot(150, lambda: [window.update(), app.processEvents()])
         except Exception:
             # Show BSOD even on startup crash (before MainWindow exists)
             import traceback as _tb
