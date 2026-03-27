@@ -7029,21 +7029,39 @@ class ChatDisplay(QScrollArea):
         self.update()
 
     def _anim_in(self, bubble, is_own):
-        """Smooth fade-in for new messages."""
+        """Плавное появление пузыря: fade-in + slide-up."""
         from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        # Fade-in
         eff = QGraphicsOpacityEffect(bubble)
         eff.setOpacity(0.0)
         bubble.setGraphicsEffect(eff)
         fade = QPropertyAnimation(eff, b"opacity", bubble)
-        fade.setDuration(220)
+        fade.setDuration(280)
         fade.setStartValue(0.0)
         fade.setEndValue(1.0)
-        fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        fade.setEasingCurve(QEasingCurve.Type.OutQuart)
+
+        # Slide-up через geometry
+        orig_pos = bubble.pos()
+        slide_offset = 18
+        bubble.move(orig_pos.x(), orig_pos.y() + slide_offset)
+        pos_anim = QPropertyAnimation(bubble, b"pos", bubble)
+        pos_anim.setDuration(300)
+        from PyQt6.QtCore import QPoint
+        pos_anim.setStartValue(QPoint(orig_pos.x(), orig_pos.y() + slide_offset))
+        pos_anim.setEndValue(orig_pos)
+        pos_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        group = QParallelAnimationGroup(bubble)
+        group.addAnimation(fade)
+        group.addAnimation(pos_anim)
+
         def _done():
             bubble.setGraphicsEffect(None)
+            bubble.move(orig_pos)
             bubble.update()
-        fade.finished.connect(_done)
-        fade.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+        group.finished.connect(_done)
+        group.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def add_system(self, text):
         entry = MessageEntry(text=text, ts=time.time(), is_system=True)
@@ -7167,18 +7185,20 @@ class ChatDisplay(QScrollArea):
                 self.add_system(m["text"])
             elif m.get("msg_type") == "poll":
                 # Восстанавливаем опрос из истории
-                poll_id  = m.get("poll_id", f"poll_{m.get('ts',0)}")
-                question = m.get("text", "?")
-                options  = m.get("poll_options", [])
-                votes    = m.get("poll_votes", {o: [] for o in options})
-                is_own   = m.get("is_own", False)
-                if not options:
-                    continue
-                # Восстанавливаем данные опроса
-                self._polls[poll_id] = {
-                    "question": question, "options": options,
-                    "votes": votes, "creator": m.get("sender", "")}
-                self._add_poll_bubble(poll_id, question, options, is_own=is_own)
+                try:
+                    poll_id  = m.get("poll_id", f"poll_{m.get('ts',0)}")
+                    question = m.get("text", "?")
+                    options  = m.get("poll_options") or []
+                    votes    = m.get("poll_votes") or {o: [] for o in options}
+                    is_own   = m.get("is_own", False)
+                    if not options:
+                        continue
+                    self._polls[poll_id] = {
+                        "question": question, "options": options,
+                        "votes": votes, "creator": m.get("sender", "")}
+                    self._add_poll_bubble(poll_id, question, options, is_own=is_own)
+                except Exception:
+                    continue  # пропускаем битые poll записи
             else:
                 # Restore image/video data from disk if stored as path
                 img_data = None
@@ -20160,96 +20180,228 @@ class GoidaTerminal(QWidget):
 # ═══════════════════════════════════════════════════════════════════════════
 class _BarVisualizer(QWidget):
     """
-    Визуализатор музыки — анимированные полосочки.
-    Работает на случайных данных когда трек играет (без доступа к аудио-буферу).
+    Визуализатор музыки.
+    Реальный FFT через PyAudio (pulse monitor) если доступен numpy.
+    Иначе — красивая реактивная псевдо-анимация.
     """
-    BAR_COUNT = 18
-    MIN_H     = 3
-    MAX_H     = 52
+    BAR_COUNT = 22
+    CHUNK     = 2048
+    RATE      = 44100
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(60)
-        self._playing = False
-        self._bars    = [self.MIN_H] * self.BAR_COUNT
-        self._targets = [self.MIN_H] * self.BAR_COUNT
-        self._color   = "#39FF14"
-        self._timer   = QTimer(self)
-        self._timer.setInterval(55)   # ~18 fps
+        self.setFixedHeight(64)
+        self.setMinimumWidth(100)
+        self._playing  = False
+        self._bars     = [1.0] * self.BAR_COUNT
+        self._peaks    = [1.0] * self.BAR_COUNT
+        self._peak_vel = [0.0] * self.BAR_COUNT
+        self._color    = "#39FF14"
+        self._stream   = None
+        self._pa       = None
+        self._fft_data = None
+        self._np       = None
+        self._use_real = False
+        self._phase    = 0.0  # для псевдо-анимации
+
+        # Пробуем загрузить numpy
+        try:
+            import numpy as _np
+            self._np = _np
+        except ImportError:
+            pass
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(33)  # 30fps
         self._timer.timeout.connect(self._tick)
         self._timer.start()
 
     def set_playing(self, playing: bool):
         self._playing = playing
-        if not playing:
-            self._targets = [self.MIN_H] * self.BAR_COUNT
+        if playing:
+            self._try_start_real()
+        else:
+            self._stop_stream()
 
     def set_color(self, color: str):
         self._color = color
+        self.update()
+
+    def _try_start_real(self):
+        """Пробуем открыть PyAudio monitor для реального FFT."""
+        if self._np is None or self._use_real:
+            return
+        try:
+            import pyaudio as _pa
+            if self._pa is None:
+                self._pa = _pa.PyAudio()
+            # Ищем pulse/pipewire monitor
+            dev_idx = None
+            n = self._pa.get_device_count()
+            for i in range(n):
+                try:
+                    info = self._pa.get_device_info_by_index(i)
+                    name = info.get('name', '').lower()
+                    max_in = int(info.get('maxInputChannels', 0))
+                    if max_in > 0 and ('monitor' in name or 'pulse' in name):
+                        dev_idx = i
+                        break
+                except Exception:
+                    continue
+
+            if dev_idx is None:
+                return  # нет монитора — используем псевдо
+
+            self._stream = self._pa.open(
+                format=_pa.paFloat32,
+                channels=1,
+                rate=self.RATE,
+                input=True,
+                input_device_index=dev_idx,
+                frames_per_buffer=self.CHUNK,
+                stream_callback=self._pa_callback,
+            )
+            self._stream.start_stream()
+            self._use_real = True
+        except Exception:
+            self._use_real = False
+            self._stream = None
+
+    def _pa_callback(self, in_data, frame_count, time_info, status):
+        try:
+            np = self._np
+            import pyaudio as _pa
+            samples = np.frombuffer(in_data, dtype=np.float32).copy()
+            win     = np.hanning(len(samples))
+            fft     = np.abs(np.fft.rfft(samples * win, n=self.CHUNK))
+            fft     = fft[:self.CHUNK // 2]
+            n_bins  = len(fft)
+            n_bars  = self.BAR_COUNT
+            # Логарифмические частотные полосы
+            bars = []
+            lo_hz, hi_hz = 40, 18000
+            for i in range(n_bars):
+                f_lo = lo_hz * ((hi_hz / lo_hz) ** (i / n_bars))
+                f_hi = lo_hz * ((hi_hz / lo_hz) ** ((i + 1) / n_bars))
+                b_lo = max(0, int(f_lo / (self.RATE / 2) * n_bins))
+                b_hi = max(b_lo+1, min(n_bins, int(f_hi / (self.RATE / 2) * n_bins)))
+                val  = float(np.mean(fft[b_lo:b_hi])) if b_hi > b_lo else 0.0
+                bars.append(val)
+            # Нормализация с защитой от тишины
+            mx = max(bars) if max(bars) > 1e-6 else 1.0
+            self._fft_data = [min(60.0, (v / mx) ** 0.6 * 60.0) for v in bars]
+            return (None, _pa.paContinue)
+        except Exception:
+            import pyaudio as _pa
+            return (None, _pa.paContinue)
+
+    def _stop_stream(self):
+        if self._stream:
+            try:
+                self._stream.stop_stream()
+                self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
+        self._use_real = False
+        self._fft_data = None
 
     def _tick(self):
-        import random as _r
-        if self._playing:
-            # Генерируем случайные мишени с перевесом в сторону текущего значения
+        import math as _m, random as _r
+        MAX_H = 60.0
+        MIN_H = 1.0
+
+        if self._playing and self._use_real and self._fft_data:
+            targets = self._fft_data[:]
+        elif self._playing:
+            # Красивая псевдо-анимация — синусоидальные волны
+            self._phase += 0.18
+            targets = []
             for i in range(self.BAR_COUNT):
-                if _r.random() < 0.3:
-                    # Новая цель: акцент на средние частоты (треугольная форма)
-                    mid = self.BAR_COUNT // 2
-                    dist = abs(i - mid)
-                    max_for_band = max(self.MIN_H + 4,
-                                      int(self.MAX_H * (1.0 - dist / (self.BAR_COUNT * 0.7))))
-                    self._targets[i] = _r.randint(self.MIN_H, max_for_band)
-        # Плавное движение к цели
-        changed = False
+                # Несколько синусоид с разными частотами
+                v  = (_m.sin(self._phase + i * 0.4) * 0.5 + 0.5)
+                v += (_m.sin(self._phase * 1.7 + i * 0.7) * 0.3 + 0.3)
+                v += (_m.sin(self._phase * 0.5 + i * 1.1) * 0.2 + 0.2) * _r.uniform(0.7, 1.3)
+                v  = max(0.05, min(1.0, v / 1.0))
+                # Акцент на средние частоты
+                mid_boost = 1.0 - abs(i - self.BAR_COUNT/2) / (self.BAR_COUNT * 0.7)
+                v = v * (0.4 + 0.6 * mid_boost)
+                targets.append(MIN_H + v * (MAX_H - MIN_H))
+        else:
+            targets = [MIN_H] * self.BAR_COUNT
+
+        # Сглаживание: быстрый attack, медленный decay
         for i in range(self.BAR_COUNT):
-            diff = self._targets[i] - self._bars[i]
-            if diff != 0:
-                step = max(1, abs(diff) // 3)
-                self._bars[i] += step if diff > 0 else -step
-                self._bars[i] = max(self.MIN_H, min(self.MAX_H, self._bars[i]))
-                changed = True
-        if changed:
-            self.update()
+            t = targets[i]
+            if t > self._bars[i]:
+                self._bars[i] += (t - self._bars[i]) * 0.55  # attack
+            else:
+                self._bars[i] += (t - self._bars[i]) * 0.12  # decay
+            self._bars[i] = max(MIN_H, min(MAX_H, self._bars[i]))
+
+            # Пики
+            if self._bars[i] >= self._peaks[i]:
+                self._peaks[i]    = self._bars[i]
+                self._peak_vel[i] = 0.0
+            else:
+                self._peak_vel[i] = min(self._peak_vel[i] + 0.35, 6.0)
+                self._peaks[i]    = max(self._bars[i], self._peaks[i] - self._peak_vel[i])
+
+        self.update()
 
     def paintEvent(self, event):
-        from PyQt6.QtGui import QPainter, QColor, QLinearGradient, QBrush
+        from PyQt6.QtGui import (QPainter, QColor, QLinearGradient,
+                                  QBrush, QPen)
+        from PyQt6.QtCore import QRectF, QPointF
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        w = self.width()
-        h = self.height()
-        n = self.BAR_COUNT
+        w  = self.width()
+        h  = self.height()
+        n  = self.BAR_COUNT
         gap = 2
-        bar_w = max(2, (w - gap * (n - 1)) // n)
+        bar_w = max(3, (w - gap * (n - 1)) // n)
 
-        base_color = QColor(self._color)
-        dim_color  = QColor(self._color)
-        dim_color.setAlphaF(0.25)
+        bc = QColor(self._color)
 
-        for i, bar_h in enumerate(self._bars):
-            x = i * (bar_w + gap)
-            bar_h = max(self.MIN_H, min(h - 2, bar_h))
-            y = h - bar_h
+        for i in range(n):
+            x      = i * (bar_w + gap)
+            bar_h  = max(2, int(self._bars[i]))
+            y      = h - bar_h
 
-            # Градиент снизу вверх
-            grad = QLinearGradient(x, y, x, h)
-            grad.setColorAt(0.0, base_color)
-            grad.setColorAt(1.0, dim_color)
+            # Цвет полоски: зелёный снизу → акцент сверху
+            top_c = QColor(bc)
+            bot_c = QColor(bc)
+            bot_c.setAlphaF(0.35)
+
+            grad = QLinearGradient(QPointF(x, y), QPointF(x, h))
+            grad.setColorAt(0.0, top_c)
+            grad.setColorAt(1.0, bot_c)
 
             p.setBrush(QBrush(grad))
             p.setPen(Qt.PenStyle.NoPen)
-
-            # Скруглённый верх
-            from PyQt6.QtCore import QRectF
             r = min(bar_w // 2, 3)
             p.drawRoundedRect(QRectF(x, y, bar_w, bar_h), r, r)
 
+            # Пиковая метка
+            pk = int(self._peaks[i])
+            if pk > bar_h + 3:
+                pc = QColor(bc)
+                pc.setAlphaF(0.85)
+                p.setPen(QPen(pc, 1.5))
+                py = h - pk
+                p.drawLine(QPointF(x + 1, py), QPointF(x + bar_w - 1, py))
+
         p.end()
 
+    def closeEvent(self, event):
+        self._stop_stream()
+        if self._pa:
+            try: self._pa.terminate()
+            except Exception: pass
+        super().closeEvent(event)
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  MEWA 1-2-3  —  GoidaPhone built-in media player
-# ═══════════════════════════════════════════════════════════════════════════
+
 class _FSKeyFilter(QObject):
     """Event filter to exit fullscreen on ESC/F/F11."""
     def __init__(self, parent, handler):
@@ -20636,8 +20788,10 @@ class MewaPlayer(QWidget):
             ("🎤 Pop Hits",          "http://top40.stream.laut.fm/top40"),
             ("🇩🇪 Antenne Bayern",   "http://mp3channels.webradio.antenne.de/antenne"),
             # ── Русское ──────────────────────────────────────────────────
-            ("🇷🇺 Europa Plus",      "https://ep128.hostingradio.ru/ep128.mp3"),
+            ("🇷🇺 Европа Плюс",     "https://online.radiorecord.ru:8102/ep-320"),
+            ("🛣 Радио Дорога",      "https://doroga.hostingradio.ru/doroga128.mp3"),
             ("📻 Радио Jazz",        "https://radiojazzfm.hostingradio.ru/jazz128.mp3"),
+            ("🎙 Радио Рекорд",      "https://online.radiorecord.ru:8102/rr-320"),
             # ── World / Other ────────────────────────────────────────────
             ("🌍 Radio Paradise",    "http://stream.radioparadise.com/aac-320"),
             ("🎷 Jazz 24",           "http://live.amperwave.net/direct/ppm-jazz24aac-ibc1"),
@@ -24502,28 +24656,49 @@ def main():
             print(f"{GRN}✓ Имя: {BOLD}{S().username}{RST}\n")
 
             _help_text = f"""
-{PURP}{'─'*50}{RST}
-{BOLD}КОМАНДЫ GoidaPhone CMD{RST}
+{PURP}{'─'*56}{RST}
+{BOLD}  GoidaPhone CMD Mode v{APP_VERSION}{RST}  {DIM}Winora Company{RST}
+{PURP}{'─'*56}{RST}
 
-{CYAN}/help{RST}             — эта справка
-{CYAN}/quit{RST} ({CYAN}/exit{RST})   — выйти
-{CYAN}/peers{RST}            — список онлайн-пользователей
-{CYAN}/msg <ip> <текст>{RST} — личное сообщение
-{CYAN}/pub <текст>{RST}      — сообщение в публичный чат
-{CYAN}/ping <ip>{RST}        — пинговать пользователя
-{CYAN}/call <ip>{RST}        — позвонить
-{CYAN}/hangup <ip>{RST}      — завершить звонок
-{CYAN}/answer <ip>{RST}      — принять входящий звонок
-{CYAN}/reject <ip>{RST}      — отклонить входящий звонок
-{CYAN}/groups{RST}           — список групп
-{CYAN}/history [ip]{RST}     — история сообщений (публичная или с пользователем)
-{CYAN}/me{RST}               — информация о себе (IP, имя, версия)
-{CYAN}/clear{RST}            — очистить экран
-{CYAN}/status <текст>{RST}   — установить статус
-{CYAN}/mute{RST}             — заглушить/включить микрофон (во время звонка)
+{BOLD}{CYAN}ОСНОВНЫЕ{RST}
+  {CYAN}/help{RST}                — эта справка
+  {CYAN}/quit{RST} · {CYAN}/exit{RST}       — выйти
+  {CYAN}/clear{RST}               — очистить экран
+  {CYAN}/me{RST}                  — информация о себе
 
-{DIM}Просто введите текст без / — отправляется в публичный чат{RST}
-{PURP}{'─'*50}{RST}"""
+{BOLD}{CYAN}СЕТЬ{RST}
+  {CYAN}/peers{RST}               — онлайн-пользователи
+  {CYAN}/ping <ip>{RST}           — пинговать
+  {CYAN}/whois <ip>{RST}          — подробно о пользователе
+  {CYAN}/groups{RST}              — список групп
+
+{BOLD}{CYAN}ЧАТ{RST}
+  {CYAN}/pub <текст>{RST}         — публичный чат
+  {CYAN}/msg <ip> <текст>{RST}    — личное сообщение
+  {CYAN}/gmsg <gid> <текст>{RST}  — сообщение в группу
+  {CYAN}/history [ip]{RST}        — история (публичная или с ip)
+
+{BOLD}{CYAN}ЗВОНКИ{RST}
+  {CYAN}/call <ip>{RST}           — позвонить
+  {CYAN}/hangup [ip]{RST}         — завершить звонок
+  {CYAN}/answer <ip>{RST}         — принять входящий
+  {CYAN}/reject <ip>{RST}         — отклонить входящий
+  {CYAN}/mute{RST}                — мут/размут микрофона
+
+{BOLD}{CYAN}ПРОФИЛЬ{RST}
+  {CYAN}/status <текст>{RST}      — установить статус
+  {CYAN}/nick <имя>{RST}          — сменить ник
+  {CYAN}/theme <тема>{RST}        — сменить тему
+  {CYAN}/themes{RST}              — список тем
+
+{BOLD}{CYAN}СИСТЕМА{RST}
+  {CYAN}/stats{RST}               — статистика сети
+  {CYAN}/crypto{RST}              — статус шифрования
+  {CYAN}/uptime{RST}              — время работы
+  {CYAN}/log [N]{RST}             — последние N строк лога
+
+{DIM}Просто текст без / → публичный чат{RST}
+{PURP}{'─'*56}{RST}"""
 
             voice = VoiceCallManager(net)
 
@@ -24610,6 +24785,86 @@ def main():
                         ip_arg = parts[1]
                         net.send_call_reject(ip_arg)
                         print(f"  {DIM}Отклонён звонок от {ip_arg}{RST}")
+
+                    elif cmd == "/whois" and len(parts) >= 2:
+                        ip_arg = parts[1]
+                        p = net.peers.get(ip_arg, {})
+                        if p:
+                            print(f"  {BOLD}{p.get('username','?')}{RST} @ {ip_arg}")
+                            print(f"  Статус:   {p.get('status','онлайн')}")
+                            print(f"  Premium:  {'✦ да' if p.get('premium') else 'нет'}")
+                            print(f"  Версия:   {p.get('version','?')}")
+                            print(f"  E2E:      {'✓' if p.get('e2e') else '✗'}")
+                        else:
+                            print(f"  {RED}Пользователь {ip_arg} не найден{RST}")
+
+                    elif cmd == "/nick" and len(parts) >= 2:
+                        new_nick = parts[1]
+                        S().username = new_nick
+                        net._broadcast()
+                        print(f"  {GRN}✓ Ник изменён: {BOLD}{new_nick}{RST}")
+
+                    elif cmd == "/theme" and len(parts) >= 2:
+                        theme_name = parts[1]
+                        if theme_name in THEMES:
+                            S().set("theme", theme_name)
+                            print(f"  {GRN}✓ Тема: {theme_name}{RST}  {DIM}(перезапусти для GUI){RST}")
+                        else:
+                            print(f"  {RED}Тема не найдена. /themes — список{RST}")
+
+                    elif cmd == "/themes":
+                        print(f"  {CYAN}Доступные темы:{RST}")
+                        for name, td in THEMES.items():
+                            cur = " ◄ текущая" if name == S().theme else ""
+                            print(f"  {DIM}•{RST} {name:<16} {td.get('label','')}{GRN}{cur}{RST}")
+
+                    elif cmd == "/gmsg" and len(parts) >= 3:
+                        gid = parts[1]; text = parts[2]
+                        g = GROUPS.get(gid)
+                        if g:
+                            for ip in g.get('members', []):
+                                if ip != get_local_ip():
+                                    net.send_udp({"type": MSG_CHAT, "username": S().username,
+                                                  "text": text, "gid": gid,
+                                                  "ts": time.time()}, ip)
+                            print(f"  {DIM}→ группа {g.get('name','?')}: {text}{RST}")
+                        else:
+                            print(f"  {RED}Группа {gid} не найдена{RST}")
+
+                    elif cmd == "/stats":
+                        print(f"  {CYAN}Статистика{RST}")
+                        print(f"  Пользователей онлайн:  {len(net.peers)}")
+                        print(f"  IP:                    {get_local_ip()}")
+                        print(f"  Протокол:              v{PROTOCOL_VERSION}")
+                        print(f"  Тема:                  {S().theme}")
+                        print(f"  Премиум:               {'да' if S().premium else 'нет'}")
+
+                    elif cmd == "/crypto":
+                        print(f"  {CYAN}Шифрование{RST}")
+                        print(f"  Алгоритм:   AES-256-GCM + X25519 ECDH + Ed25519")
+                        print(f"  Протокол:   v{PROTOCOL_VERSION}")
+                        enc = S().encryption_enabled
+                        print(f"  Статус:     {'✓ включено' if enc else '✗ выключено'}")
+                        for ip, p in net.peers.items():
+                            e2e = f"{GRN}[E2E]{RST}" if p.get('e2e') else f"{RED}[plain]{RST}"
+                            print(f"  {p.get('username','?'):<16} {e2e}")
+
+                    elif cmd == "/uptime":
+                        import time as _tu
+                        up = int(_tu.time() - _start_time) if '_start_time' in dir() else 0
+                        h, m2 = divmod(up // 60, 60)
+                        s2 = up % 60
+                        print(f"  Uptime: {h:02d}:{m2:02d}:{s2:02d}")
+
+                    elif cmd == "/log":
+                        n_lines = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 20
+                        log_file = DATA_DIR / "goidaphone.log"
+                        if log_file.exists():
+                            lines_list = log_file.read_text(encoding='utf-8', errors='replace').splitlines()
+                            for ln in lines_list[-n_lines:]:
+                                print(f"  {DIM}{ln}{RST}")
+                        else:
+                            print(f"  {DIM}Лог-файл не найден{RST}")
 
                     elif cmd == "/mute":
                         muted = voice.toggle_mute()
