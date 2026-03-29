@@ -19,6 +19,13 @@ class _QtStderrFilter:
         "qt.qpa.stylesheet:",
         "qt.widgets.stylesheet:",
         "Using Qt multimedia with FFmpeg",
+        "qt.multimedia*=false",
+        "qt.widgets.stylesheet=false",
+        "qt.qpa.stylesheet=false",
+        "qt.qpa.fonts=false",
+        "qt.core.logging=false",
+        "*.debug=false",
+        "ffmpeg*=false",
     )
     def __init__(self, wrapped):
         self._w = wrapped
@@ -58,13 +65,13 @@ _sys_early.stderr = _QtStderrFilter(_sys_early.stderr)
 
 # QT_LOGGING_RULES — одна строка без переносов (Qt 6 требует \n как разделитель)
 _os_early.environ["QT_LOGGING_RULES"] = (
-    "*.debug=false\n"
-    "qt.qpa.stylesheet=false\n"
-    "qt.qpa.fonts=false\n"
-    "qt.widgets.stylesheet=false\n"
-    "qt.core.logging=false\n"
-    "qt.multimedia*=false\n"
-    "ffmpeg*=false\n"
+    "*.debug=false;"
+    "qt.qpa.stylesheet=false;"
+    "qt.qpa.fonts=false;"
+    "qt.widgets.stylesheet=false;"
+    "qt.core.logging=false;"
+    "qt.multimedia*=false;"
+    "ffmpeg*=false"
 )
 # ─────────────────────────────────────────────────────────────────────────────
 """
@@ -1183,7 +1190,7 @@ def _open_link(url: str, parent=None):
     # Ask
     t = get_theme(S().theme)
     dlg = QDialog(parent)
-    dlg.setWindowTitle("Открыть ссылку")
+    dlg.setWindowTitle(TR("open_link"))
     dlg.setFixedWidth(420)
     dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
     vl = QVBoxLayout(dlg)
@@ -1197,15 +1204,15 @@ def _open_link(url: str, parent=None):
     url_lbl.setWordWrap(True)
     vl.addWidget(url_lbl)
 
-    q = QLabel("Где открыть?")
+    q = QLabel(TR("where_open"))
     q.setStyleSheet(
         f"font-size:13px;font-weight:bold;color:{t['text']};background:transparent;")
     vl.addWidget(q)
 
     btn_row = QHBoxLayout(); btn_row.setSpacing(8)
-    wns_btn = QPushButton("🌐 WNS (встроенный)")
+    wns_btn = QPushButton(TR("browser_builtin"))
     wns_btn.setObjectName("accent_btn"); wns_btn.setFixedHeight(36)
-    sys_btn = QPushButton("🖥 Браузер по умолчанию")
+    sys_btn = QPushButton(TR("browser_system"))
     sys_btn.setFixedHeight(36)
     sys_btn.setStyleSheet(
         f"QPushButton{{background:{t['btn_bg']};color:{t['text']};"
@@ -1261,7 +1268,7 @@ def _open_media_smart(path: str, parent=None):
     from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QCheckBox
     t = get_theme(S().theme)
     dlg = QDialog(parent)
-    dlg.setWindowTitle("Открыть медиафайл")
+    dlg.setWindowTitle(TR("open_media"))
     dlg.setFixedSize(380, 210)
     dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
     vl = QVBoxLayout(dlg)
@@ -1284,9 +1291,9 @@ def _open_media_smart(path: str, parent=None):
 
     btn_row = QHBoxLayout(); btn_row.setSpacing(10)
 
-    btn_mewa = QPushButton("🎵 Mewa (встроенный)")
+    btn_mewa = QPushButton(TR("player_builtin"))
     btn_mewa.setObjectName("accent_btn"); btn_mewa.setFixedHeight(34)
-    btn_sys  = QPushButton("📂 Системный плеер")
+    btn_sys  = QPushButton(TR("player_system"))
     btn_sys.setFixedHeight(34)
     btn_sys.setStyleSheet(
         f"QPushButton{{background:{t['btn_bg']};color:{t['text']};"
@@ -2433,7 +2440,10 @@ QWidget {{
     font-size: 9pt;
 }}
 QMainWindow, QDialog {{
-    background-color: {t['bg']};
+    background-color: {t.get('_bg_gradient', t['bg'])};
+}}
+QMainWindow > QWidget#central_widget {{
+    background-color: {t.get('_bg_gradient', t['bg'])};
 }}
 
 /* ── Buttons ── */
@@ -2888,16 +2898,16 @@ _STRINGS_RU = {
     "stickers":             "Стикеры",
     "typing":               "печатает...",
     "you":                  "Вы",
-    "call_started":         "Звонок начат",
-    "call_ended":           "Звонок завершён",
-    "active_call":          "📞 Активный звонок",
+    "call_started":         "通話開始",
+    "call_ended":           "通話終了",
+    "active_call":          "📞 通話中",
     "mute_mic":             "🎤 Микрофон",
-    "muted":                "🔇 Заглушён",
+    "muted":                "🔇 ミュート中",
     # Users panel
     "users":                "👥 Пользователи",
     "groups":               "📂 Группы",
-    "search":               "🔍 Поиск...",
-    "create_group":         "➕ Создать группу",
+    "search":               _L("🔍 Поиск...", "🔍 Search...", "🔍 検索..."),
+    "create_group":         _L("➕ Создать группу", "➕ Create group", "➕ グループ作成"),
     "new_group":            "Новая группа",
     "group_name":           "Название группы:",
     "group_created":        "Группа создана.",
@@ -2911,10 +2921,10 @@ _STRINGS_RU = {
     # Messages
     "msg_file":             "📎 Файл",
     "msg_image":            "🖼 Изображение",
-    "msg_edit_hint":        "(изменено)",
-    "msg_forwarded":        "↪ Переслано",
+    "msg_edit_hint":        "(編集済)",
+    "msg_forwarded":        "↪ 転送",
     "msg_reaction_add":     "Добавить реакцию",
-    "msg_copy":             "📋 Копировать",
+    "msg_copy":             _L("📋 Копировать", "📋 Copy", "📋 コピー"),
     "msg_edit":             "✏ Редактировать",
     "msg_delete":           "🗑 Удалить",
     "msg_forward":          "↪ Переслать",
@@ -2934,9 +2944,9 @@ _STRINGS_RU = {
     "tab_data":             "💾 Данные",
     "tab_specialist":       "🔧 Для специалистов",
     "tab_language":         "🌍 Язык",
-    "save":                 "💾 Сохранить",
-    "close":                "Закрыть",
-    "cancel":               "Отмена",
+    "save":                 _L("💾 Сохранить", "💾 Save", "💾 保存"),
+    "close":                _L("Закрыть", "Close", "閉じる"),
+    "cancel":               _L("Отмена", "Cancel", "キャンセル"),
     "yes":                  "Да",
     "no":                   "Нет",
     "ok":                   "OK",
@@ -2982,10 +2992,10 @@ _STRINGS_RU = {
     "cmd_ping":             "Pong!",
     "cmd_unknown":          "Неизвестная команда. Введите /help для списка команд.",
     # Status
-    "searching":            "🔍 Поиск пользователей...",
-    "no_calls":             "📞 Нет звонков",
-    "mic_on":               "🎤 Вкл",
-    "mic_off":              "🔇 Выкл",
+    "searching":            "🔍 ユーザーを検索中...",
+    "no_calls":             "📞 通話なし",
+    "mic_on":               "🎤 オン",
+    "mic_off":              "🔇 オフ",
     "premium_label":        "👑 Премиум",
     # Меню
     "menu_file":            "Файл",
@@ -2993,26 +3003,188 @@ _STRINGS_RU = {
     "menu_themes":          "🎨 Темы",
     "menu_calls":           "Звонки",
     "menu_help":            "Справка",
+    "open_link":                   "リンクを開く",
+    "where_open":                  "どこで開く?",
+    "browser_builtin":             "🌐 WNS (内蔵)",
+    "browser_system":              "🖥 デフォルトブラウザ",
+    "open_media":                  "メディアを開く",
+    "player_builtin":              "🎵 Mewa (内蔵)",
+    "player_system":               "📂 システムプレーヤー",
+    "update_platform":             "プラットフォームを選択:",
+    "update_release_page":         "🌐 Открыть страницу релиза",
+    "btn_later":                   "後で",
+    "launcher_choose":             "起動モードを選択",
+    "launcher_hint":               "← → стрелки  •  Enter запуск",
+    "launcher_run":                "起動  ▶",
+    "launcher_help":               "❓ ヘルプ",
+    "btn_close_lbl":               _L("Закрыть", "Close", "閉じる"),
+    "loading":                     "Загрузка",
+    "online_since":                "🕐 Онлайн с",
+    "premium_user":                "👑 プレミアムユーザー",
+    "group_invite_card":           "📂 グループ招待",
+    "already_in_group":            "✅ 既にグループにいます",
+    "btn_join":                    "👋  参加",
+    "joined_group":                "✅ 参加しました!",
+    "img_hint":                    "クリックで表示 · 右クリック保存",
+    "video_hint":                  "クリックで再生",
+    "scroll_hint":                 "Скролл — масштаб  •  ЛКМ — перетащить",
+    "new_messages":                "↓ 新着",
+    "reply_cancelled":             "Ответ отменён",
+    "call_floating":               "📞 通話中",
+    "call_no_peer":                "Нет активного пира",
+    "call_muted":                  "🔇 ミュート中",
+    "call_unmuted":                "🎤 Микрофон",
+    "settings_restart":            "Для применения нужен перезапуск",
+    "theme_changed":               "テーマ変更",
+    "theme_back":                  "← 元に戻す",
+    "theme_restart":               "↺ 再起動",
+    "file_received_msg":           "файл получен",
+    "save_file":                   _L("💾 Сохранить", "💾 Save", "💾 保存"),
+    "open_file":                   "開く",
+    "history_empty":               "История пуста",
+    "no_messages":                 "Нет сообщений",
+    "quicksetup_title":            "⚡ クイック設定",
+    "quicksetup_q1":               "Как тебя зовут?",
+    "quicksetup_q2":               "Выбери цвет ника",
+    "quicksetup_q3":               "Выбери тему оформления",
+    "quicksetup_q4":               "Включить звуки?",
+    "quicksetup_q5":               "Сохранять историю?",
+    "quicksetup_q6":               "Показывать сплеш при запуске?",
+    "quicksetup_done":             "Всё настроено! 🎉",
+    "tutorial_skip":               "✕ スキップ",
+    "tutorial_next":               "Далее →",
+    "tutorial_finish":             "完了 ✓",
+    "tutorial_back":               "← Назад",
+    "connecting":                  "接続中...",
+    "connected":                   "接続済み",
+    "disconnected":                "切断",
+    "network_error_short":         "Ошибка сети",
     "tab_appearance":          "🖼 Внешний вид",
     "tab_security":            "🔒 Блокировка",
     "tab_privacy":             "🛡 Приватность",
     "tab_calls":               "📞 Звонки",
     "tab_sounds":              "🔔 Звуки",
-    "btn_save":                "💾 Сохранить",
-    "btn_close":               "Закрыть",
-    "btn_cancel":              "Отмена",
+    "btn_save":                _L("💾 Сохранить", "💾 Save", "💾 保存"),
+    "btn_close":               _L("Закрыть", "Close", "閉じる"),
+    "btn_cancel":              _L("Отмена", "Cancel", "キャンセル"),
     "lbl_online_users":        "Пользователи онлайн",
     "no_users":                "Нет пользователей в сети",
     "incoming_call_from":      "Входящий звонок от",
-    "call_ended_msg":          "Звонок завершён",
-    "call_started_msg":        "Звонок начат",
+    "call_ended_msg":          "通話終了",
+    "call_started_msg":        "通話開始",
     "msg_deleted":             "Сообщение удалено",
     "msg_edited":              "изменено",
     "file_received":           "Файл получен",
     "image_received":          "Изображение получено",
     "tab_users":            "👥 Пользователи",
     "tab_groups":           "📂 Группы",
-    "tab_chat_pub":         "💬 Чат",
+    "tab_chat_pub":         "💬 Чат",    "open_with_what":              "Чем открыть медиафайл?",
+    "help_title":                  "Справка — GoidaPhone",
+    "help_modes_title":            "📖  Справка по режимам запуска",
+    "splash_loading":              "Загрузка",
+    "scroll_zoom_hint":            "Скролл — масштаб  •  ЛКМ перетащить",
+    "btn_view":                    "🔍 Открыть",
+    "btn_play":                    "▶ Воспроизвести",
+    "note_saved":                  "Заметка сохранена",
+    "note_placeholder":            "Напишите заметку...",
+    "search_msgs":                 "Поиск сообщений...",
+    "pin_enter":                   "Введите PIN",
+    "pin_wrong":                   "Неверный PIN",
+    "sticker_label":               "Стикер",
+    "edited_label":                "изменено",
+    "forwarded_label":             "Переслано",
+    "update_available_h":          "🚀 Доступно обновление!",
+    "launcher_arrows":             "← → стрелки  •  Enter запуск",
+    "premium_user_lbl":            "👑 Премиум пользователь",
+    "goidaid_active":              "GoidaID режим активен",
+    "_auto_000": "Запомнить выбор (изменить в Настройки → Приватность)",
+    "_auto_001": "Запомнить мой выбор (можно сменить в Настройках)",
+    "_auto_002": "Запомнить мой выбор",
+    "_auto_003": _L("Закрыть", "Close", "閉じる"),
+    "_auto_004": _L("Отмена", "Cancel", "キャンセル"),
+    "_auto_005": "GoidaPhone v{ver} доступна!",
+    "_auto_006": _L("🔍 Поиск...", "🔍 Search...", "🔍 検索..."),
+    "_auto_007": "Онлайн: 0",
+    "_auto_008": "Онлайн: {count}",
+    "_auto_009": _L("➕ Создать группу", "➕ Create group", "➕ グループ作成"),
+    "_auto_010": _L("⭐ Избранное", "⭐ Favorites", "⭐ お気に入り"),
+    "_auto_011": "Отправить приглашение",
+    "_auto_012": "Куда отправить приглашение в «{g.get('name','?')}»?",
+    "_auto_013": _L("📨 Отправить", "📨 Send", "📨 送信"),
+    "_auto_014": "Аватар группы",
+    "_auto_015": "<b>Аватар группы</b>",
+    "_auto_016": _L("📷 Изменить аватар", "📷 Change avatar", "📷 アバター変更"),
+    "_auto_017": _L("Название:", "Name:", "名前:"),
+    "_auto_018": _L("Название группы", "Group name", "グループ名"),
+    "_auto_019": _L("✏ Переименовать", "✏ Rename", "✏ 名前変更"),
+    "_auto_020": _L("Участники:", "Members:", "メンバー:"),
+    "_auto_021": _L("🚫 Удалить участника", "🚫 Remove member", "🚫 メンバー削除"),
+    "_auto_022": _L("➕ Пригласить пользователя", "➕ Invite user", "➕ ユーザー招待"),
+    "_auto_023": _L("Ссылка-приглашение:", "Invite link:", "招待リンク:"),
+    "_auto_024": _L("📋 Копировать", "📋 Copy", "📋 コピー"),
+    "_auto_025": _L("🚪 Выйти", "🚪 Leave", "🚪 退出"),
+    "_auto_026": _L("🗑 Удалить группу", "🗑 Delete group", "🗑 グループ削除"),
+    "_auto_027": "Поиск по сообщениям... (Enter — следующее)",
+    "_auto_028": _L("🎭 Стикеры", "🎭 Stickers", "🎭 スタンプ"),
+    "_auto_029": _L("⚙ Паки", "⚙ Packs", "⚙ パック"),
+    "_auto_030": "Управление паками стикеров",
+    "_auto_031": "Стикеры",
+    "_auto_032": _L("Не найдено", "Not found", "見つかりません"),
+    "_auto_033": _L("🔓 Незашифровано", "🔓 Unencrypted", "🔓 暗号化なし"),
+    "_auto_034": "{username} печатает...",
+    "_auto_035": "Отменить вызов",
+    "_auto_036": "Позвонить",
+    "_auto_037": "Завершить звонок",
+    "_auto_038": _L("(нет паков — добавьте в ⚙)", "(no packs — add in ⚙)", "(パックなし — ⚙で追加)"),
+    "_auto_039": _L("Нет стикеров. Добавьте пак через ⚙ Паки", "No stickers. Add a pack via ⚙", "スタンプなし"),
+    "_auto_040": _L("📝 Совместные заметки", "📝 Shared notes (real-time)", "📝 共有メモ"),
+    "_auto_041": _L("📤 Синхронизировать", "📤 Sync", "📤 同期"),
+    "_auto_042": "Заметки, ссылки, файлы только для себя",
+    "_auto_043": "🔵 СИНИЙ ЭКРАН СМЕРТИ",
+    "_auto_044": "Критическая ошибка",
+    "_auto_045": "Перезапустить",
+    "_auto_046": "Сохранить отчёт",
+    "_auto_047": "Копировать",
+    "_auto_048": "Скопировано",
+    "_auto_049": "Внешний вид",
+    "_auto_050": "Блокировка",
+    "_auto_051": "Приватность",
+    "_auto_052": "Звонки",
+    "_auto_053": "Звуки",
+    "_auto_054": "Специалист",
+    "_auto_055": "Имя пользователя:",
+    "_auto_056": "Описание:",
+    "_auto_057": "Цвет ника:",
+    "_auto_058": "Эмодзи у имени:",
+    "_auto_059": "Сохранить профиль",
+    "_auto_060": "Профиль сохранён!",
+    "_auto_061": "Тема:",
+    "_auto_062": "Предпросмотр темы",
+    "_auto_063": "Масштаб интерфейса:",
+    "_auto_064": "Сохранить",
+    "_auto_065": "👑 PREMIUM",
+    "_auto_066": _L("Активировать лицензию", "Activate license", "ライセンス認証"),
+    "_auto_067": "Введите лицензионный ключ:",
+    "_auto_068": _L("Активировать", "Activate", "認証"),
+    "_auto_069": _L("Купить Premium", "Buy Premium", "プレミアム購入"),
+    "_auto_070": "Ключ принят! ✓",
+    "_auto_071": "Неверный ключ",
+    "_auto_072": "Файл получен",
+    "_auto_073": "Изображение",
+    "_auto_074": "Видео",
+    "_auto_075": "Аудио",
+    "_auto_076": "Файл",
+    "_auto_077": _L("⚠ Не удалось загрузить", "⚠ Failed to load", "⚠ 読み込み失敗"),
+    "_auto_078": _L("💾 Сохранить", "💾 Save", "💾 保存"),
+    "_auto_079": "GoidaID режим активен. Настоящий IP скрыт.",
+    "_auto_080": "Участников: {len(members)}",
+    "_auto_081": "📂 {g.get('name','Группа')}",
+    "_auto_082": "👥 Пользователи",
+    "_auto_083": "📂 Группы",
+    "_auto_084": "💬 Чат",
+    "_auto_085": _L("📷 Выбрать баннер", "📷 Choose banner", "📷 バナー選択"),
+    "_auto_086": _L("🗑 Убрать", "🗑 Remove", "🗑 削除"),
+
 }
 
 _STRINGS_EN = {
@@ -3137,6 +3309,62 @@ _STRINGS_EN = {
     "menu_themes":          "🎨 Themes",
     "menu_calls":           "Calls",
     "menu_help":            "Help",
+    "open_link":                   "Open link",
+    "where_open":                  "Where to open?",
+    "browser_builtin":             "🌐 WNS (built-in)",
+    "browser_system":              "🖥 Default browser",
+    "open_media":                  "Open media file",
+    "player_builtin":              "🎵 Mewa (built-in)",
+    "player_system":               "📂 System player",
+    "update_platform":             "Choose your platform:",
+    "update_release_page":         "🌐 Open release page",
+    "btn_later":                   "Later",
+    "launcher_choose":             "Choose launch mode",
+    "launcher_hint":               "← → arrows  •  Enter",
+    "launcher_run":                "Launch  ▶",
+    "launcher_help":               "❓ Help",
+    "btn_close_lbl":               "Close",
+    "loading":                     "Loading",
+    "online_since":                "🕐 Online since",
+    "premium_user":                "👑 Premium user",
+    "group_invite_card":           "📂 Group invitation",
+    "already_in_group":            "✅ Already in this group",
+    "btn_join":                    "👋 Join",
+    "joined_group":                "✅ Joined!",
+    "img_hint":                    "Click to view · RMB save",
+    "video_hint":                  "Click to play",
+    "scroll_hint":                 "Scroll — zoom  •  LMB — drag",
+    "new_messages":                "↓ New",
+    "reply_cancelled":             "Reply cancelled",
+    "call_floating":               "📞 Active call",
+    "call_no_peer":                "No active peer",
+    "call_muted":                  "🔇 Muted",
+    "call_unmuted":                "🎤 Microphone",
+    "settings_restart":            "Restart required to apply",
+    "theme_changed":               "Theme changed",
+    "theme_back":                  "← Revert",
+    "theme_restart":               "↺ Restart",
+    "file_received_msg":           "file received",
+    "save_file":                   "💾 Save",
+    "open_file":                   "Open",
+    "history_empty":               "History is empty",
+    "no_messages":                 "No messages",
+    "quicksetup_title":            "⚡ Quick setup",
+    "quicksetup_q1":               "What's your name?",
+    "quicksetup_q2":               "Choose nickname color",
+    "quicksetup_q3":               "Choose theme",
+    "quicksetup_q4":               "Enable sounds?",
+    "quicksetup_q5":               "Save message history?",
+    "quicksetup_q6":               "Show splash on startup?",
+    "quicksetup_done":             "All done! 🎉",
+    "tutorial_skip":               "✕ Skip",
+    "tutorial_next":               "Next →",
+    "tutorial_finish":             "Finish ✓",
+    "tutorial_back":               "← Back",
+    "connecting":                  "Connecting...",
+    "connected":                   "Connected",
+    "disconnected":                "Disconnected",
+    "network_error_short":         "Network error",
     "tab_appearance":          "🖼 Appearance",
     "tab_security":            "🔒 Security",
     "tab_privacy":             "🛡 Privacy",
@@ -3157,7 +3385,113 @@ _STRINGS_EN = {
     "tab_users":            "👥 Users",
     "tab_groups":           "📂 Groups",
     "tab_chat_pub":         "💬 Chat",
-    "premium_label":        "👑 Premium",
+    "premium_label":        "👑 Premium",    "open_with_what":              "How to open?",
+    "help_title":                  "Help — GoidaPhone",
+    "help_modes_title":            "📖  Launch modes help",
+    "splash_loading":              "Loading",
+    "scroll_zoom_hint":            "Scroll — zoom  •  LMB drag",
+    "btn_view":                    "🔍 View",
+    "btn_play":                    "▶ Play",
+    "note_saved":                  "Note saved",
+    "note_placeholder":            "Write a note...",
+    "search_msgs":                 "Search messages...",
+    "pin_enter":                   "Enter PIN",
+    "pin_wrong":                   "Wrong PIN",
+    "sticker_label":               "Sticker",
+    "edited_label":                "edited",
+    "forwarded_label":             "Forwarded",
+    "update_available_h":          "🚀 Update available!",
+    "launcher_arrows":             "← → arrows  •  Enter",
+    "premium_user_lbl":            "👑 Premium user",
+    "goidaid_active":              "GoidaID mode active",
+    "_auto_000": "Remember choice (change in Settings → Privacy)",
+    "_auto_001": "Remember my choice",
+    "_auto_002": "Remember my choice",
+    "_auto_003": "Close",
+    "_auto_004": "Cancel",
+    "_auto_005": "GoidaPhone v{ver} available!",
+    "_auto_006": "🔍 Search...",
+    "_auto_007": "Online: 0",
+    "_auto_008": "Online: {count}",
+    "_auto_009": "➕ Create group",
+    "_auto_010": "⭐ Favorites",
+    "_auto_011": "Send invitation",
+    "_auto_012": "Where to send invitation?",
+    "_auto_013": "📨 Send",
+    "_auto_014": "<b>Group avatar</b>",
+    "_auto_015": "<b>Group avatar</b>",
+    "_auto_016": "📷 Change avatar",
+    "_auto_017": "Name:",
+    "_auto_018": "Group name",
+    "_auto_019": "✏ Rename",
+    "_auto_020": "Members:",
+    "_auto_021": "🚫 Remove member",
+    "_auto_022": "➕ Invite user",
+    "_auto_023": "Invite link:",
+    "_auto_024": "📋 Copy",
+    "_auto_025": "🚪 Leave",
+    "_auto_026": "🗑 Delete group",
+    "_auto_027": "Search messages... (Enter — next)",
+    "_auto_028": "🎭 Stickers",
+    "_auto_029": "⚙ Packs",
+    "_auto_030": "Manage sticker packs",
+    "_auto_031": "Stickers",
+    "_auto_032": "Not found",
+    "_auto_033": "🔓 Unencrypted",
+    "_auto_034": "{username} is typing...",
+    "_auto_035": "Cancel call",
+    "_auto_036": "Call",
+    "_auto_037": "End call",
+    "_auto_038": "(no packs — add in ⚙)",
+    "_auto_039": "No stickers. Add a pack via ⚙ Packs",
+    "_auto_040": "📝 Shared notes (real-time sync)",
+    "_auto_041": "📤 Sync",
+    "_auto_042": "Notes, links, files for yourself",
+    "_auto_043": "🔵 BLUE SCREEN OF DEATH",
+    "_auto_044": "Critical error",
+    "_auto_045": "Restart",
+    "_auto_046": "Save report",
+    "_auto_047": "Copy",
+    "_auto_048": "Copied",
+    "_auto_049": "Appearance",
+    "_auto_050": "Lock",
+    "_auto_051": "Privacy",
+    "_auto_052": "Calls",
+    "_auto_053": "Sounds",
+    "_auto_054": "Advanced",
+    "_auto_055": "Username:",
+    "_auto_056": "About:",
+    "_auto_057": "Nick color:",
+    "_auto_058": "Emoji next to name:",
+    "_auto_059": "Save profile",
+    "_auto_060": "Profile saved!",
+    "_auto_061": "Theme:",
+    "_auto_062": "Preview theme",
+    "_auto_063": "UI scale:",
+    "_auto_064": "Save",
+    "_auto_065": "👑 PREMIUM",
+    "_auto_066": "Activate license",
+    "_auto_067": "Enter license key:",
+    "_auto_068": "Activate",
+    "_auto_069": "Buy Premium",
+    "_auto_070": "Key accepted! ✓",
+    "_auto_071": "Invalid key",
+    "_auto_072": "File received",
+    "_auto_073": "Image",
+    "_auto_074": "Video",
+    "_auto_075": "Audio",
+    "_auto_076": "File",
+    "_auto_077": "⚠ Failed to load image",
+    "_auto_078": "💾 Save",
+    "_auto_079": "GoidaID mode active. Real IP hidden.",
+    "_auto_080": "Members: {len(members)}",
+    "_auto_081": "📂 {g.get('name','Group')}",
+    "_auto_082": "👥 Users",
+    "_auto_083": "📂 Groups",
+    "_auto_084": "💬 Chat",
+    "_auto_085": "📷 Choose banner",
+    "_auto_086": "🗑 Remove",
+
 }
 
 _STRINGS_JA = {
@@ -3282,6 +3616,62 @@ _STRINGS_JA = {
     "menu_themes":          "🎨 テーマ",
     "menu_calls":           "通話",
     "menu_help":            "ヘルプ",
+    "open_link":                   "リンクを開く",
+    "where_open":                  "どこで開く?",
+    "browser_builtin":             "🌐 WNS (内蔵)",
+    "browser_system":              "🖥 デフォルトブラウザ",
+    "open_media":                  "メディアを開く",
+    "player_builtin":              "🎵 Mewa (内蔵)",
+    "player_system":               "📂 システムプレーヤー",
+    "update_platform":             "プラットフォームを選択:",
+    "update_release_page":         "🌐 リリースページ",
+    "btn_later":                   "後で",
+    "launcher_choose":             "起動モードを選択",
+    "launcher_hint":               "← → 矢印  •  Enter",
+    "launcher_run":                "起動  ▶",
+    "launcher_help":               "❓ ヘルプ",
+    "btn_close_lbl":               "閉じる",
+    "loading":                     "読み込み中",
+    "online_since":                "🕐 オンライン",
+    "premium_user":                "👑 プレミアムユーザー",
+    "group_invite_card":           "📂 グループ招待",
+    "already_in_group":            "✅ 既にグループにいます",
+    "btn_join":                    "👋  参加",
+    "joined_group":                "✅ 参加しました!",
+    "img_hint":                    "クリックで表示 · 右クリック保存",
+    "video_hint":                  "クリックで再生",
+    "scroll_hint":                 "スクロール拡大 · ドラッグ",
+    "new_messages":                "↓ 新着",
+    "reply_cancelled":             "返信キャンセル",
+    "call_floating":               "📞 通話中",
+    "call_no_peer":                "アクティブな相手なし",
+    "call_muted":                  "🔇 ミュート中",
+    "call_unmuted":                "🎤 マイク",
+    "settings_restart":            "適用には再起動が必要",
+    "theme_changed":               "テーマ変更",
+    "theme_back":                  "← 元に戻す",
+    "theme_restart":               "↺ 再起動",
+    "file_received_msg":           "ファイル受信",
+    "save_file":                   "💾 保存",
+    "open_file":                   "開く",
+    "history_empty":               "履歴なし",
+    "no_messages":                 "メッセージなし",
+    "quicksetup_title":            "⚡ クイック設定",
+    "quicksetup_q1":               "あなたの名前は?",
+    "quicksetup_q2":               "ニックネームの色",
+    "quicksetup_q3":               "テーマを選択",
+    "quicksetup_q4":               "サウンドを有効にする?",
+    "quicksetup_q5":               "メッセージ履歴を保存?",
+    "quicksetup_q6":               "起動時スプラッシュ表示?",
+    "quicksetup_done":             "設定完了! 🎉",
+    "tutorial_skip":               "✕ スキップ",
+    "tutorial_next":               "次へ →",
+    "tutorial_finish":             "完了 ✓",
+    "tutorial_back":               "← 戻る",
+    "connecting":                  "接続中...",
+    "connected":                   "接続済み",
+    "disconnected":                "切断",
+    "network_error_short":         "ネットワークエラー",
     "tab_appearance":          "🖼 外観",
     "tab_security":            "🔒 セキュリティ",
     "tab_privacy":             "🛡 プライバシー",
@@ -3302,7 +3692,113 @@ _STRINGS_JA = {
     "tab_users":            "👥 ユーザー",
     "tab_groups":           "📂 グループ",
     "tab_chat_pub":         "💬 チャット",
-    "premium_label":        "👑 プレミアム",
+    "premium_label":        "👑 プレミアム",    "open_with_what":              "Чем открыть медиафайл?",
+    "help_title":                  "Справка — GoidaPhone",
+    "help_modes_title":            "📖  Справка по режимам запуска",
+    "splash_loading":              "Загрузка",
+    "scroll_zoom_hint":            "Скролл — масштаб  •  ЛКМ перетащить",
+    "btn_view":                    "🔍 Открыть",
+    "btn_play":                    "▶ Воспроизвести",
+    "note_saved":                  "Заметка сохранена",
+    "note_placeholder":            "Напишите заметку...",
+    "search_msgs":                 "Поиск сообщений...",
+    "pin_enter":                   "Введите PIN",
+    "pin_wrong":                   "Неверный PIN",
+    "sticker_label":               "Стикер",
+    "edited_label":                "изменено",
+    "forwarded_label":             "Переслано",
+    "update_available_h":          "🚀 Доступно обновление!",
+    "launcher_arrows":             "← → стрелки  •  Enter запуск",
+    "premium_user_lbl":            "👑 Премиум пользователь",
+    "goidaid_active":              "GoidaID режим активен",
+    "_auto_000": "選択を記憶",
+    "_auto_001": "選択を記憶",
+    "_auto_002": "選択を記憶",
+    "_auto_003": "閉じる",
+    "_auto_004": "キャンセル",
+    "_auto_005": "GoidaPhone v{ver} 利用可能!",
+    "_auto_006": "🔍 検索...",
+    "_auto_007": "オンライン: 0",
+    "_auto_008": "オンライン: {count}",
+    "_auto_009": "➕ グループ作成",
+    "_auto_010": "⭐ お気に入り",
+    "_auto_011": "招待を送る",
+    "_auto_012": "どこに招待を送りますか?",
+    "_auto_013": "📨 送信",
+    "_auto_014": "グループアバター",
+    "_auto_015": "<b>グループアバター</b>",
+    "_auto_016": "📷 アバター変更",
+    "_auto_017": "名前:",
+    "_auto_018": "グループ名",
+    "_auto_019": "✏ 名前変更",
+    "_auto_020": "メンバー:",
+    "_auto_021": "🚫 メンバー削除",
+    "_auto_022": "➕ ユーザー招待",
+    "_auto_023": "招待リンク:",
+    "_auto_024": "📋 コピー",
+    "_auto_025": "🚪 退出",
+    "_auto_026": "🗑 グループ削除",
+    "_auto_027": "メッセージ検索...",
+    "_auto_028": "🎭 スタンプ",
+    "_auto_029": "⚙ パック",
+    "_auto_030": "スタンプパック管理",
+    "_auto_031": "スタンプ",
+    "_auto_032": "見つかりません",
+    "_auto_033": "🔓 暗号化なし",
+    "_auto_034": "{username} が入力中...",
+    "_auto_035": "発信をキャンセル",
+    "_auto_036": "通話",
+    "_auto_037": "通話終了",
+    "_auto_038": "(パックなし — ⚙で追加)",
+    "_auto_039": "スタンプなし",
+    "_auto_040": "📝 共有メモ",
+    "_auto_041": "📤 同期",
+    "_auto_042": "自分用メモ・リンク・ファイル",
+    "_auto_043": "🔵 ブルースクリーン",
+    "_auto_044": "致命的なエラー",
+    "_auto_045": "再起動",
+    "_auto_046": "レポート保存",
+    "_auto_047": "コピー",
+    "_auto_048": "コピー済み",
+    "_auto_049": "外観",
+    "_auto_050": "ロック",
+    "_auto_051": "プライバシー",
+    "_auto_052": "通話",
+    "_auto_053": "サウンド",
+    "_auto_054": "上級者",
+    "_auto_055": "ユーザー名:",
+    "_auto_056": "自己紹介:",
+    "_auto_057": "ニックネーム色:",
+    "_auto_058": "名前横絵文字:",
+    "_auto_059": "プロフィール保存",
+    "_auto_060": "プロフィール保存済み!",
+    "_auto_061": "テーマ:",
+    "_auto_062": "テーマプレビュー",
+    "_auto_063": "UIスケール:",
+    "_auto_064": "保存",
+    "_auto_065": "👑 プレミアム",
+    "_auto_066": "ライセンス認証",
+    "_auto_067": "ライセンスキーを入力:",
+    "_auto_068": "認証",
+    "_auto_069": "プレミアム購入",
+    "_auto_070": "キー受付! ✓",
+    "_auto_071": "無効なキー",
+    "_auto_072": "ファイル受信",
+    "_auto_073": "画像",
+    "_auto_074": "ビデオ",
+    "_auto_075": "オーディオ",
+    "_auto_076": "ファイル",
+    "_auto_077": "⚠ 画像読み込み失敗",
+    "_auto_078": "💾 保存",
+    "_auto_079": "GoidaIDモード有効。実IPを隠匿。",
+    "_auto_080": "メンバー: {len(members)}",
+    "_auto_081": "📂 {g.get('name','グループ')}",
+    "_auto_082": "👥 ユーザー",
+    "_auto_083": "📂 グループ",
+    "_auto_084": "💬 チャット",
+    "_auto_085": "📷 バナー選択",
+    "_auto_086": "🗑 削除",
+
 }
 
 class Strings:
@@ -3336,6 +3832,20 @@ class Strings:
         return self._table().get(key, fallback)
 
 TR = Strings()   # global translator — use TR("key")
+
+def _L(ru: str, en: str = "", ja: str = "") -> str:
+    """
+    Inline локализация без регистрации ключа.
+    Использование: _L("Русский текст", "English text", "日本語テキスト")
+    Если en/ja пустые — возвращает ru для всех языков.
+    """
+    lang = S().language
+    if lang == "en" and en:
+        return en
+    if lang == "ja" and ja:
+        return ja
+    return ru
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  SETTINGS / PROFILE MANAGER
@@ -3859,7 +4369,7 @@ def _show_update_dialog(ver: str, desc: str, parent=None):
     t = get_theme(S().theme)
 
     dlg = QDialog(parent)
-    dlg.setWindowTitle("🚀 Доступно обновление!")
+    dlg.setWindowTitle(TR("update_available_h"))
     dlg.setFixedSize(460, 320)
     dlg.setStyleSheet(
         f"QDialog{{background:{t['bg2']};}}"
@@ -3890,7 +4400,7 @@ def _show_update_dialog(ver: str, desc: str, parent=None):
     _release_page = f"https://github.com/{GITHUB_REPO}/releases/tag/v{ver}"
 
     # Кнопки скачивания
-    btns_lbl = QLabel("Выбери свою платформу:")
+    btns_lbl = QLabel(TR("update_platform"))
     btns_lbl.setStyleSheet(f"font-size:9pt;color:{t['text_dim']};")
     lay.addWidget(btns_lbl)
 
@@ -3932,7 +4442,7 @@ def _show_update_dialog(ver: str, desc: str, parent=None):
     lay.addLayout(btn_row)
 
     # Ссылка на страницу релиза
-    page_btn = QPushButton("🌐 Открыть страницу релиза на GitHub")
+    page_btn = QPushButton(TR("update_release_page"))
     page_btn.setFixedHeight(28)
     page_btn.setStyleSheet(
         f"QPushButton{{background:transparent;color:{t['text_dim']};"
@@ -3943,7 +4453,7 @@ def _show_update_dialog(ver: str, desc: str, parent=None):
     lay.addWidget(page_btn)
 
     # Кнопка закрыть
-    close_btn = QPushButton("Позже")
+    close_btn = QPushButton(TR("btn_later"))
     close_btn.setFixedHeight(30)
     close_btn.setStyleSheet(
         f"QPushButton{{background:transparent;color:{t['text_dim']};"
@@ -5121,7 +5631,7 @@ class LauncherScreen(QDialog):
         cl.addWidget(hdr)
         cl.addSpacing(4)
 
-        sub = QLabel("Выберите режим запуска")
+        sub = QLabel(TR("launcher_choose"))
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sub.setStyleSheet(f"color:{t['text_dim']};font-size:13px;background:transparent;")
         cl.addWidget(sub)
@@ -5167,7 +5677,7 @@ class LauncherScreen(QDialog):
         cl.addSpacing(20)
 
         # Arrow hint
-        arrow_hint = QLabel("← → стрелочки для выбора  •  Enter для запуска")
+        arrow_hint = QLabel(TR("launcher_arrows"))
         arrow_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         arrow_hint.setStyleSheet(
             f"color:{t['text_dim']};font-size:9px;background:transparent;")
@@ -5186,7 +5696,7 @@ class LauncherScreen(QDialog):
         bot.addWidget(self._no_show)
         bot.addStretch()
 
-        help_btn = QPushButton("❓ Справка")
+        help_btn = QPushButton(TR("launcher_help"))
         help_btn.setFixedHeight(36)
         help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         help_btn.setStyleSheet(f"""
@@ -5200,7 +5710,7 @@ class LauncherScreen(QDialog):
         help_btn.clicked.connect(self._show_help)
         bot.addWidget(help_btn)
 
-        go_btn = QPushButton("Запустить  ▶")
+        go_btn = QPushButton(TR("launcher_run"))
         go_btn.setFixedHeight(36)
         go_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         go_btn.setStyleSheet(f"""
@@ -5309,7 +5819,7 @@ class LauncherScreen(QDialog):
     def _show_help(self):
         t = get_theme(S().theme)
         dlg = QDialog(self)
-        dlg.setWindowTitle("Справка — GoidaPhone")
+        dlg.setWindowTitle(TR("help_title"))
         dlg.setFixedSize(480, 420)
         dlg.setStyleSheet(f"""
             QDialog {{ background:{t['bg2']}; border-radius:16px; }}
@@ -5319,7 +5829,7 @@ class LauncherScreen(QDialog):
         vl.setContentsMargins(28, 24, 28, 20)
         vl.setSpacing(12)
 
-        title = QLabel("📖  Справка по режимам запуска")
+        title = QLabel(TR("help_modes_title"))
         title.setStyleSheet(
             f"font-size:15px;font-weight:bold;color:{t['accent']};")
         vl.addWidget(title)
@@ -5350,7 +5860,7 @@ class LauncherScreen(QDialog):
         vl.addWidget(txt)
         vl.addStretch()
 
-        close = QPushButton("Закрыть")
+        close = QPushButton(_L("Закрыть", "Close", "閉じる"))
         close.setObjectName("accent_btn")
         close.setFixedHeight(34)
         close.clicked.connect(dlg.accept)
@@ -5484,7 +5994,7 @@ class SplashScreen(QWidget):
                 "background:rgba(0,0,0,140);border-radius:0 0 16px 16px;padding:6px;")
         else:
             bottom_bar.setStyleSheet("background:transparent;")
-        self._progress_lbl = QLabel("Загрузка")
+        self._progress_lbl = QLabel(TR("splash_loading"))
         self._progress_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._progress_lbl.setStyleSheet(
             f"color:{'white' if self._bg_pixmap else t['accent']};"
@@ -5612,9 +6122,9 @@ class UserHoverCard(QFrame):
         ts = p.get("last_seen", 0)
         if ts:
             dt = datetime.fromtimestamp(ts).strftime("%H:%M:%S")
-            lay.addWidget(QLabel(f"🕐 Онлайн с {dt}"))
+            lay.addWidget(QLabel(f"{TR("online_since_lbl")} {dt}"))
         if p.get("premium"):
-            lay.addWidget(QLabel("👑 Премиум пользователь"))
+            lay.addWidget(QLabel(TR("premium_user")))
 
         self.adjustSize()
 
@@ -6012,8 +6522,8 @@ class ImageViewer(QWidget):
             "padding:0 8px;")
         tl.addWidget(self._zoom_lbl)
 
-        mk("💾 Сохранить", "Сохранить в файл",  self._save_file)
-        mk("📋 Копировать","Копировать в буфер", self._copy_clipboard)
+        mk(_L("💾 Сохранить", "💾 Save", "💾 保存"), "Сохранить в файл",  self._save_file)
+        mk(_L("📋 Копировать", "📋 Copy", "📋 コピー"),"Копировать в буфер", self._copy_clipboard)
         def _close_overlay():
             if self.parent():
                 self.parent().removeEventFilter(self)
@@ -6046,7 +6556,7 @@ class ImageViewer(QWidget):
             f"color:{t['text_dim']};font-size:10px;background:transparent;")
         il.addWidget(self._info_lbl)
         il.addStretch()
-        hint = QLabel("Скролл — масштаб  •  ЛКМ — перетащить  •  2× клик — вписать")
+        hint = QLabel(TR("scroll_zoom_hint"))
         hint.setStyleSheet(
             f"color:{t['text_dim']};font-size:9px;background:transparent;")
         il.addWidget(hint)
@@ -6356,7 +6866,7 @@ class MessageBubble(QWidget):
             card_lay.setContentsMargins(10, 8, 10, 8)
             card_lay.setSpacing(4)
 
-            ico_lbl = QLabel("📂 Приглашение в группу")
+            ico_lbl = QLabel(TR("group_invite_card"))
             ico_lbl.setStyleSheet(f"font-size:10px;color:{t['text_dim']};background:transparent;border:none;")
             card_lay.addWidget(ico_lbl)
 
@@ -6368,11 +6878,11 @@ class MessageBubble(QWidget):
             already_in = gid and gid in dict(GROUPS.list_for(get_local_ip()))
 
             if already_in:
-                status_lbl = QLabel("✅ Вы уже в этой группе")
+                status_lbl = QLabel(TR("already_in_group"))
                 status_lbl.setStyleSheet(f"font-size:10px;color:#80FF80;background:transparent;border:none;")
                 card_lay.addWidget(status_lbl)
             elif gid:
-                join_btn = QPushButton("👋 Вступить")
+                join_btn = QPushButton(TR("btn_join"))
                 join_btn.setFixedHeight(30)
                 join_btn.setCursor(Qt.CursorShape.PointingHandCursor)
                 join_btn.setStyleSheet(
@@ -6381,7 +6891,7 @@ class MessageBubble(QWidget):
                     "")
                 def _do_join(checked=False, _gid=gid, _gname=gname, _host=host, _btn=join_btn):
                     GROUPS.add_member(_gid, get_local_ip())
-                    _btn.setText("✅ Вы вступили!")
+                    _btn.setText(TR("joined_group"))
                     _btn.setEnabled(False)
                     _btn.setStyleSheet("QPushButton{background:#2a6a2a;color:#80FF80;"
                                        "border-radius:8px;border:none;font-size:11px;}")
@@ -6499,7 +7009,7 @@ class MessageBubble(QWidget):
         pm = QPixmap()
         pm.loadFromData(m.image_data)
         if pm.isNull():
-            err = QLabel("⚠ Не удалось загрузить изображение")
+            err = QLabel(_L("⚠ Не удалось загрузить", "⚠ Failed to load", "⚠ 読み込み失敗"))
             err.setStyleSheet(f"color:{t['error'] if 'error' in t else '#e74c3c'};font-size:10px;")
             layout.addWidget(err)
             return
@@ -6535,7 +7045,7 @@ class MessageBubble(QWidget):
                 self_2.setPixmap(rounded)
                 self_2.setFixedSize(w, h)
                 self_2.setCursor(Qt.CursorShape.PointingHandCursor)
-                self_2.setToolTip("Нажмите для просмотра · ПКМ сохранить")
+                self_2.setToolTip(TR("img_hint"))
                 self_2.setAttribute(Qt.WidgetAttribute.WA_Hover)
 
             def enterEvent(self_2, e):
@@ -6571,8 +7081,8 @@ class MessageBubble(QWidget):
                 elif e.button() == _Qt.MouseButton.RightButton:
                     from PyQt6.QtWidgets import QMenu
                     menu = QMenu(self_2)
-                    menu.addAction("🔍 Открыть", lambda: ImageViewer(m.image_data, self).exec())
-                    menu.addAction("💾 Сохранить", lambda: self._save_image(m))
+                    menu.addAction(TR("btn_view"), lambda: ImageViewer(m.image_data, self).exec())
+                    menu.addAction(_L("💾 Сохранить", "💾 Save", "💾 保存"), lambda: self._save_image(m))
                     menu.exec(e.globalPosition().toPoint())
 
         img_w = _ImgWidget()
@@ -6652,7 +7162,7 @@ class MessageBubble(QWidget):
                 self_2.setPixmap(pm_card)
                 self_2.setFixedSize(VW, VH)
                 self_2.setCursor(Qt.CursorShape.PointingHandCursor)
-                self_2.setToolTip("Нажмите для воспроизведения")
+                self_2.setToolTip(TR("video_hint"))
                 self_2.setAttribute(Qt.WidgetAttribute.WA_Hover)
             def enterEvent(self_2, e): self_2._hov = True;  self_2.update()
             def leaveEvent(self_2, e): self_2._hov = False; self_2.update()
@@ -6689,8 +7199,8 @@ class MessageBubble(QWidget):
                 elif e.button() == _Qt2.MouseButton.RightButton:
                     from PyQt6.QtWidgets import QMenu
                     menu = QMenu(self_2)
-                    menu.addAction("▶ Воспроизвести", lambda: _open_media_smart(str(dest), self))
-                    menu.addAction("💾 Сохранить", lambda: (
+                    menu.addAction(TR("btn_play"), lambda: _open_media_smart(str(dest), self))
+                    menu.addAction(_L("💾 Сохранить", "💾 Save", "💾 保存"), lambda: (
                         lambda sp: __import__('shutil').copy2(str(dest), sp) if sp else None
                     )(QFileDialog.getSaveFileName(None,"Сохранить",fname,"Video (*.mp4 *.mkv);;All (*)")[0]))
                     menu.exec(e.globalPosition().toPoint())
@@ -7029,39 +7539,21 @@ class ChatDisplay(QScrollArea):
         self.update()
 
     def _anim_in(self, bubble, is_own):
-        """Плавное появление пузыря: fade-in + slide-up."""
+        """Плавное появление пузыря: только fade-in (slide ломает layout)."""
         from PyQt6.QtWidgets import QGraphicsOpacityEffect
-        # Fade-in
         eff = QGraphicsOpacityEffect(bubble)
         eff.setOpacity(0.0)
         bubble.setGraphicsEffect(eff)
         fade = QPropertyAnimation(eff, b"opacity", bubble)
-        fade.setDuration(280)
+        fade.setDuration(260)
         fade.setStartValue(0.0)
         fade.setEndValue(1.0)
-        fade.setEasingCurve(QEasingCurve.Type.OutQuart)
-
-        # Slide-up через geometry
-        orig_pos = bubble.pos()
-        slide_offset = 18
-        bubble.move(orig_pos.x(), orig_pos.y() + slide_offset)
-        pos_anim = QPropertyAnimation(bubble, b"pos", bubble)
-        pos_anim.setDuration(300)
-        from PyQt6.QtCore import QPoint
-        pos_anim.setStartValue(QPoint(orig_pos.x(), orig_pos.y() + slide_offset))
-        pos_anim.setEndValue(orig_pos)
-        pos_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-        group = QParallelAnimationGroup(bubble)
-        group.addAnimation(fade)
-        group.addAnimation(pos_anim)
-
+        fade.setEasingCurve(QEasingCurve.Type.OutCubic)
         def _done():
             bubble.setGraphicsEffect(None)
-            bubble.move(orig_pos)
             bubble.update()
-        group.finished.connect(_done)
-        group.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+        fade.finished.connect(_done)
+        fade.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def add_system(self, text):
         entry = MessageEntry(text=text, ts=time.time(), is_system=True)
@@ -7265,7 +7757,7 @@ class ChatDisplay(QScrollArea):
             self._jump_btn = None
         if self._jump_btn is None:
             t = get_theme(S().theme)
-            self._jump_btn = QPushButton("↓ Новые", self.viewport())
+            self._jump_btn = QPushButton(TR("new_messages"), self.viewport())
             self._jump_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._jump_btn.setStyleSheet(
                 f"QPushButton{{background:{t['accent']};color:white;"
@@ -7455,7 +7947,7 @@ class PeerPanel(QWidget):
         ul.setSpacing(4)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("🔍 Поиск...")
+        self._search.setPlaceholderText(_L("🔍 Поиск...", "🔍 Search...", "🔍 検索..."))
         self._search.textChanged.connect(self._filter)
         ul.addWidget(self._search)
 
@@ -7488,10 +7980,10 @@ class PeerPanel(QWidget):
         gl.addWidget(self._groups_list)
 
         grp_btns = QHBoxLayout()
-        new_group_btn = QPushButton("➕ Создать группу")
+        new_group_btn = QPushButton(_L("➕ Создать группу", "➕ Create group", "➕ グループ作成"))
         new_group_btn.clicked.connect(self._create_group)
         grp_btns.addWidget(new_group_btn)
-        fav_btn = QPushButton("⭐ Избранное")
+        fav_btn = QPushButton(_L("⭐ Избранное", "⭐ Favorites", "⭐ お気に入り"))
         fav_btn.clicked.connect(self._open_favorites)
         grp_btns.addWidget(fav_btn)
         gl.addLayout(grp_btns)
@@ -7676,11 +8168,11 @@ class PeerPanel(QWidget):
             leave_a = QAction("🚪 Выйти из группы", self)
             leave_a.triggered.connect(lambda: self._leave_group(gid, name))
             menu.addAction(leave_a)
-            del_a = QAction("🗑 Удалить группу", self)
+            del_a = QAction(_L("🗑 Удалить группу", "🗑 Delete group", "🗑 グループ削除"), self)
             del_a.triggered.connect(lambda: self._delete_group(gid, name))
             menu.addAction(del_a)
         else:
-            new_a = QAction("➕ Создать группу", self)
+            new_a = QAction(_L("➕ Создать группу", "➕ Create group", "➕ グループ作成"), self)
             new_a.triggered.connect(self._create_group)
             menu.addAction(new_a)
         menu.exec(self._groups_list.mapToGlobal(pos))
@@ -7733,9 +8225,9 @@ class PeerPanel(QWidget):
         lay.addWidget(dest_list)
 
         btn_row = QHBoxLayout()
-        send_btn = QPushButton("📨 Отправить")
+        send_btn = QPushButton(_L("📨 Отправить", "📨 Send", "📨 送信"))
         send_btn.setObjectName("accent_btn")
-        cancel_btn = QPushButton("Отмена")
+        cancel_btn = QPushButton(_L("Отмена", "Cancel", "キャンセル"))
         cancel_btn.clicked.connect(dlg.reject)
         btn_row.addStretch()
         btn_row.addWidget(send_btn)
@@ -7851,7 +8343,7 @@ class PeerPanel(QWidget):
         av_row.addWidget(av_lbl)
         av_info = QVBoxLayout()
         av_info.addWidget(QLabel("<b>Аватар группы</b>"))
-        av_btn = QPushButton("📷 Изменить аватар")
+        av_btn = QPushButton(_L("📷 Изменить аватар", "📷 Change avatar", "📷 アバター変更"))
         av_btn.setObjectName("accent_btn")
         def do_change_avatar():
             path, _ = QFileDialog.getOpenFileName(
@@ -7886,11 +8378,11 @@ class PeerPanel(QWidget):
 
         # ── Name ────────────────────────────────────────────────────────
         name_row = QHBoxLayout()
-        name_row.addWidget(QLabel("Название:"))
+        name_row.addWidget(QLabel(_L("Название:", "Name:", "名前:")))
         name_edit = QLineEdit(g.get("name",""))
-        name_edit.setPlaceholderText("Название группы")
+        name_edit.setPlaceholderText(_L("Название группы", "Group name", "グループ名"))
         name_row.addWidget(name_edit)
-        rename_btn = QPushButton("✏ Переименовать")
+        rename_btn = QPushButton(_L("✏ Переименовать", "✏ Rename", "✏ 名前変更"))
         def do_rename():
             n = name_edit.text().strip()
             if n:
@@ -7902,7 +8394,7 @@ class PeerPanel(QWidget):
         dl.addLayout(name_row)
 
         # Members
-        dl.addWidget(QLabel("Участники:"))
+        dl.addWidget(QLabel(_L("Участники:", "Members:", "メンバー:")))
         members_list = QListWidget()
         members_list.setMaximumHeight(180)
         def refresh_members():
@@ -7921,7 +8413,7 @@ class PeerPanel(QWidget):
         dl.addWidget(members_list)
 
         mem_btn_row = QHBoxLayout()
-        kick_btn = QPushButton("🚫 Удалить участника")
+        kick_btn = QPushButton(_L("🚫 Удалить участника", "🚫 Remove member", "🚫 メンバー削除"))
         def do_kick():
             item = members_list.currentItem()
             if not item: return
@@ -7935,7 +8427,7 @@ class PeerPanel(QWidget):
         kick_btn.clicked.connect(do_kick)
         mem_btn_row.addWidget(kick_btn)
 
-        invite_peer_btn = QPushButton("➕ Пригласить пользователя")
+        invite_peer_btn = QPushButton(_L("➕ Пригласить пользователя", "➕ Invite user", "➕ ユーザー招待"))
         def do_invite():
             peers_online = self._peers
             if not peers_online:
@@ -7955,13 +8447,13 @@ class PeerPanel(QWidget):
         dl.addLayout(mem_btn_row)
 
         # Invite link
-        dl.addWidget(QLabel("Ссылка-приглашение:"))
+        dl.addWidget(QLabel(_L("Ссылка-приглашение:", "Invite link:", "招待リンク:")))
         ip_self = get_local_ip()
         invite_str = f"goidaphone://join/{gid}?host={ip_self}&name={g.get('name','')}"
         inv_row = QHBoxLayout()
         inv_lbl = QLineEdit(invite_str)
         inv_lbl.setReadOnly(True)
-        copy_inv = QPushButton("📋 Копировать")
+        copy_inv = QPushButton(_L("📋 Копировать", "📋 Copy", "📋 コピー"))
         copy_inv.clicked.connect(lambda: (QApplication.clipboard().setText(invite_str),
                                           QMessageBox.information(dlg,"Скопировано","Ссылка скопирована!")))
         inv_row.addWidget(inv_lbl)
@@ -7971,9 +8463,9 @@ class PeerPanel(QWidget):
         # Danger zone
         dl.addWidget(QLabel(""))
         danger_row = QHBoxLayout()
-        leave_btn2 = QPushButton("🚪 Выйти")
+        leave_btn2 = QPushButton(_L("🚪 Выйти", "🚪 Leave", "🚪 退出"))
         leave_btn2.clicked.connect(lambda: (dlg.accept(), self._leave_group(gid, g.get("name",""))))
-        del_btn2 = QPushButton("🗑 Удалить группу")
+        del_btn2 = QPushButton(_L("🗑 Удалить группу", "🗑 Delete group", "🗑 グループ削除"))
         del_btn2.setObjectName("danger_btn")
         del_btn2.clicked.connect(lambda: (dlg.accept(), self._delete_group(gid, g.get("name",""))))
         danger_row.addStretch()
@@ -7981,7 +8473,7 @@ class PeerPanel(QWidget):
         danger_row.addWidget(del_btn2)
         dl.addLayout(danger_row)
 
-        close_btn = QPushButton("Закрыть")
+        close_btn = QPushButton(_L("Закрыть", "Close", "閉じる"))
         dl.addWidget(close_btn)
         if tabs is not None:
             def _do_close():
@@ -8309,7 +8801,7 @@ class ChatPanel(QWidget):
         # Header row: title + pack combo + manage + close
         sp_top = QHBoxLayout()
         sp_top.setSpacing(6)
-        sp_lbl = QLabel("🎭 Стикеры")
+        sp_lbl = QLabel(_L("🎭 Стикеры", "🎭 Stickers", "🎭 スタンプ"))
         sp_lbl.setStyleSheet(
             f"font-weight:bold;font-size:11px;color:{t2['text']};background:transparent;")
         sp_top.addWidget(sp_lbl)
@@ -8321,7 +8813,7 @@ class ChatPanel(QWidget):
         self._sp_pack_combo.currentIndexChanged.connect(self._refresh_sticker_grid)
         sp_top.addWidget(self._sp_pack_combo)
 
-        manage_btn = QPushButton("⚙ Паки")
+        manage_btn = QPushButton(_L("⚙ Паки", "⚙ Packs", "⚙ パック"))
         manage_btn.setFixedHeight(26)
         manage_btn.setToolTip("Управление паками стикеров")
         manage_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -8516,7 +9008,7 @@ class ChatPanel(QWidget):
 
         # ── Избранное (self-chat) ───────────────────────────────────────
         if gid == "__favorites__":
-            self._title_lbl.setText("⭐ Избранное")
+            self._title_lbl.setText(_L("⭐ Избранное", "⭐ Favorites", "⭐ お気に入り"))
             self._title_lbl.setTextFormat(Qt.TextFormat.PlainText)
             self._sub_lbl.setText("Заметки, ссылки, файлы только для себя")
             self._call_btn.setVisible(False)
@@ -8893,7 +9385,7 @@ class ChatPanel(QWidget):
             self._search_count_lbl.setText(f"1/{count}")
             self._display.scroll_to_match(self._search_matches[0])
         else:
-            self._search_count_lbl.setText("Не найдено")
+            self._search_count_lbl.setText(_L("Не найдено", "Not found", "見つかりません"))
 
     def _search_next(self):
         if not self._search_matches: return
@@ -8918,7 +9410,7 @@ class ChatPanel(QWidget):
             self._enc_badge.setStyleSheet(
                 "font-size:9px;background:transparent;color:#4CAF50;")
         else:
-            self._enc_badge.setText("🔓 Незашифровано")
+            self._enc_badge.setText(_L("🔓 Незашифровано", "🔓 Unencrypted", "🔓 暗号化なし"))
             self._enc_badge.setStyleSheet(
                 "font-size:9px;background:transparent;color:#FF9800;")
 
@@ -9653,7 +10145,7 @@ class ChatPanel(QWidget):
 
     def _toggle_mute(self):
         muted = self.voice.toggle_mute()
-        self._mute_btn.setText("🔇 Заглушён" if muted else "🎤 Микрофон")
+        self._mute_btn.setText(TR("call_muted") if muted else "🎤 Микрофон")
         # Sync active call window if open
         if hasattr(self, "_float_call") and self._float_call:
             if hasattr(self._float_call, '_toggle_mute'):
@@ -9774,7 +10266,7 @@ class ChatPanel(QWidget):
             raw = S().get("sticker_packs", "[]", t=str)
             packs = json.loads(raw) if raw else []
             if not packs:
-                self._sp_pack_combo.addItem("(нет паков — добавьте в ⚙)")
+                self._sp_pack_combo.addItem(_L("(нет паков — добавьте в ⚙)", "(no packs — add in ⚙)", "(パックなし — ⚙で追加)"))
             for p in packs:
                 self._sp_pack_combo.addItem(p.get("name", "Без имени"))
             self._sp_pack_combo.blockSignals(False)
@@ -9794,7 +10286,7 @@ class ChatPanel(QWidget):
             packs = json.loads(raw) if raw else []
             idx = self._sp_pack_combo.currentIndex()
             if not packs or idx < 0 or idx >= len(packs) or not isinstance(packs[idx], dict):
-                no_lbl = QLabel("Нет стикеров. Добавьте пак через ⚙ Паки")
+                no_lbl = QLabel(_L("Нет стикеров. Добавьте пак через ⚙ Паки", "No stickers. Add a pack via ⚙", "スタンプなし"))
                 no_lbl.setStyleSheet("color:gray;font-size:11px;padding:8px;")
                 no_lbl.setWordWrap(True)
                 self._sticker_grid_layout.addWidget(no_lbl, 0, 0)
@@ -9839,12 +10331,12 @@ class ChatPanel(QWidget):
         if tabs is not None:
             # Check if already open
             for i in range(tabs.count()):
-                if tabs.tabText(i).strip() == "🎭 Стикеры":
+                if tabs.tabText(i).strip() == _L("🎭 Стикеры", "🎭 Stickers", "🎭 スタンプ"):
                     tabs.setCurrentIndex(i)
                     return
             dlg = StickerPackDialog(main_win)
             dlg.setWindowFlags(Qt.WindowType.Widget)
-            idx = tabs.addTab(dlg, "🎭 Стикеры")
+            idx = tabs.addTab(dlg, _L("🎭 Стикеры", "🎭 Stickers", "🎭 スタンプ"))
             tabs.setCurrentIndex(idx)
             if hasattr(main_win, '_add_tab_close_btn'):
                 main_win._add_tab_close_btn(idx)
@@ -9879,7 +10371,7 @@ class ChatPanel(QWidget):
         lay = QVBoxLayout(dlg)
         lay.setContentsMargins(12,12,12,12); lay.setSpacing(8)
 
-        hdr = QLabel("📝 Совместные заметки (синхронизируются в реальном времени)")
+        hdr = QLabel(_L("📝 Совместные заметки", "📝 Shared notes (real-time)", "📝 共有メモ"))
         hdr.setStyleSheet(
             f"font-size:12px;color:{t['accent']};background:transparent;")
         hdr.setWordWrap(True)
@@ -9897,7 +10389,7 @@ class ChatPanel(QWidget):
         lay.addWidget(editor, stretch=1)
 
         btn_row = QHBoxLayout()
-        sync_btn = QPushButton("📤 Синхронизировать")
+        sync_btn = QPushButton(_L("📤 Синхронизировать", "📤 Sync", "📤 同期"))
         sync_btn.setObjectName("accent_btn"); sync_btn.setFixedHeight(32)
         clear_btn = QPushButton("🗑 Очистить")
         clear_btn.setFixedHeight(32)
@@ -9918,7 +10410,7 @@ class ChatPanel(QWidget):
                     if ip != get_local_ip(): self.net.send_udp(pkt, ip)
             else: self.net.send_udp(pkt)
             sync_btn.setText("✅ Отправлено")
-            QTimer.singleShot(2000, lambda: sync_btn.setText("📤 Синхронизировать"))
+            QTimer.singleShot(2000, lambda: sync_btn.setText(_L("📤 Синхронизировать", "📤 Sync", "📤 同期")))
 
         def _clear():
             editor.clear()
@@ -10095,7 +10587,7 @@ class NotesWidget(QWidget):
         lay.setSpacing(4)
 
         toolbar = QHBoxLayout()
-        for label, cb in [("💾 Сохранить", self._save),
+        for label, cb in [(_L("💾 Сохранить", "💾 Save", "💾 保存"), self._save),
                           ("📂 Загрузить", self._load),
                           ("🧹 Очистить",  self._clear),
                           ("📤 Экспорт",   self._export)]:
@@ -10412,7 +10904,7 @@ class ImageCropDialog(QDialog):
         ok_btn.setObjectName("accent_btn")
         ok_btn.setFixedHeight(32)
         ok_btn.clicked.connect(self._apply)
-        cancel_btn = QPushButton("Отмена")
+        cancel_btn = QPushButton(_L("Отмена", "Cancel", "キャンセル"))
         cancel_btn.setFixedHeight(32)
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
@@ -10977,9 +11469,9 @@ class ProfileDialog(QDialog):
         bl.addWidget(self._banner_lbl)
 
         banner_row = QHBoxLayout()
-        banner_btn = QPushButton("📷 Выбрать баннер")
+        banner_btn = QPushButton(TR("banner"))
         banner_btn.clicked.connect(self._pick_banner)
-        clear_banner_btn = QPushButton("🗑 Убрать")
+        clear_banner_btn = QPushButton(_L("🗑 Убрать", "🗑 Remove", "🗑 削除"))
         clear_banner_btn.clicked.connect(self._clear_banner)
         banner_row.addWidget(banner_btn)
         banner_row.addWidget(clear_banner_btn)
@@ -11060,7 +11552,7 @@ class ProfileDialog(QDialog):
         save.setObjectName("accent_btn")
         save.clicked.connect(self._save)
         blay.addWidget(save)
-        cancel = QPushButton("Отмена")
+        cancel = QPushButton(_L("Отмена", "Cancel", "キャンセル"))
         cancel.clicked.connect(self.reject)
         blay.addWidget(cancel)
         lay.addLayout(blay)
@@ -11099,7 +11591,7 @@ class ProfileDialog(QDialog):
         preview = ProfilePreviewWidget()
         lay.addWidget(preview, stretch=1)
 
-        close = QPushButton("Закрыть")
+        close = QPushButton(_L("Закрыть", "Close", "閉じる"))
         close.setObjectName("accent_btn"); close.setFixedHeight(36)
         close.setContentsMargins(16,0,16,0)
         close.clicked.connect(dlg.accept)
@@ -11230,7 +11722,7 @@ class CustomThemeDialog(QDialog):
 
         # Name
         nl = QHBoxLayout()
-        nl.addWidget(QLabel("Название:"))
+        nl.addWidget(QLabel(_L("Название:", "Name:", "名前:")))
         self._name = QLineEdit(f"Моя тема {self.slot}")
         nl.addWidget(self._name)
         lay.addLayout(nl)
@@ -11280,7 +11772,7 @@ class CustomThemeDialog(QDialog):
         save.setObjectName("accent_btn")
         save.clicked.connect(self._save)
         blay.addWidget(save)
-        cancel = QPushButton("Отмена")
+        cancel = QPushButton(_L("Отмена", "Cancel", "キャンセル"))
         cancel.clicked.connect(self.reject)
         blay.addWidget(cancel)
         lay.addLayout(blay)
@@ -11344,7 +11836,7 @@ class SettingsDialog(QDialog):
         save.setObjectName("accent_btn")
         save.clicked.connect(self._save)
         blay.addWidget(save)
-        cancel = QPushButton("Закрыть")
+        cancel = QPushButton(_L("Закрыть", "Close", "閉じる"))
         cancel.clicked.connect(self.reject)
         blay.addWidget(cancel)
         lay.addLayout(blay)
@@ -12013,9 +12505,9 @@ class SettingsDialog(QDialog):
         dl.addWidget(req_note)
 
         btn_row = QHBoxLayout()
-        ok_btn = QPushButton("💾 Сохранить")
+        ok_btn = QPushButton(_L("💾 Сохранить", "💾 Save", "💾 保存"))
         ok_btn.setObjectName("accent_btn")
-        cancel_btn = QPushButton("Отмена")
+        cancel_btn = QPushButton(_L("Отмена", "Cancel", "キャンセル"))
         btn_row.addStretch()
         btn_row.addWidget(ok_btn)
         btn_row.addWidget(cancel_btn)
@@ -12326,7 +12818,7 @@ class SettingsDialog(QDialog):
             act_l.addWidget(self._lic_input)
 
             btn_row = QHBoxLayout()
-            self._activate_btn = QPushButton("Активировать")
+            self._activate_btn = QPushButton(_L("Активировать", "Activate", "認証"))
             self._activate_btn.setObjectName("accent_btn")
             self._activate_btn.setFixedHeight(36)
             self._activate_btn.clicked.connect(self._activate)
@@ -12489,7 +12981,7 @@ class SettingsDialog(QDialog):
                 "Настройте GITHUB_REPO в исходном коде для автообновления.")
             return
         dest = str(Path(sys.argv[0]).parent / f"goidaphone_update_{APP_VERSION}.py")
-        dlg  = QProgressDialog("Загрузка обновления...", "Отмена", 0, 100, self)
+        dlg  = QProgressDialog("Загрузка обновления...", _L("Отмена", "Cancel", "キャンセル"), 0, 100, self)
         dlg.setWindowModality(Qt.WindowModality.WindowModal)
         dlg.show()
         self._updater = Updater(GITHUB_RAW_URL, dest)
@@ -12561,11 +13053,11 @@ class SettingsDialog(QDialog):
         # Launcher settings
         g2 = QGroupBox("🚀 Запуск")
         fl2 = QFormLayout(g2)
-        self._show_launcher_cb = QCheckBox(
+        self._show_launcher_cb2 = QCheckBox(
             "Показывать экран выбора режима при запуске" if S().language=="ru"
             else "Show mode selection screen on startup")
-        self._show_launcher_cb.setChecked(S().show_launcher)
-        fl2.addRow(self._show_launcher_cb)
+        self._show_launcher_cb2.setChecked(S().show_launcher)
+        fl2.addRow(self._show_launcher_cb2)
 
         self._os_notif_cb = QCheckBox(
             "Системные уведомления о новых сообщениях" if S().language=="ru"
@@ -13009,7 +13501,7 @@ class SettingsDialog(QDialog):
             te = QPlainTextEdit(report); te.setReadOnly(True)
             te.setStyleSheet(f"font-family:monospace;font-size:9pt;background:{t['bg3']};color:{t['text']};")
             vl.addWidget(te)
-            vl.addWidget(QPushButton("Закрыть", clicked=dlg.accept))
+            vl.addWidget(QPushButton(_L("Закрыть", "Close", "閉じる"), clicked=dlg.accept))
             dlg.exec()
         audit_btn.clicked.connect(_show_audit)
         vault_btn_row.addWidget(audit_btn)
@@ -13953,6 +14445,8 @@ class SettingsDialog(QDialog):
             cfg.language = self._lang_combo.currentData() or "ru"
         if hasattr(self, '_show_launcher_cb'):
             cfg.show_launcher = self._show_launcher_cb.isChecked()
+        if hasattr(self, '_show_launcher_cb2'):
+            cfg.show_launcher = self._show_launcher_cb2.isChecked()
         if hasattr(self, '_os_notif_cb'):
             cfg.os_notifications = self._os_notif_cb.isChecked()
 
@@ -14508,7 +15002,7 @@ class PeerProfileDialog(QDialog):
         outer.addWidget(card)
 
         # Close button
-        close_btn = QPushButton("✕  " + ("Закрыть" if lang=="ru" else "Close"))
+        close_btn = QPushButton("✕  " + (_L("Закрыть", "Close", "閉じる") if lang=="ru" else "Close"))
         close_btn.setObjectName("accent_btn")
         close_btn.clicked.connect(self.accept)
         close_btn.setFixedHeight(36)
@@ -15886,7 +16380,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
             self._navigate(url)
         elif act == edit_a:
             new_t, ok = QInputDialog.getText(
-                self, "Переименовать закладку", "Название:", text=title)
+                self, "Переименовать закладку", _L("Название:", "Name:", "名前:"), text=title)
             if ok and new_t.strip():
                 self._bookmarks[idx]['title'] = new_t.strip()
                 self._save_bookmarks(); self._refresh_bmarks()
@@ -16160,14 +16654,14 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
                 match_e.setText(sc.get("match","*"))
                 code_e.setPlainText(sc.get("code",""))
         lw.itemClicked.connect(_load)
-        save_b=QPushButton("💾 Сохранить"); save_b.setObjectName("accent_btn")
+        save_b=QPushButton(_L("💾 Сохранить", "💾 Save", "💾 保存")); save_b.setObjectName("accent_btn")
         run_b=QPushButton("▶ Запустить на текущей"); run_b.setFixedHeight(32)
         run_b.setStyleSheet(
             f"QPushButton{{background:{t['bg3']};color:{t['text']};"
             f"border:1px solid {t['border']};border-radius:6px;}}"
             f"QPushButton:hover{{background:{t['btn_hover']};}}")
         save_b.clicked.connect(_save); run_b.clicked.connect(_run)
-        rl.addWidget(QLabel("Название:")); rl.addWidget(name_e)
+        rl.addWidget(QLabel(_L("Название:", "Name:", "名前:"))); rl.addWidget(name_e)
         rl.addWidget(QLabel("URL (паттерн):")); rl.addWidget(match_e)
         rl.addWidget(QLabel("Код:")); rl.addWidget(code_e,stretch=1)
         br=QHBoxLayout(); br.addWidget(save_b); br.addWidget(run_b)
@@ -16356,7 +16850,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
         info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         info.setStyleSheet(f"font-size:11px;color:{t['text_dim']};background:transparent;")
         vl.addWidget(info)
-        close = QPushButton("Закрыть"); close.setObjectName("accent_btn")
+        close = QPushButton(_L("Закрыть", "Close", "閉じる")); close.setObjectName("accent_btn")
         close.clicked.connect(dlg.accept); vl.addWidget(close)
         dlg.exec()
 
@@ -17625,7 +18119,7 @@ class GroupCallWindow(QWidget):
             flag = " (Вы)" if peer.get("_is_self") else ""
             lw.addItem(f"👤  {name}{flag}")
         vl.addWidget(lw)
-        close = QPushButton("Закрыть")
+        close = QPushButton(_L("Закрыть", "Close", "閉じる"))
         close.clicked.connect(dlg.accept)
         vl.addWidget(close)
         dlg.exec()
@@ -17843,8 +18337,8 @@ class GroupCallWindow(QWidget):
         lbl = QLabel(stats_text)
         lbl.setStyleSheet("font-family:monospace;font-size:12px;padding:12px;")
         vl.addWidget(lbl)
-        QPushButton("Закрыть", clicked=dlg.accept, parent=dlg)
-        close = QPushButton("Закрыть"); close.clicked.connect(dlg.accept)
+        QPushButton(_L("Закрыть", "Close", "閉じる"), clicked=dlg.accept, parent=dlg)
+        close = QPushButton(_L("Закрыть", "Close", "閉じる")); close.clicked.connect(dlg.accept)
         vl.addWidget(close)
         dlg.exec()
 
@@ -17991,7 +18485,7 @@ class StickerPackDialog(QDialog):
         add_sticker_btn.clicked.connect(self._add_sticker)
         bot.addWidget(add_sticker_btn)
         bot.addStretch()
-        close_btn = QPushButton("Закрыть")
+        close_btn = QPushButton(_L("Закрыть", "Close", "閉じる"))
         close_btn.clicked.connect(self.hide)
         bot.addWidget(close_btn)
         lay.addLayout(bot)
@@ -18396,7 +18890,7 @@ class GoidaTerminal(QWidget):
 
         # Traffic-light dots — RIGHT side (Windows/Linux convention)
         self._traffic_dots = []
-        for col, tip in [("#FF5F56","Закрыть"),("#FFBD2E","Свернуть"),("#27C93F","Развернуть")]:
+        for col, tip in [("#FF5F56",_L("Закрыть", "Close", "閉じる")),("#FFBD2E","Свернуть"),("#27C93F","Развернуть")]:
             d = QLabel("⬤")
             d.setStyleSheet(f"color:{col};font-size:11px;background:transparent;")
             d.setToolTip(tip)
@@ -18442,19 +18936,22 @@ class GoidaTerminal(QWidget):
         for label, tip, cb in [
             ("▁", "Свернуть",   self._collapse),
             ("⛶", "Развернуть", self._expand),
-            ("✕", "Закрыть",    self.hide),
+            ("✕", _L("Закрыть", "Close", "閉じる"),    self.hide),
         ]:
             b = QPushButton(label)
             b.setFixedSize(24, 24)
             b.setToolTip(tip)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setStyleSheet("""
-                QPushButton {
-                    background:#151530;color:#8080A0;
+            _btn_acc = self._tt.get('accent', '#7C4DFF')
+            _btn_bg  = self._tt.get('bg3', '#151530')
+            _btn_dim = self._tt.get('text_dim', '#8080A0')
+            b.setStyleSheet(f"""
+                QPushButton {{
+                    background:{_btn_bg};color:{_btn_dim};
                     border:none;border-radius:12px;
                     font-size:10px;font-weight:bold;
-                }
-                QPushButton:hover{background:#2A2A60;color:#E0E0FF;}
+                }}
+                QPushButton:hover{{background:{_btn_acc}22;color:{_btn_acc};}}
             """)
             b.clicked.connect(cb)
             lay.addWidget(b)
@@ -18467,36 +18964,39 @@ class GoidaTerminal(QWidget):
     def _build_tabs(self) -> QTabWidget:
         self._tabs = QTabWidget()
         _acc = self._tt.get('accent', '#7C4DFF')
+        _acc_tab = self._tt.get('accent', '#39FF14')
         self._tabs.setStyleSheet(f"""
             QTabWidget::pane {{
                 border: none;
                 background: #000000;
+                border-radius: 0;
             }}
             QTabBar {{
-                background: #0A0A0A;
-                border-bottom: 1px solid #1A1A1A;
+                background: #080808;
             }}
             QTabBar::tab {{
-                background: #0A0A0A;
-                color: #555555;
+                background: transparent;
+                color: #444444;
                 font-size: 9px;
-                font-weight: bold;
+                font-weight: 700;
                 letter-spacing: 2px;
                 font-family: monospace;
-                padding: 6px 16px;
+                padding: 7px 18px 6px 18px;
                 border: none;
                 border-bottom: 2px solid transparent;
-                margin-right: 0px;
-                min-width: 80px;
+                margin-right: 1px;
+                min-width: 72px;
+                border-radius: 0;
             }}
             QTabBar::tab:selected {{
-                background: #000000;
-                color: #CCCCCC;
-                border-bottom: 2px solid {_acc};
+                background: #0D0D0D;
+                color: {_acc_tab};
+                border-bottom: 2px solid {_acc_tab};
             }}
             QTabBar::tab:hover:!selected {{
                 background: #111111;
-                color: #888888;
+                color: #666666;
+                border-bottom: 2px solid #222222;
             }}
         """)
 
@@ -18673,6 +19173,7 @@ class GoidaTerminal(QWidget):
             def __init__(self, net_ref, parent=None):
                 super().__init__(parent)
                 self._net = net_ref
+                self._tt  = get_theme(S().theme)
                 self.setMinimumHeight(300)
                 self._timer = QTimer(self)
                 self._timer.timeout.connect(self.update)
@@ -18708,7 +19209,8 @@ class GoidaTerminal(QWidget):
                         p.drawLine(cx, cy, nx, ny)
 
                     # Draw node
-                    color = QColor("#7C4DFF") if is_me else QColor("#2D6A4F")
+                    _gc = self._tt.get('accent', '#7C4DFF')
+                    color = QColor(_gc) if is_me else QColor("#2D6A4F")
                     p.setBrush(QBrush(color))
                     p.setPen(QPen(QColor("#A0A0FF") if is_me else QColor("#74C69D"), 2))
                     node_r = 22 if is_me else 18
@@ -18722,7 +19224,7 @@ class GoidaTerminal(QWidget):
                                Qt.AlignmentFlag.AlignCenter, short)
                     if ip:
                         p.setFont(QFont("monospace", 7))
-                        p.setPen(QPen(QColor("#666688")))
+                        p.setPen(QPen(QColor(self._tt.get('text_dim', '#666688'))))
                         p.drawText(nx - 35, ny + node_r + 26, 70, 14,
                                    Qt.AlignmentFlag.AlignCenter, ip.split(".")[-1])
                 p.end()
@@ -18871,7 +19373,7 @@ class GoidaTerminal(QWidget):
         self._sb_time   = QLabel("")
 
         for lbl in [self._sb_peers, self._sb_crypto, self._sb_uptime]:
-            lbl.setStyleSheet("color:#303060;font-size:8px;font-family:monospace;background:transparent;")
+            lbl.setStyleSheet(f"color:{self._tt.get('text_dim','#444466')};font-size:8px;font-family:monospace;background:transparent;")
             lay.addWidget(lbl)
 
         lay.addStretch()
@@ -20544,7 +21046,7 @@ class MewaPlayer(QWidget):
         mk_tb("✕", "Очистить очередь", self._clear_queue)
         tbl.addStretch()
         self._search_edit = QLineEdit()
-        self._search_edit.setPlaceholderText("🔍 Поиск...")
+        self._search_edit.setPlaceholderText(_L("🔍 Поиск...", "🔍 Search...", "🔍 検索..."))
         self._search_edit.setFixedWidth(180)
         self._search_edit.setStyleSheet(
             f"QLineEdit{{background:{t['bg3']};color:{t['text']};"
@@ -21790,7 +22292,7 @@ class MewaPlayer(QWidget):
         if not item: return
         row = self._queue_tbl.row(item)
         menu = QMenu(self)
-        menu.addAction("▶ Воспроизвести",   lambda: self._play_idx(row))
+        menu.addAction(TR("btn_play"),   lambda: self._play_idx(row))
         menu.addAction("🗑 Убрать из очереди", lambda: self._remove_row(row))
         menu.addAction("📁 Открыть в менеджере",
             lambda: self._open_fm(self._playlist[row]["path"]))
@@ -21815,7 +22317,7 @@ class MewaPlayer(QWidget):
 
     # ── playlists ─────────────────────────────────────────────────────────────
     def _save_playlist(self):
-        name, ok = QInputDialog.getText(self,"Сохранить плейлист","Название:")
+        name, ok = QInputDialog.getText(self,"Сохранить плейлист",_L("Название:", "Name:", "名前:"))
         if not ok or not name.strip(): return
         import json as _json
         pls = _json.loads(S().get("mewa_playlists","[]",t=str))
@@ -22098,7 +22600,7 @@ class QuickSetupWizard(QDialog):
         lay.addWidget(sub)
 
         btn_row = QHBoxLayout()
-        skip = QPushButton("Позже")
+        skip = QPushButton(TR("btn_later"))
         skip.setStyleSheet(
             f"QPushButton{{background:transparent;color:{t['text_dim']};"
             f"border:1px solid {t['border']};border-radius:8px;padding:6px 18px;}}"
@@ -22730,7 +23232,7 @@ class TutorialOverlay(QWidget):
         self._title_lbl.setText(title)
         self._body_lbl.setText(body)
         last = idx == total - 1
-        self._next_btn.setText(("Завершить ✓" if lang=="ru" else "Finish ✓") if last
+        self._next_btn.setText((TR("tutorial_finish") if lang=="ru" else "Finish ✓") if last
                                 else ("Далее →" if lang=="ru" else "Next →"))
 
         # Find target widget for arrow highlight
@@ -22872,7 +23374,7 @@ class MainWindow(QMainWindow):
 
         # Start networking
         if not self.net.start():
-            QMessageBox.critical(self,"Сеть", TR("network_error"))
+            QMessageBox.critical(self,TR("tab_network"), TR("network_error"))
 
         # System tray icon
         self._setup_tray()
@@ -23106,9 +23608,17 @@ class MainWindow(QMainWindow):
             self._show_tutorial()
 
     def _start_quicksetup(self):
-        """Запустить быструю настройку вручную из меню."""
-        S().set("quicksetup_done", False)  # сбрасываем чтобы показало
-        QuickSetupWizard.offer(self)
+        """Запустить быструю настройку как inline вкладку."""
+        for i in range(self._tabs.count()):
+            if "настройка" in self._tabs.tabText(i).lower():
+                self._tabs.setCurrentIndex(i)
+                return
+        wiz = QuickSetupWizard(self)
+        wiz.setWindowFlags(Qt.WindowType.Widget)
+        wiz.setModal(False)
+        idx = self._tabs.addTab(wiz, TR("quicksetup_title"))
+        self._tabs.setCurrentIndex(idx)
+        self._add_tab_close_btn(idx)
 
     def _toggle_terminal(self):
         """Toggle the floating GoidaPhone terminal panel with animation."""
@@ -23264,11 +23774,30 @@ class MainWindow(QMainWindow):
         hm.addAction(act("🌐 Winora NetScape (WNS)", self._open_wns, "Ctrl+B"))
         hm.addSeparator()
         hm.addAction(act("❓ Учебник / Tutorial", self._start_tutorial))
-        hm.addAction(act("⚡ Быстрая настройка", self._start_quicksetup))
+        hm.addAction(act(TR("quicksetup_title"), self._start_quicksetup))
 
     def _switch_theme(self, key: str):
+        prev_key = S().theme
         S().theme = key
         self._apply_theme_from_settings()
+        # Предупреждаем если тема изменилась — нужен перезапуск для полного применения
+        if prev_key != key:
+            t = get_theme(key)
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle(TR("theme_changed"))
+            dlg.setText(f"Тема «{key}» применена.\n\nДля полного применения нужен перезапуск.")
+            back_btn    = dlg.addButton(TR("theme_back"), QMessageBox.ButtonRole.RejectRole)
+            restart_btn = dlg.addButton(TR("theme_restart"),   QMessageBox.ButtonRole.AcceptRole)
+            later_btn   = dlg.addButton(TR("btn_later"),              QMessageBox.ButtonRole.DestructiveRole)
+            dlg.setDefaultButton(later_btn)
+            dlg.exec()
+            clicked = dlg.clickedButton()
+            if clicked == back_btn:
+                S().theme = prev_key
+                self._apply_theme_from_settings()
+            elif clicked == restart_btn:
+                import os, sys
+                os.execv(sys.executable, [sys.executable] + sys.argv)
 
     def _switch_language(self, lang: str):
         if S().language == lang:
@@ -23282,8 +23811,8 @@ class MainWindow(QMainWindow):
         dlg = QMessageBox(self)
         dlg.setWindowTitle("Язык / Language / 言語")
         dlg.setText(msg_text + "\n\nДля полного применения нужен перезапуск.\nПерезапустить сейчас?")
-        restart_btn = dlg.addButton("↺ Перезапустить", QMessageBox.ButtonRole.AcceptRole)
-        later_btn   = dlg.addButton("Позже",           QMessageBox.ButtonRole.RejectRole)
+        restart_btn = dlg.addButton(TR("theme_restart"), QMessageBox.ButtonRole.AcceptRole)
+        later_btn   = dlg.addButton(TR("btn_later"),           QMessageBox.ButtonRole.RejectRole)
         dlg.setDefaultButton(restart_btn)
         dlg.exec()
         if dlg.clickedButton() == restart_btn:
@@ -23294,18 +23823,18 @@ class MainWindow(QMainWindow):
     def _setup_statusbar(self):
         sb = self.statusBar()
 
-        self._status_main = QLabel("🔍 Поиск пользователей...")
+        self._status_main = QLabel(TR("searching"))
         sb.addWidget(self._status_main)
 
         self._status_ip = StatusWidget(f"IP: {get_local_ip()}", "#8090B0")
         sb.addPermanentWidget(self._status_ip)
 
-        self._status_mic = StatusWidget("🎤 Вкл", "#80FF80")
+        self._status_mic = StatusWidget(TR("mic_on"), "#80FF80")
         self._status_mic.setToolTip("Кликните для переключения")
         self._status_mic.mousePressEvent = lambda e: self._toggle_mute()
         sb.addPermanentWidget(self._status_mic)
 
-        self._status_call = StatusWidget("📞 Нет звонков", "#A0A0A0")
+        self._status_call = StatusWidget(TR("no_calls"), "#A0A0A0")
         sb.addPermanentWidget(self._status_call)
 
         self._status_prem = StatusWidget("👑 Премиум", "#FFD700")
@@ -23507,7 +24036,7 @@ class MainWindow(QMainWindow):
                 self._call_log_widget.add_call(name, False, dur)
             self._call_start_time = 0.0
             t = get_theme(S().theme)
-            self._status_call.setText("📞 Нет звонков")
+            self._status_call.setText(TR("no_calls"))
             self._status_call.setStyleSheet(
                 f"color:{t['text_dim']}; background:{t['bg2']}; border:1px solid {t['border']};"
                 "border-radius:3px; padding:1px 7px; font-size:10px;")
@@ -23806,12 +24335,12 @@ class MainWindow(QMainWindow):
     def _toggle_mute(self):
         muted = self.voice.toggle_mute()
         if muted:
-            self._status_mic.setText("🔇 Выкл")
+            self._status_mic.setText(TR("mic_off"))
             self._status_mic.setStyleSheet(
                 "color:#FF6060; background:#3A1010; border:1px solid #5A2020;"
                 "border-radius:3px; padding:1px 7px; font-size:10px;")
         else:
-            self._status_mic.setText("🎤 Вкл")
+            self._status_mic.setText(TR("mic_on"))
             self._status_mic.setStyleSheet(
                 "color:#80FF80; background:#103010; border:1px solid #205020;"
                 "border-radius:3px; padding:1px 7px; font-size:10px;")
@@ -24203,7 +24732,7 @@ class GoidaDeathScreen(QWidget):
             _make_btn("💾 Сохранить отчёт", "#0050CC", "#0066EE",
                       lambda: self._save_report(tb_str, error_code, ts)))
         btn_row.addWidget(
-            _make_btn("📋 Копировать", "#0050CC", "#0066EE",
+            _make_btn(_L("📋 Копировать", "📋 Copy", "📋 コピー"), "#0050CC", "#0066EE",
                       lambda: QApplication.clipboard().setText(
                           f"GoidaPhone Death Report\n{ts}\n{error_code}\n\n{tb_str}")))
         if manual:
@@ -24384,13 +24913,13 @@ def main():
         # ── Qt CSS warnings ("Could not parse stylesheet") ────────────────────
         # В Qt6 правильные имена категорий:
         _os.environ["QT_LOGGING_RULES"] = (
-            "*.debug=false\n"
-            "qt.qpa.stylesheet=false\n"
-            "qt.qpa.fonts=false\n"
-            "qt.widgets.stylesheet=false\n"
-            "qt.core.logging=false\n"
-            "qt.multimedia*=false\n"
-            "ffmpeg*=false\n"
+            "*.debug=false;"
+            "qt.qpa.stylesheet=false;"
+            "qt.qpa.fonts=false;"
+            "qt.widgets.stylesheet=false;"
+            "qt.core.logging=false;"
+            "qt.multimedia*=false;"
+            "ffmpeg*=false;"
         )
         # Дополнительно через QLoggingCategory после создания QApplication:
         # вызывается ниже после app = QApplication(...)
@@ -24479,13 +25008,13 @@ def main():
     try:
         from PyQt6.QtCore import QLoggingCategory
         QLoggingCategory.setFilterRules(
-            "*.debug=false\n"
-            "qt.qpa.stylesheet=false\n"
-            "qt.qpa.fonts=false\n"
-            "qt.widgets.stylesheet=false\n"
-            "qt.core.logging=false\n"
-            "qt.multimedia*=false\n"
-            "ffmpeg*=false\n"
+            "*.debug=false;"
+            "qt.qpa.stylesheet=false;"
+            "qt.qpa.fonts=false;"
+            "qt.widgets.stylesheet=false;"
+            "qt.core.logging=false;"
+            "qt.multimedia*=false;"
+            "ffmpeg*=false;"
         )
     except Exception:
         pass
