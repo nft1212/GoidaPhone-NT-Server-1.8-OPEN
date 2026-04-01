@@ -726,8 +726,8 @@ _SOUND_EVENT_LABELS = {
     "message":    "💬 Новое сообщение",
     "mention":    "🔔 Упоминание (@имя)",
     "call":       "📞 Входящий звонок",
-    "call_end":   "📵 Звонок завершён",
-    "online":     "🟢 Пользователь онлайн",
+    "call_end":   "📵 Call ended",
+    "online":     "🟢 Пользователь online",
     "offline":    "🔴 Пользователь офлайн",
     "delete":     "🗑 Удаление",
     "pin":        "📌 Закрепление",
@@ -1221,7 +1221,7 @@ def _open_link(url: str, parent=None):
     btn_row.addWidget(wns_btn); btn_row.addWidget(sys_btn)
     vl.addLayout(btn_row)
 
-    remember = QCheckBox("Запомнить выбор (изменить в Настройки → Приватность)")
+    remember = QCheckBox("Remember choice (change in Settings → Privacy)")
     remember.setStyleSheet(
         f"color:{t['text_dim']};font-size:10px;background:transparent;")
     vl.addWidget(remember)
@@ -1275,17 +1275,17 @@ def _open_media_smart(path: str, parent=None):
     vl.setContentsMargins(20,16,20,16); vl.setSpacing(12)
 
     fname = Path(path).name
-    lbl = QLabel(f"<b>{fname}</b><br><br>Чем открыть медиафайл?")
+    lbl = QLabel(f"<b>{fname}</b><br><br>" + _L("Чем открыть?", "How to open?", "何で開く?"))
     lbl.setTextFormat(Qt.TextFormat.RichText)
     lbl.setWordWrap(True)
     lbl.setStyleSheet(f"font-size:12px;color:{t['text']};background:transparent;")
     vl.addWidget(lbl)
 
-    remember = QCheckBox("Запомнить мой выбор (можно сменить в Настройках)")
+    remember = QCheckBox("Remember my choice (changeable in Settings)")
     remember.setStyleSheet(f"color:{t['text_dim']};font-size:10px;background:transparent;")
     vl.addWidget(remember)
 
-    info = QLabel("Сменить выбор: Настройки → Приватность → Медиаплеер")
+    info = QLabel(_L("Сменить: Настройки → Приватность", "Change: Settings → Privacy", "設定→プライバシー"))
     info.setStyleSheet(f"font-size:9px;color:{t['text_dim']};background:transparent;")
     vl.addWidget(info)
 
@@ -1420,8 +1420,8 @@ class SecureVault:
       Layers 2-5:  Защита данных, UI и памяти
       Layers 6-10: Поведенческая и оперативная защита
       Layers 11-15: Сетевая и криптографическая защита
-      Layers 16-19: Протокольная защита
-      Layer 20:    🔴 Параноидальный режим — всё включено
+      Layers 16-19: Protocolьная защита
+      Layer 20:    🔴 Параноидальный режим — всё enabled
     """
 
     VAULT_FILE    = "vault.gcrypto"
@@ -1537,7 +1537,7 @@ class SecureVault:
             f"Существует: {self.vault_exists()}",
             f"Разблокировано: {self.is_unlocked()}",
             f"PBKDF2 итерации: {self.PBKDF2_ITERS:,}",
-            f"Алгоритм: AES-256-GCM",
+            f"Algorithm: AES-256-GCM",
             f"Ключ: PBKDF2-HMAC-SHA256",
         ]
         if self._unlocked:
@@ -1626,7 +1626,7 @@ class IntegrityChecker:
             print(f"[IntegrityChecker] sign: {e}")
 
     def verify(self, key: bytes) -> bool | None:
-        """Проверить подпись. None = нет подписи (первый запуск)."""
+        """Проверить подпись. None = no подписи (первый запуск)."""
         if not self._sig_path.exists():
             return None
         try:
@@ -2891,13 +2891,13 @@ _STRINGS_RU = {
     "private_chat":         "Личный чат",
     "type_message":         "Введите сообщение...",
     "send":                 "Отправить",
-    "call":                 "Позвонить",
+    "call":                 "Call",
     "hangup":               "Завершить",
     "attach":               "Файл",
     "emoji":                "Эмодзи",
-    "stickers":             "Стикеры",
+    "stickers":             "Stickers",
     "typing":               "печатает...",
-    "you":                  "Вы",
+    "you":                  "You",
     "call_started":         "通話開始",
     "call_ended":           "通話終了",
     "active_call":          "📞 通話中",
@@ -2906,11 +2906,11 @@ _STRINGS_RU = {
     # Users panel
     "users":                "👥 Пользователи",
     "groups":               "📂 Группы",
-    "search":               _L("🔍 Поиск...", "🔍 Search...", "🔍 検索..."),
-    "create_group":         _L("➕ Создать группу", "➕ Create group", "➕ グループ作成"),
+    "search":               "🔍 Поиск...",
+    "create_group":         "➕ Создать группу",
     "new_group":            "Новая группа",
-    "group_name":           "Название группы:",
-    "group_created":        "Группа создана.",
+    "group_name":           "Group name:",
+    "group_created":        "Group created.",
     "add_members":          "Добавьте участников через контекстное меню.",
     "personal_chat":        "💬 Личный чат",
     "call_peer":            "📞 Позвонить",
@@ -2924,7 +2924,7 @@ _STRINGS_RU = {
     "msg_edit_hint":        "(編集済)",
     "msg_forwarded":        "↪ 転送",
     "msg_reaction_add":     "Добавить реакцию",
-    "msg_copy":             _L("📋 Копировать", "📋 Copy", "📋 コピー"),
+    "msg_copy":             "📋 Copy",
     "msg_edit":             "✏ Редактировать",
     "msg_delete":           "🗑 Удалить",
     "msg_forward":          "↪ Переслать",
@@ -2934,7 +2934,7 @@ _STRINGS_RU = {
     "notif_new_message":    "Новое сообщение",
     "notif_incoming_call":  "Входящий звонок",
     "notif_file_received":  "Получен файл",
-    "notif_user_online":    "пользователь онлайн",
+    "notif_user_online":    "пользователь online",
     # Settings
     "settings":             "Настройки GoidaPhone",
     "tab_audio":            "🎵 Аудио",
@@ -2944,21 +2944,21 @@ _STRINGS_RU = {
     "tab_data":             "💾 Данные",
     "tab_specialist":       "🔧 Для специалистов",
     "tab_language":         "🌍 Язык",
-    "save":                 _L("💾 Сохранить", "💾 Save", "💾 保存"),
-    "close":                _L("Закрыть", "Close", "閉じる"),
-    "cancel":               _L("Отмена", "Cancel", "キャンセル"),
+    "save":                 "💾 Сохранить",
+    "close":                "Закрыть",
+    "cancel":               "Отмена",
     "yes":                  "Да",
     "no":                   "Нет",
     "ok":                   "OK",
-    "saved":                "Настройки сохранены!",
+    "saved":                "Settings saved!",
     # Profile
     "my_profile":           "👤 Мой профиль",
-    "username":             "Имя пользователя:",
+    "username":             "Username:",
     "bio":                  "О себе:",
     "avatar":               "Аватар",
     "change_avatar":        "📷 Сменить аватар",
     "banner":               "Баннер профиля",
-    "nickname_color":       "Цвет ника:",
+    "nickname_color":       "Nick color:",
     "custom_emoji":         "Эмодзи рядом с именем:",
     "profile_saved":        "Профиль сохранён!",
     # Calls
@@ -2967,13 +2967,13 @@ _STRINGS_RU = {
     "reject":               "❌ Отклонить",
     # Launcher
     "launcher_title":       "GoidaPhone",
-    "launcher_subtitle":    "Добро пожаловать",
+    "launcher_subtitle":    "Welcome",
     "launcher_gui":         "🖥 Запустить\nграфический\nинтерфейс",
     "launcher_cmd":         "⌨ Запустить\nконсольный\nрежим",
     "launcher_gui_hint":    "Полный интерфейс с чатом, звонками и файлами",
     "launcher_cmd_hint":    "Для серверов, диагностики и автоматизации",
     # About
-    "about":                f"О {APP_NAME}",
+    "about":                "О GoidaPhone",
     # Updates
     "check_updates":        "🔄 Проверить обновления",
     "update_found":         "🚀 Доступна версия",
@@ -2990,7 +2990,7 @@ _STRINGS_RU = {
     "cmd_help": "Команды: /clear /help /me /ping /version /ttl /poll /notes /schedule /tr /translate",
     "cmd_me":               "действует",
     "cmd_ping":             "Pong!",
-    "cmd_unknown":          "Неизвестная команда. Введите /help для списка команд.",
+    "cmd_unknown":          "Unknown command. Введите /help для списка команд.",
     # Status
     "searching":            "🔍 ユーザーを検索中...",
     "no_calls":             "📞 通話なし",
@@ -3017,7 +3017,7 @@ _STRINGS_RU = {
     "launcher_hint":               "← → стрелки  •  Enter запуск",
     "launcher_run":                "起動  ▶",
     "launcher_help":               "❓ ヘルプ",
-    "btn_close_lbl":               _L("Закрыть", "Close", "閉じる"),
+    "btn_close_lbl":               "Закрыть",
     "loading":                     "Загрузка",
     "online_since":                "🕐 Онлайн с",
     "premium_user":                "👑 プレミアムユーザー",
@@ -3039,10 +3039,10 @@ _STRINGS_RU = {
     "theme_back":                  "← 元に戻す",
     "theme_restart":               "↺ 再起動",
     "file_received_msg":           "файл получен",
-    "save_file":                   _L("💾 Сохранить", "💾 Save", "💾 保存"),
+    "save_file":                   "💾 Сохранить",
     "open_file":                   "開く",
     "history_empty":               "История пуста",
-    "no_messages":                 "Нет сообщений",
+    "no_messages":                 "No messages",
     "quicksetup_title":            "⚡ クイック設定",
     "quicksetup_q1":               "Как тебя зовут?",
     "quicksetup_q2":               "Выбери цвет ника",
@@ -3052,9 +3052,9 @@ _STRINGS_RU = {
     "quicksetup_q6":               "Показывать сплеш при запуске?",
     "quicksetup_done":             "Всё настроено! 🎉",
     "tutorial_skip":               "✕ スキップ",
-    "tutorial_next":               "Далее →",
+    "tutorial_next":               "Next →",
     "tutorial_finish":             "完了 ✓",
-    "tutorial_back":               "← Назад",
+    "tutorial_back":               "← Back",
     "connecting":                  "接続中...",
     "connected":                   "接続済み",
     "disconnected":                "切断",
@@ -3064,12 +3064,12 @@ _STRINGS_RU = {
     "tab_privacy":             "🛡 Приватность",
     "tab_calls":               "📞 Звонки",
     "tab_sounds":              "🔔 Звуки",
-    "btn_save":                _L("💾 Сохранить", "💾 Save", "💾 保存"),
-    "btn_close":               _L("Закрыть", "Close", "閉じる"),
-    "btn_cancel":              _L("Отмена", "Cancel", "キャンセル"),
-    "lbl_online_users":        "Пользователи онлайн",
+    "btn_save":                "💾 Сохранить",
+    "btn_close":               "Закрыть",
+    "btn_cancel":              "Отмена",
+    "lbl_online_users":        "Пользователи online",
     "no_users":                "Нет пользователей в сети",
-    "incoming_call_from":      "Входящий звонок от",
+    "incoming_call_from":      "Incoming call from",
     "call_ended_msg":          "通話終了",
     "call_started_msg":        "通話開始",
     "msg_deleted":             "Сообщение удалено",
@@ -3097,93 +3097,93 @@ _STRINGS_RU = {
     "launcher_arrows":             "← → стрелки  •  Enter запуск",
     "premium_user_lbl":            "👑 Премиум пользователь",
     "goidaid_active":              "GoidaID режим активен",
-    "_auto_000": "Запомнить выбор (изменить в Настройки → Приватность)",
-    "_auto_001": "Запомнить мой выбор (можно сменить в Настройках)",
-    "_auto_002": "Запомнить мой выбор",
-    "_auto_003": _L("Закрыть", "Close", "閉じる"),
-    "_auto_004": _L("Отмена", "Cancel", "キャンセル"),
-    "_auto_005": "GoidaPhone v{ver} доступна!",
-    "_auto_006": _L("🔍 Поиск...", "🔍 Search...", "🔍 検索..."),
-    "_auto_007": "Онлайн: 0",
-    "_auto_008": "Онлайн: {count}",
-    "_auto_009": _L("➕ Создать группу", "➕ Create group", "➕ グループ作成"),
-    "_auto_010": _L("⭐ Избранное", "⭐ Favorites", "⭐ お気に入り"),
-    "_auto_011": "Отправить приглашение",
-    "_auto_012": "Куда отправить приглашение в «{g.get('name','?')}»?",
-    "_auto_013": _L("📨 Отправить", "📨 Send", "📨 送信"),
+    "_auto_000": "Remember choice (change in Settings → Privacy)",
+    "_auto_001": "Remember my choice (changeable in Settings)",
+    "_auto_002": "Remember my choice",
+    "_auto_003": "Закрыть",
+    "_auto_004": "Отмена",
+    "_auto_005": "GoidaPhone update available",
+    "_auto_006": "🔍 Поиск...",
+    "_auto_007": "Online: 0",
+    "_auto_008": "Online",
+    "_auto_009": "➕ Создать группу",
+    "_auto_010": "⭐ Избранное",
+    "_auto_011": "Send invitation",
+    "_auto_012": "Send group invitation",
+    "_auto_013": "📨 Отправить",
     "_auto_014": "Аватар группы",
-    "_auto_015": "<b>Аватар группы</b>",
-    "_auto_016": _L("📷 Изменить аватар", "📷 Change avatar", "📷 アバター変更"),
-    "_auto_017": _L("Название:", "Name:", "名前:"),
-    "_auto_018": _L("Название группы", "Group name", "グループ名"),
-    "_auto_019": _L("✏ Переименовать", "✏ Rename", "✏ 名前変更"),
-    "_auto_020": _L("Участники:", "Members:", "メンバー:"),
-    "_auto_021": _L("🚫 Удалить участника", "🚫 Remove member", "🚫 メンバー削除"),
-    "_auto_022": _L("➕ Пригласить пользователя", "➕ Invite user", "➕ ユーザー招待"),
-    "_auto_023": _L("Ссылка-приглашение:", "Invite link:", "招待リンク:"),
-    "_auto_024": _L("📋 Копировать", "📋 Copy", "📋 コピー"),
-    "_auto_025": _L("🚪 Выйти", "🚪 Leave", "🚪 退出"),
-    "_auto_026": _L("🗑 Удалить группу", "🗑 Delete group", "🗑 グループ削除"),
-    "_auto_027": "Поиск по сообщениям... (Enter — следующее)",
-    "_auto_028": _L("🎭 Стикеры", "🎭 Stickers", "🎭 スタンプ"),
-    "_auto_029": _L("⚙ Паки", "⚙ Packs", "⚙ パック"),
-    "_auto_030": "Управление паками стикеров",
-    "_auto_031": "Стикеры",
-    "_auto_032": _L("Не найдено", "Not found", "見つかりません"),
-    "_auto_033": _L("🔓 Незашифровано", "🔓 Unencrypted", "🔓 暗号化なし"),
-    "_auto_034": "{username} печатает...",
-    "_auto_035": "Отменить вызов",
-    "_auto_036": "Позвонить",
-    "_auto_037": "Завершить звонок",
-    "_auto_038": _L("(нет паков — добавьте в ⚙)", "(no packs — add in ⚙)", "(パックなし — ⚙で追加)"),
-    "_auto_039": _L("Нет стикеров. Добавьте пак через ⚙ Паки", "No stickers. Add a pack via ⚙", "スタンプなし"),
-    "_auto_040": _L("📝 Совместные заметки", "📝 Shared notes (real-time)", "📝 共有メモ"),
-    "_auto_041": _L("📤 Синхронизировать", "📤 Sync", "📤 同期"),
-    "_auto_042": "Заметки, ссылки, файлы только для себя",
+    "_auto_015": "<b>Group avatar</b>",
+    "_auto_016": "📷 Изменить аватар",
+    "_auto_017": "Название:",
+    "_auto_018": "Название группы",
+    "_auto_019": "✏ Переименовать",
+    "_auto_020": "Участники:",
+    "_auto_021": "🚫 Удалить участника",
+    "_auto_022": "➕ Пригласить пользователя",
+    "_auto_023": "Ссылка-приглашение:",
+    "_auto_024": "📋 Copy",
+    "_auto_025": "🚪 Выйти",
+    "_auto_026": "🗑 Удалить группу",
+    "_auto_027": "Search messages... (Enter — next)",
+    "_auto_028": "🎭 Стикеры",
+    "_auto_029": "⚙ Паки",
+    "_auto_030": "Manage sticker packs",
+    "_auto_031": "Stickers",
+    "_auto_032": "Не найдено",
+    "_auto_033": "🔓 Незашифровано",
+    "_auto_034": "{username} is typing...",
+    "_auto_035": "Cancel call",
+    "_auto_036": "Call",
+    "_auto_037": "End call",
+    "_auto_038": "(no паков — добавьте в ⚙)",
+    "_auto_039": "Нет стикеров. Добавьте пак через ⚙ Паки",
+    "_auto_040": "📝 Совместные заметки",
+    "_auto_041": "📤 Синхронизировать",
+    "_auto_042": "Notes, links, files for yourself",
     "_auto_043": "🔵 СИНИЙ ЭКРАН СМЕРТИ",
     "_auto_044": "Критическая ошибка",
     "_auto_045": "Перезапустить",
     "_auto_046": "Сохранить отчёт",
     "_auto_047": "Копировать",
     "_auto_048": "Скопировано",
-    "_auto_049": "Внешний вид",
+    "_auto_049": "Appearance",
     "_auto_050": "Блокировка",
     "_auto_051": "Приватность",
     "_auto_052": "Звонки",
     "_auto_053": "Звуки",
     "_auto_054": "Специалист",
-    "_auto_055": "Имя пользователя:",
-    "_auto_056": "Описание:",
-    "_auto_057": "Цвет ника:",
-    "_auto_058": "Эмодзи у имени:",
+    "_auto_055": "Username:",
+    "_auto_056": "Bio:",
+    "_auto_057": "Nick color:",
+    "_auto_058": "Name emoji:",
     "_auto_059": "Сохранить профиль",
     "_auto_060": "Профиль сохранён!",
-    "_auto_061": "Тема:",
+    "_auto_061": "Theme:",
     "_auto_062": "Предпросмотр темы",
-    "_auto_063": "Масштаб интерфейса:",
+    "_auto_063": "UI scale:",
     "_auto_064": "Сохранить",
     "_auto_065": "👑 PREMIUM",
-    "_auto_066": _L("Активировать лицензию", "Activate license", "ライセンス認証"),
-    "_auto_067": "Введите лицензионный ключ:",
-    "_auto_068": _L("Активировать", "Activate", "認証"),
-    "_auto_069": _L("Купить Premium", "Buy Premium", "プレミアム購入"),
-    "_auto_070": "Ключ принят! ✓",
-    "_auto_071": "Неверный ключ",
+    "_auto_066": "Активировать лицензию",
+    "_auto_067": "Enter license key:",
+    "_auto_068": "Активировать",
+    "_auto_069": "Купить Premium",
+    "_auto_070": "Key accepted! ✓",
+    "_auto_071": "Invalid key",
     "_auto_072": "Файл получен",
     "_auto_073": "Изображение",
-    "_auto_074": "Видео",
-    "_auto_075": "Аудио",
+    "_auto_074": "Video",
+    "_auto_075": "Audio",
     "_auto_076": "Файл",
-    "_auto_077": _L("⚠ Не удалось загрузить", "⚠ Failed to load", "⚠ 読み込み失敗"),
-    "_auto_078": _L("💾 Сохранить", "💾 Save", "💾 保存"),
-    "_auto_079": "GoidaID режим активен. Настоящий IP скрыт.",
-    "_auto_080": "Участников: {len(members)}",
-    "_auto_081": "📂 {g.get('name','Группа')}",
+    "_auto_077": "⚠ Не удалось загрузить",
+    "_auto_078": "💾 Сохранить",
+    "_auto_079": "GoidaID mode active. Real IP hidden.",
+    "_auto_080": "Members",
+    "_auto_081": "Group",
     "_auto_082": "👥 Пользователи",
     "_auto_083": "📂 Группы",
     "_auto_084": "💬 Чат",
-    "_auto_085": _L("📷 Выбрать баннер", "📷 Choose banner", "📷 バナー選択"),
-    "_auto_086": _L("🗑 Убрать", "🗑 Remove", "🗑 削除"),
+    "_auto_085": "📷 Выбрать баннер",
+    "_auto_086": "🗑 Убрать",
 
 }
 
@@ -3280,7 +3280,7 @@ _STRINGS_EN = {
     "launcher_gui_hint":    "Full interface with chat, calls and files",
     "launcher_cmd_hint":    "For servers, diagnostics and automation",
     # About
-    "about":                f"About {APP_NAME}",
+    "about":                "About GoidaPhone",
     # Updates
     "check_updates":        "🔄 Check for updates",
     "update_found":         "🚀 Version available",
@@ -3587,7 +3587,7 @@ _STRINGS_JA = {
     "launcher_gui_hint":    "チャット、通話、ファイル共有",
     "launcher_cmd_hint":    "サーバー・診断・自動化向け",
     # About
-    "about":                f"About {APP_NAME}",
+    "about":                "About GoidaPhone",
     # Updates
     "check_updates":        "🔄 アップデート確認",
     "update_found":         "🚀 新バージョンあり",
@@ -3812,12 +3812,11 @@ class Strings:
 
     @classmethod
     def _table(cls) -> dict:
-        # avoid circular import — AppSettings may not be ready yet
         try:
             lang = AppSettings.inst().language
         except Exception:
-            lang = "ru"
-        return cls._langs.get(lang, _STRINGS_RU)
+            lang = "en"
+        return cls._langs.get(lang, _STRINGS_EN)  # fallback EN not RU
 
     def __call__(self, key: str, **kwargs) -> str:
         val = self._table().get(key, key)
@@ -3979,7 +3978,7 @@ class AppSettings:
     @property
     def language(self) -> str:
         """Interface language: 'ru' or 'en'."""
-        return self.get("language", "ru", t=str)
+        return self.get("language", "en", t=str)
 
     @language.setter
     def language(self, v: str):
@@ -4380,7 +4379,7 @@ def _show_update_dialog(ver: str, desc: str, parent=None):
     lay.setSpacing(14)
 
     # Заголовок
-    title = QLabel(f"GoidaPhone v{ver} доступна!")
+    title = QLabel(f'GoidaPhone v{ver} ' + _L("доступна!", "available!", "利用可能!"))
     title.setStyleSheet(
         f"font-size:16px;font-weight:700;color:{t['text']};")
     lay.addWidget(title)
@@ -5583,10 +5582,10 @@ class LauncherScreen(QDialog):
     mode_selected = pyqtSignal(str)   # "gui" or "cmd"
 
     _MODES = [
-        ("gui", "🖥  GUI режим",
-         "Полноценный графический интерфейс.\nВсе функции: чаты, звонки, файлы, настройки.\nРекомендуется для обычного использования."),
-        ("cmd", "⌨  CMD режим",
-         "Консольный режим без GUI.\nУдобен для серверов и диагностики.\nКоманды: /peers /ping /send /quit"),
+        ("gui", "🖥  GUI mode",
+         "Full graphical interface.\nВсе функции: чаты, звонки, файлы, настройки.\nРекомендуется для обычного использования."),
+        ("cmd", "⌨  CMD mode",
+         "Console mode without GUI.\nУдобен для серверов и диагностики.\nКоманды: /peers /ping /send /quit"),
     ]
 
     def __init__(self, parent=None):
@@ -5689,7 +5688,7 @@ class LauncherScreen(QDialog):
         bot.setSpacing(12)
 
         self._no_show = QCheckBox(
-            "Запомнить мой выбор" if S().language=="ru" else "Remember my choice")
+            "Remember my choice" if S().language=="ru" else "Remember my choice")
         self._no_show.setStyleSheet(
             f"color:{t['text_dim']};background:transparent;font-size:10px;")
         self._no_show.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -5835,7 +5834,7 @@ class LauncherScreen(QDialog):
         vl.addWidget(title)
 
         txt = QLabel(
-            "<b>🖥 GUI режим</b><br>"
+            "<b>🖥 GUI mode</b><br>"
             "Полноценный графический интерфейс GoidaPhone.<br>"
             "Доступны: публичный чат, личные сообщения, группы,<br>"
             "голосовые и групповые звонки, передача файлов,<br>"
@@ -5846,7 +5845,7 @@ class LauncherScreen(QDialog):
             "<b>Хоткеи выбора:</b><br>"
             "← → — переключение карточек<br>"
             "Enter — запуск выбранного режима<br>"
-            "F1 или H — эта справка<br>"
+            "F1 или H — this help<br>"
             "Esc — запуск GUI (по умолчанию)<br><br>"
             "<b>Запомнить выбор:</b><br>"
             "Отметь чекбокс «Запомнить мой выбор» чтобы это окно<br>"
@@ -5903,7 +5902,7 @@ class SplashScreen(QWidget):
         self._dot_timer.timeout.connect(self._tick_dots)
         self._dot_timer.start(400)
 
-        # Загружаем изображение — пользовательское или дефолтное
+        # Load image — custom or default
         self._bg_pixmap: QPixmap | None = None
 
         # Сплеш: сначала из настроек (явный выбор пользователя)
@@ -5919,7 +5918,7 @@ class SplashScreen(QWidget):
                         Qt.TransformationMode.SmoothTransformation)
             except Exception:
                 pass
-        # Дефолт: splashq.jpg рядом с gdf.py (только если нет кастомного)
+        # Default: splashq.jpg next to gdf.py
         if self._bg_pixmap is None:
             _sp = Path(__file__).parent / "splashq.jpg"
             if not _sp.exists():
@@ -5932,7 +5931,7 @@ class SplashScreen(QWidget):
                         Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                         Qt.TransformationMode.SmoothTransformation)
 
-        # Фиксированный размер 616×338
+        # Fixed size 616×338
         self.setFixedSize(616, 338)
         sg = QApplication.primaryScreen().geometry()
         self.move((sg.width() - 616) // 2, (sg.height() - 338) // 2)
@@ -6007,7 +6006,7 @@ class SplashScreen(QWidget):
     def _tick_dots(self):
         self._dot_count = (self._dot_count + 1) % 4
         dots = "." * self._dot_count
-        self._progress_lbl.setText(f"Загрузка{dots}")
+        self._progress_lbl.setText(f"Loading{dots}")
 
     def paintEvent(self, event):
         if self._bg_pixmap:
@@ -6523,7 +6522,7 @@ class ImageViewer(QWidget):
         tl.addWidget(self._zoom_lbl)
 
         mk(_L("💾 Сохранить", "💾 Save", "💾 保存"), "Сохранить в файл",  self._save_file)
-        mk(_L("📋 Копировать", "📋 Copy", "📋 コピー"),"Копировать в буфер", self._copy_clipboard)
+        mk(_L("📋 Copy", "📋 Copy", "📋 コピー"),"Копировать в буфер", self._copy_clipboard)
         def _close_overlay():
             if self.parent():
                 self.parent().removeEventFilter(self)
@@ -7844,10 +7843,10 @@ class PeerListItem(QWidget):
         t = get_theme(S().theme)
         sub.setStyleSheet(f"color: {t['text_dim']}; font-size: 9px;")
         if S().safe_mode:
-            sub.setToolTip(f"GoidaID режим активен. Настоящий IP скрыт.")
+            sub.setToolTip(f_L("GoidaID mode active. Real IP hidden.", "GoidaID mode active. Real IP hidden.", "GoidaIDモード有効"))
         elif loyalty > 0:
             lang = S().language
-            sub.setToolTip(f"{'В сети' if lang=='ru' else 'Online for'} "
+            sub.setToolTip(f"'Online for' "
                            f"{loyalty} {'мес. подряд' if lang=='ru' else 'months in a row'}")
         info.addWidget(sub)
 
@@ -7960,7 +7959,7 @@ class PeerPanel(QWidget):
         self._list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._ctx_menu)
 
-        self._status_lbl = QLabel("Онлайн: 0")
+        self._status_lbl = QLabel(_L("Online: 0", "Online: 0", "オンライン: 0"))
         t = get_theme(S().theme)
         self._status_lbl.setStyleSheet(f"color:{t['text_dim']}; font-size:9px; padding:2px 6px;")
         ul.addWidget(self._status_lbl)
@@ -8028,7 +8027,7 @@ class PeerPanel(QWidget):
                 item.setBackground(QColor(t.get("accent","#6c63ff") + "22"))
             self._list.setItemWidget(item, widget)
             count += 1
-        self._status_lbl.setText(f"Онлайн: {count}")
+        self._status_lbl.setText(f'Online: {count}')
 
     def _is_pinned(self, ip: str) -> bool:
         return ip in set(json.loads(S().get("pinned_peers", "[]", t=str)))
@@ -8084,7 +8083,7 @@ class PeerPanel(QWidget):
         menu.exec(self._list.mapToGlobal(pos))
 
     def _send_file(self, peer):
-        path, _ = QFileDialog.getOpenFileName(self, "Выберите файл")
+        path, _ = QFileDialog.getOpenFileName(self, "Select file")
         if path:
             self.net.send_file(peer["ip"], path)
 
@@ -8184,14 +8183,14 @@ class PeerPanel(QWidget):
         t = get_theme(S().theme)
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("Отправить приглашение")
+        dlg.setWindowTitle(_L("Send invitation", "Send invitation", "招待を送る"))
         dlg.resize(340, 420)
         dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
         lay = QVBoxLayout(dlg)
         lay.setContentsMargins(14, 14, 14, 14)
         lay.setSpacing(8)
 
-        lbl = QLabel(f"Куда отправить приглашение в «{g.get('name','?')}»?")
+        lbl = QLabel(f'Where to send invitation to «{g.get("name","?")}»?')
         lbl.setWordWrap(True)
         lbl.setStyleSheet("font-size:12px;font-weight:bold;")
         lay.addWidget(lbl)
@@ -8293,7 +8292,7 @@ class PeerPanel(QWidget):
             dlg = QWidget(main_win)
         else:
             dlg = QDialog(self)
-            dlg.setWindowTitle(f"Группа: {g.get('name','')}")
+            dlg.setWindowTitle(f'Group: {g.get("name","")}')
             dlg.resize(460, 560)
         dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
         # Wrap in scroll for tab display
@@ -8342,7 +8341,7 @@ class PeerPanel(QWidget):
             av_lbl.setText("📂")
         av_row.addWidget(av_lbl)
         av_info = QVBoxLayout()
-        av_info.addWidget(QLabel("<b>Аватар группы</b>"))
+        av_info.addWidget(QLabel("<b>Group avatar</b>"))
         av_btn = QPushButton(_L("📷 Изменить аватар", "📷 Change avatar", "📷 アバター変更"))
         av_btn.setObjectName("accent_btn")
         def do_change_avatar():
@@ -8369,7 +8368,7 @@ class PeerPanel(QWidget):
                                             Qt.TransformationMode.SmoothTransformation))
                 self._refresh_groups()
             except Exception as e:
-                QMessageBox.warning(dlg, "Ошибка", f"Не удалось загрузить: {e}")
+                QMessageBox.warning(dlg, "Error", f"Не удалось загрузить: {e}")
         av_btn.clicked.connect(do_change_avatar)
         av_info.addWidget(av_btn)
         av_row.addLayout(av_info)
@@ -8387,7 +8386,7 @@ class PeerPanel(QWidget):
             n = name_edit.text().strip()
             if n:
                 GROUPS.rename(gid, n)
-                dlg.setWindowTitle(f"Группа: {n}")
+                dlg.setWindowTitle(f"Group: {n}")
                 self._refresh_groups()
         rename_btn.clicked.connect(do_rename)
         name_row.addWidget(rename_btn)
@@ -8431,7 +8430,7 @@ class PeerPanel(QWidget):
         def do_invite():
             peers_online = self._peers
             if not peers_online:
-                QMessageBox.information(dlg,"Нет пользователей","Никого нет онлайн.")
+                QMessageBox.information(dlg,"Нет пользователей","Никого no online.")
                 return
             names = [f"{v.get('username','?')} ({k})" for k,v in peers_online.items()]
             choice, ok = QInputDialog.getItem(dlg,"Пригласить","Выберите пользователя:",
@@ -8453,7 +8452,7 @@ class PeerPanel(QWidget):
         inv_row = QHBoxLayout()
         inv_lbl = QLineEdit(invite_str)
         inv_lbl.setReadOnly(True)
-        copy_inv = QPushButton(_L("📋 Копировать", "📋 Copy", "📋 コピー"))
+        copy_inv = QPushButton(_L("📋 Copy", "📋 Copy", "📋 コピー"))
         copy_inv.clicked.connect(lambda: (QApplication.clipboard().setText(invite_str),
                                           QMessageBox.information(dlg,"Скопировано","Ссылка скопирована!")))
         inv_row.addWidget(inv_lbl)
@@ -8491,7 +8490,7 @@ class PeerPanel(QWidget):
             dlg.exec()
 
     def _create_group(self):
-        name, ok = QInputDialog.getText(self, "Новая группа", "Название группы:")
+        name, ok = QInputDialog.getText(self, "Новая группа", "Group name:")
         if ok and name.strip():
             gid = GROUPS.create(name.strip(), get_local_ip())
             self._refresh_groups()
@@ -8701,7 +8700,7 @@ class ChatPanel(QWidget):
         search_ico.setStyleSheet("background:transparent;font-size:12px;")
         sb_lay.addWidget(search_ico)
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText("Поиск по сообщениям... (Enter — следующее)")
+        self._search_input.setPlaceholderText(_L("Search messages... (Enter — next)", "Search messages... (Enter — next)", "メッセージ検索..."))
         self._search_input.setStyleSheet(f"""
             QLineEdit {{
                 background:transparent;border:none;
@@ -8815,7 +8814,7 @@ class ChatPanel(QWidget):
 
         manage_btn = QPushButton(_L("⚙ Паки", "⚙ Packs", "⚙ パック"))
         manage_btn.setFixedHeight(26)
-        manage_btn.setToolTip("Управление паками стикеров")
+        manage_btn.setToolTip("Manage sticker packs")
         manage_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         manage_btn.setStyleSheet(
             f"QPushButton{{background:{t2['bg3']};color:{t2['text']};"
@@ -8890,7 +8889,7 @@ class ChatPanel(QWidget):
 
         self._sticker_btn = QPushButton("🎭")
         self._sticker_btn.setFixedSize(34,34)
-        self._sticker_btn.setToolTip("Стикеры")
+        self._sticker_btn.setToolTip("Stickers")
         self._sticker_btn.setCheckable(True)
         self._sticker_btn.clicked.connect(lambda checked: self._toggle_sticker_panel(checked))
         il.addWidget(self._sticker_btn)
@@ -8971,9 +8970,9 @@ class ChatPanel(QWidget):
         self._title_lbl.setText(f"<span style='color:{color}'>{name} {emoji}</span>")
         self._title_lbl.setTextFormat(Qt.TextFormat.RichText)
         sec = CRYPTO.security_level(ip)
-        fp  = CRYPTO.peer_fingerprint(ip) if CRYPTO.has_session(ip) else "нет E2E-ключа"
+        fp  = CRYPTO.peer_fingerprint(ip) if CRYPTO.has_session(ip) else "no E2E-ключа"
         self._sub_lbl.setText(f"{TR('private_chat')} • {ip}  {sec}")
-        self._sub_lbl.setToolTip(f"Отпечаток собеседника: {fp}")
+        self._sub_lbl.setToolTip(f"Peer fingerprint: {fp}")
         self._call_btn.setVisible(True)
         self._file_btn.setVisible(True)
         # Avatar
@@ -9010,7 +9009,7 @@ class ChatPanel(QWidget):
         if gid == "__favorites__":
             self._title_lbl.setText(_L("⭐ Избранное", "⭐ Favorites", "⭐ お気に入り"))
             self._title_lbl.setTextFormat(Qt.TextFormat.PlainText)
-            self._sub_lbl.setText("Заметки, ссылки, файлы только для себя")
+            self._sub_lbl.setText(_L("Notes, links, files for yourself", "Notes, links, files for yourself", "自分用メモ・ファイル"))
             self._call_btn.setVisible(False)
             self._file_btn.setVisible(True)
             self._avatar_lbl.setPixmap(QPixmap())
@@ -9025,10 +9024,10 @@ class ChatPanel(QWidget):
             return
 
         g = GROUPS.get(gid)
-        self._title_lbl.setText(f"📂 {g.get('name','Группа')}")
+        self._title_lbl.setText(f'📂 {g.get("name","Group")}')
         self._title_lbl.setTextFormat(Qt.TextFormat.PlainText)
         members = g.get("members",[])
-        self._sub_lbl.setText(f"Участников: {len(members)}")
+        self._sub_lbl.setText(f"Members: {len(members)}")
         self._call_btn.setVisible(True)
         self._file_btn.setVisible(True)
         g_av = g.get("avatar_b64","")
@@ -9062,10 +9061,10 @@ class ChatPanel(QWidget):
         "/ping":     "Проверка соединения",
         "/version":  "Версия GoidaPhone",
         "/nick":     "Сменить ник (/nick Имя)",
-        "/away":     "Статус: отошёл",
-        "/busy":     "Статус: занят",
-        "/dnd":      "Статус: не беспокоить",
-        "/online":   "Статус: онлайн",
+        "/away":     "Status: отошёл",
+        "/busy":     "Status: занят",
+        "/dnd":      "Status: не беспокоить",
+        "/online":   "Status: online",
         "/search":   "Поиск по истории",
         "/shrug":    "Добавить ¯_(ツ)_/¯",
         "/ttl":      "Исчезающие сообщения (/ttl 30)",
@@ -9203,7 +9202,7 @@ class ChatPanel(QWidget):
             if arg.strip():
                 old = S().username
                 S().username = arg.strip()
-                self._display.add_system(f"Ник изменён: {old} → {arg.strip()}")
+                self._display.add_system(f"Nick changed: {old} → {arg.strip()}")
                 self.net._broadcast()
             return True
 
@@ -9215,7 +9214,7 @@ class ChatPanel(QWidget):
             icons  = {"online": "🟢", "away": "🟡", "busy": "🔴", "dnd": "⊘"}
             labels = {"online": "Онлайн", "away": "Отошёл",
                       "busy": "Занят", "dnd": "Не беспокоить"}
-            self._display.add_system(f"{icons[new_st]} Статус: {labels[new_st]}")
+            self._display.add_system(f"{icons[new_st]} Status: {labels[new_st]}")
             if self.net:
                 self.net._broadcast()  # broadcast updated presence immediately
             return True
@@ -9444,7 +9443,7 @@ class ChatPanel(QWidget):
         peers = list(self.net.peers.values())
         if not peers:
             QMessageBox.information(self, TR("msg_forward"),
-                "Нет пользователей онлайн для пересылки." if S().language=="ru"
+                "No users online для пересылки." if S().language=="ru"
                 else "No users online to forward to.")
             return
         items = ["Общий чат"] + [p.get("username","?") for p in peers]
@@ -9638,13 +9637,13 @@ class ChatPanel(QWidget):
 
         self._display.remove_progress(prog_id)
         if ext in self._IMG_EXTS:
-            self._display.add_message("Вы", fname, ts, is_own=True,
+            self._display.add_message("You", fname, ts, is_own=True,
                 image_data=_pre_data)
         elif ext in self._VID_EXTS:
-            self._display.add_message("Вы", fname, ts, is_own=True,
+            self._display.add_message("You", fname, ts, is_own=True,
                 msg_type="video", image_data=_pre_data)
         else:
-            self._display.add_message("Вы", fname, ts, is_own=True, msg_type="file")
+            self._display.add_message("You", fname, ts, is_own=True, msg_type="file")
 
         HISTORY.append(_chat_id, {
             "sender": S().username, "text": fname, "ts": ts,
@@ -9959,7 +9958,7 @@ class ChatPanel(QWidget):
         elif self._current_gid and chat_id == f"group_{self._current_gid}":
             show = True
         if show:
-            self._typing_lbl.setText(f"{username} печатает...")
+            self._typing_lbl.setText(f"{username} is typing...")
             self._typing_hide_timer.start(3000)
 
     # ── file ──────────────────────────────────────────────────────────────
@@ -9967,7 +9966,7 @@ class ChatPanel(QWidget):
     _IMG_EXTS = {".png",".jpg",".jpeg",".gif",".bmp",".webp"}
 
     def _send_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Выберите файл")
+        path, _ = QFileDialog.getOpenFileName(self, "Select file")
         if not path:
             return
         p = Path(path); ext = p.suffix.lower(); fname = p.name
@@ -10010,13 +10009,13 @@ class ChatPanel(QWidget):
         # Remove progress and show bubble right away
         self._display.remove_progress(prog_id)
         if ext in self._IMG_EXTS:
-            self._display.add_message("Вы", fname, ts, is_own=True,
+            self._display.add_message("You", fname, ts, is_own=True,
                 image_data=_pre_data)
         elif ext in self._VID_EXTS:
-            self._display.add_message("Вы", fname, ts, is_own=True,
+            self._display.add_message("You", fname, ts, is_own=True,
                 msg_type="video", image_data=_pre_data)
         else:
-            self._display.add_message("Вы", fname, ts, is_own=True, msg_type="file")
+            self._display.add_message("You", fname, ts, is_own=True, msg_type="file")
 
         # Save to history WITH file_path — restores on restart
         HISTORY.append(_chat_id, {
@@ -10048,7 +10047,7 @@ class ChatPanel(QWidget):
             self.net.send_call_request(ip)
             # Set call active visually but don't start voice yet
             self._call_btn.setText("📵")
-            self._call_btn.setToolTip("Отменить вызов")
+            self._call_btn.setToolTip("Cancel call")
 
         elif self._current_gid:
             # Group call → GroupCallWindow (Телемост style)
@@ -10076,7 +10075,7 @@ class ChatPanel(QWidget):
         self.net.send_call_end(ip)
         self._float_call = None
         self._call_btn.setText("📞")
-        self._call_btn.setToolTip("Позвонить")
+        self._call_btn.setToolTip("Call")
 
     def _set_call_active(self, active: bool, peer: dict | None = None):
         # Guard против двойного вызова
@@ -10086,11 +10085,11 @@ class ChatPanel(QWidget):
         self._call_bar.setVisible(False)
         if active:
             self._call_btn.setText("📵")
-            self._call_btn.setToolTip("Завершить звонок")
+            self._call_btn.setToolTip("End call")
             self._display.add_system(TR("call_started_msg"))
         else:
             self._call_btn.setText("📞")
-            self._call_btn.setToolTip("Позвонить")
+            self._call_btn.setToolTip("Call")
             self._display.add_system(TR("call_ended_msg"))
             if hasattr(self, "_float_call") and self._float_call:
                 try:
@@ -10266,7 +10265,7 @@ class ChatPanel(QWidget):
             raw = S().get("sticker_packs", "[]", t=str)
             packs = json.loads(raw) if raw else []
             if not packs:
-                self._sp_pack_combo.addItem(_L("(нет паков — добавьте в ⚙)", "(no packs — add in ⚙)", "(パックなし — ⚙で追加)"))
+                self._sp_pack_combo.addItem(_L("(no паков — добавьте в ⚙)", "(no packs — add in ⚙)", "(パックなし — ⚙で追加)"))
             for p in packs:
                 self._sp_pack_combo.addItem(p.get("name", "Без имени"))
             self._sp_pack_combo.blockSignals(False)
@@ -10365,7 +10364,7 @@ class ChatPanel(QWidget):
             self._notes_dlg.raise_(); return
 
         dlg = QWidget(self.window(), Qt.WindowType.Window)
-        dlg.setWindowTitle(f"📝 Совместные заметки — {chat_id or 'Публичный чат'}")
+        dlg.setWindowTitle(f'📝 Shared notes — {chat_id or "Public chat"}')
         dlg.resize(500, 400)
         dlg.setStyleSheet(f"background:{t['bg2']};color:{t['text']};")
         lay = QVBoxLayout(dlg)
@@ -10391,7 +10390,7 @@ class ChatPanel(QWidget):
         btn_row = QHBoxLayout()
         sync_btn = QPushButton(_L("📤 Синхронизировать", "📤 Sync", "📤 同期"))
         sync_btn.setObjectName("accent_btn"); sync_btn.setFixedHeight(32)
-        clear_btn = QPushButton("🗑 Очистить")
+        clear_btn = QPushButton("🗑 Clear")
         clear_btn.setFixedHeight(32)
         clear_btn.setStyleSheet(
             f"QPushButton{{background:{t['bg3']};color:{t['text_dim']};"
@@ -10409,7 +10408,7 @@ class ChatPanel(QWidget):
                 for ip in GROUPS.get(self._current_gid).get("members",[]):
                     if ip != get_local_ip(): self.net.send_udp(pkt, ip)
             else: self.net.send_udp(pkt)
-            sync_btn.setText("✅ Отправлено")
+            sync_btn.setText("✅ Sent")
             QTimer.singleShot(2000, lambda: sync_btn.setText(_L("📤 Синхронизировать", "📤 Sync", "📤 同期")))
 
         def _clear():
@@ -10597,11 +10596,11 @@ class NotesWidget(QWidget):
         lay.addLayout(toolbar)
 
         self._edit = QTextEdit()
-        self._edit.setPlaceholderText("Ваши заметки...")
+        self._edit.setPlaceholderText("Your notes...")
         self._edit.textChanged.connect(lambda: self._autosave.start(2000))
         lay.addWidget(self._edit)
 
-        self._status = QLabel("Готово")
+        self._status = QLabel("Done")
         t = get_theme(S().theme)
         self._status.setStyleSheet(f"color:{t['text_dim']}; font-size:9px; padding:2px;")
         lay.addWidget(self._status)
@@ -10610,11 +10609,11 @@ class NotesWidget(QWidget):
 
     def _save(self):
         S().set("notes", self._edit.toPlainText())
-        self._status.setText(f"Сохранено {datetime.now().strftime('%H:%M:%S')}")
+        self._status.setText(f"Saved {datetime.now().strftime('%H:%M:%S')}")
 
     def _load(self):
         self._edit.setPlainText(S().get("notes","",t=str))
-        self._status.setText("Загружено")
+        self._status.setText("Loaded")
 
     def _clear(self):
         if QMessageBox.question(self,"Очистить","Очистить заметки?",
@@ -10626,7 +10625,7 @@ class NotesWidget(QWidget):
         fn, _ = QFileDialog.getSaveFileName(self,"Экспорт заметок","notes.txt","Text (*.txt)")
         if fn:
             Path(fn).write_text(self._edit.toPlainText(), encoding="utf-8")
-            self._status.setText(f"Экспортировано: {fn}")
+            self._status.setText(f"Exported: {fn}")
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CALL LOG WIDGET
@@ -10665,10 +10664,10 @@ class CallLogWidget(QWidget):
 
         # ── Stats bar ──
         stats_row = QHBoxLayout()
-        self._stat_total = QLabel("Всего: 0")
-        self._stat_out   = QLabel("📞 Исходящих: 0")
-        self._stat_in    = QLabel("📲 Входящих: 0")
-        self._stat_miss  = QLabel("❌ Пропущенных: 0")
+        self._stat_total = QLabel("Total: 0")
+        self._stat_out   = QLabel("📞 Outgoing: 0")
+        self._stat_in    = QLabel("📲 Incoming: 0")
+        self._stat_miss  = QLabel("❌ Missed: 0")
         for lbl in [self._stat_total, self._stat_out,
                     self._stat_in, self._stat_miss]:
             lbl.setStyleSheet(
@@ -10680,7 +10679,7 @@ class CallLogWidget(QWidget):
 
         # ── Filter row ──
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("Фильтр:"))
+        filter_row.addWidget(QLabel("Filter:"))
         self._filter_combo = QComboBox()
         self._filter_combo.addItems([
             "Все звонки", "Только входящие", "Только исходящие",
@@ -10689,7 +10688,7 @@ class CallLogWidget(QWidget):
         filter_row.addWidget(self._filter_combo)
 
         self._search_edit = QLineEdit()
-        self._search_edit.setPlaceholderText("🔍 Поиск по имени...")
+        self._search_edit.setPlaceholderText("🔍 Search by name...")
         self._search_edit.textChanged.connect(self._refresh)
         filter_row.addWidget(self._search_edit, stretch=1)
         lay.addLayout(filter_row)
@@ -10708,11 +10707,11 @@ class CallLogWidget(QWidget):
 
         # ── Bottom controls ──
         bot = QHBoxLayout()
-        refresh_btn = QPushButton("🔄 Обновить")
+        refresh_btn = QPushButton("🔄 Refresh")
         refresh_btn.clicked.connect(self._refresh)
-        export_btn  = QPushButton("📤 Экспорт в CSV")
+        export_btn  = QPushButton("📤 Export CSV")
         export_btn.clicked.connect(self._export_csv)
-        clear_btn   = QPushButton("🗑 Очистить")
+        clear_btn   = QPushButton("🗑 Clear")
         clear_btn.clicked.connect(self._clear)
         for b in [refresh_btn, export_btn, clear_btn]:
             bot.addWidget(b)
@@ -10767,10 +10766,10 @@ class CallLogWidget(QWidget):
             self._list.addItem(item)
 
         if hasattr(self,'_stat_total'):
-            self._stat_total.setText(f"Всего: {total}")
-            self._stat_out.setText(f"📞 Исходящих: {out}")
-            self._stat_in.setText(f"📲 Входящих: {inc}")
-            self._stat_miss.setText(f"❌ Пропущенных: {miss}")
+            self._stat_total.setText(f"Total: {total}")
+            self._stat_out.setText(f"📞 Outgoing: {out}")
+            self._stat_in.setText(f"📲 Incoming: {inc}")
+            self._stat_miss.setText(f"❌ Missed: {miss}")
 
     def add_call(self, peer: str, outgoing: bool, duration: float = 0):
         HISTORY.add_call({"peer": peer, "outgoing": outgoing,
@@ -10788,12 +10787,12 @@ class CallLogWidget(QWidget):
         if not item: return
         entry = item.data(Qt.ItemDataRole.UserRole)
         menu = QMenu(self)
-        menu.addAction("📞 Перезвонить",
+        menu.addAction("📞 Call back",
             lambda: self.call_back_requested.emit(entry.get("peer","")))
-        menu.addAction("📋 Копировать имя",
+        menu.addAction("📋 Copy name",
             lambda: QApplication.clipboard().setText(entry.get("peer","")))
         menu.addSeparator()
-        menu.addAction("🗑 Удалить запись",
+        menu.addAction("🗑 Delete entry",
             lambda: self._delete_entry(entry))
         menu.exec(QCursor.pos())
 
@@ -10847,7 +10846,7 @@ class ImageCropDialog(QDialog):
     def __init__(self, pixmap: QPixmap, circle: bool = True,
                  aspect_ratio: float | None = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Обрезать изображение")
+        self.setWindowTitle("Crop image")
         self.setModal(True)
         self.setMinimumSize(600, 520)
         self.resize(720, 560)
@@ -11499,12 +11498,12 @@ class ProfileDialog(QDialog):
         form = QFormLayout()
         self._username_edit = QLineEdit(S().username)
         self._username_edit.setMaxLength(24)
-        form.addRow("Имя:", self._username_edit)
+        form.addRow("Name:", self._username_edit)
 
         self._bio_edit = QLineEdit(S().bio)
         self._bio_edit.setMaxLength(120)
         self._bio_edit.setPlaceholderText("Расскажите о себе...")
-        form.addRow("Описание:", self._bio_edit)
+        form.addRow("Bio:", self._bio_edit)
 
         al.addLayout(form)
         lay.addWidget(av_group)
@@ -11516,7 +11515,7 @@ class ProfileDialog(QDialog):
         self._color_btn = QPushButton()
         self._color_btn.setFixedSize(40,24)
         self._color_btn.clicked.connect(self._pick_color)
-        pl.addRow("Цвет ника:", self._color_btn)
+        pl.addRow("Nick color:", self._color_btn)
 
         self._emoji_edit = QLineEdit(S().custom_emoji)
         self._emoji_edit.setMaxLength(5)
@@ -11699,7 +11698,7 @@ class ProfileDialog(QDialog):
             cfg.nickname_color = self._color_btn.property("color") or "#E0E0E0"
             cfg.custom_emoji   = self._emoji_edit.text()
         self.profile_saved.emit()
-        QMessageBox.information(self,"Профиль","Профиль сохранён!")
+        QMessageBox.information(self,"Profile","Профиль сохранён!")
         self.accept()
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -11736,7 +11735,7 @@ class CustomThemeDialog(QDialog):
             ("bg2",      "Фон вторичный",      "#1E1E1E"),
             ("bg3",      "Фон элементов",      "#141414"),
             ("border",   "Рамки",              "#444444"),
-            ("text",     "Текст",              "#E0E0E0"),
+            ("text",     "Lyrics",              "#E0E0E0"),
             ("text_dim", "Текст dim",          "#808080"),
             ("accent",   "Акцент",             "#0078D4"),
             ("btn_bg",   "Фон кнопок",         "#3A3A3A"),
@@ -11878,11 +11877,11 @@ class SettingsDialog(QDialog):
         vol_row = QHBoxLayout()
         vol_row.addWidget(self._vol)
         vol_row.addWidget(self._vol_lbl)
-        fl.addRow("Громкость:", vol_row)
+        fl.addRow("Volume:", vol_row)
 
         lay.addWidget(g)
 
-        g2 = QGroupBox("Уведомления")
+        g2 = QGroupBox("Notifications")
         fl2 = QFormLayout(g2)
         self._notif_sounds = QCheckBox("Звуковые уведомления о новых сообщениях")
         fl2.addRow(self._notif_sounds)
@@ -12310,8 +12309,8 @@ class SettingsDialog(QDialog):
         ip_row.addStretch()
         fl2.addRow("Мой IP:", ip_row)
         fl2.addRow("ОС:", QLabel(get_os_name()))
-        fl2.addRow("Версия:", QLabel(APP_VERSION))
-        fl2.addRow("Протокол:", QLabel(f"v{PROTOCOL_VERSION}"))
+        fl2.addRow("Version:", QLabel(APP_VERSION))
+        fl2.addRow("Protocol:", QLabel(f"v{PROTOCOL_VERSION}"))
         lay.addWidget(g_info)
 
         # ── Пароль сети (admin) ──
@@ -12430,7 +12429,7 @@ class SettingsDialog(QDialog):
     def _set_network_password(self):
         pw = self._netpw_edit.text().strip()
         if not pw:
-            QMessageBox.warning(self,"Ошибка","Введите пароль.")
+            QMessageBox.warning(self,"Error","Введите пароль.")
             return
         if not AdminManager.is_admin() or not AdminManager.verify_admin(""):
             # require admin terminal auth - just set directly if admin exists
@@ -12441,7 +12440,7 @@ class SettingsDialog(QDialog):
 
     def _disable_network_password(self):
         AdminManager.set_network_password("")
-        QMessageBox.information(self,"Пароль сети","Пароль отключён.")
+        QMessageBox.information(self,"Пароль сети","Пароль disabled.")
 
     def _refresh_server_list(self):
         self._server_list_widget.clear()
@@ -12517,7 +12516,7 @@ class SettingsDialog(QDialog):
 
         def do_save():
             if not name_e.text().strip() or not host_e.text().strip():
-                QMessageBox.warning(dlg,"Ошибка","Заполните обязательные поля.")
+                QMessageBox.warning(dlg,"Error","Заполните обязательные поля.")
                 return
             import json
             servers = json.loads(S().get("server_list","[]",t=str))
@@ -12602,7 +12601,7 @@ class SettingsDialog(QDialog):
         self._theme_combo = QComboBox()
         for key, td in THEMES.items():
             self._theme_combo.addItem(td["label"], key)
-        fl.addRow("Тема:", self._theme_combo)
+        fl.addRow("Theme:", self._theme_combo)
         preview_btn = QPushButton("👁 Предпросмотр")
         preview_btn.clicked.connect(self._preview_theme)
         fl.addRow(preview_btn)
@@ -12851,7 +12850,7 @@ class SettingsDialog(QDialog):
             QMessageBox.information(self,"Активация",f"🎉 Премиум активирован до {exp}!")
             self.settings_saved.emit()
         else:
-            QMessageBox.warning(self,"Ошибка","Неверный код лицензии.")
+            QMessageBox.warning(self,"Error","Неверный код лицензии.")
 
     def _deactivate_premium(self):
         from PyQt6.QtWidgets import QMessageBox
@@ -13004,9 +13003,9 @@ class SettingsDialog(QDialog):
                     QApplication.instance().quit()
                     subprocess.Popen([sys.executable, sys.argv[0]])
                 except Exception as e:
-                    QMessageBox.critical(self,"Ошибка",f"Не удалось заменить файл:\n{e}")
+                    QMessageBox.critical(self,"Error",f"Не удалось заменить файл:\n{e}")
         else:
-            QMessageBox.critical(self,"Ошибка",f"Ошибка загрузки:\n{info}")
+            QMessageBox.critical(self,"Error",f"Ошибка загрузки:\n{info}")
 
     # ── Language tab ────────────────────────────────────────────────────
     def _tab_language(self) -> QWidget:
@@ -13051,10 +13050,10 @@ class SettingsDialog(QDialog):
         lay.addWidget(g)
 
         # Launcher settings
-        g2 = QGroupBox("🚀 Запуск")
+        g2 = QGroupBox("🚀 Startup")
         fl2 = QFormLayout(g2)
         self._show_launcher_cb2 = QCheckBox(
-            "Показывать экран выбора режима при запуске" if S().language=="ru"
+            "Show mode selection screen on startup" if S().language=="ru"
             else "Show mode selection screen on startup")
         self._show_launcher_cb2.setChecked(S().show_launcher)
         fl2.addRow(self._show_launcher_cb2)
@@ -13173,13 +13172,13 @@ class SettingsDialog(QDialog):
         pin1 = self._pin_new.text().strip()
         pin2 = self._pin_confirm.text().strip()
         if not pin1:
-            QMessageBox.warning(self, "Ошибка", "Введите PIN.")
+            QMessageBox.warning(self, "Error", "Введите PIN.")
             return
         if len(pin1) < 4 or not pin1.isdigit():
-            QMessageBox.warning(self, "Ошибка", "PIN: минимум 4 цифры (только цифры).")
+            QMessageBox.warning(self, "Error", "PIN: минимум 4 цифры (только цифры).")
             return
         if pin1 != pin2:
-            QMessageBox.warning(self, "Ошибка", "PIN-коды не совпадают.")
+            QMessageBox.warning(self, "Error", "PIN-коды не совпадают.")
             return
         S().set("pin_hash", _hl.sha256(pin1.encode()).hexdigest())
         S().set("pin_hint", self._pin_hint_edit.text().strip())
@@ -13231,7 +13230,7 @@ class SettingsDialog(QDialog):
         self._priv_show_status.setChecked(
             S().get("priv_show_status", True, t=bool))
         self._priv_show_status.setToolTip(
-            "Если выключено — другие не видят «Онлайн», «Отошёл» и т.д.")
+            "Если disabled — другие не видят «Онлайн», «Отошёл» и т.д.")
         fl1.addWidget(self._priv_show_status)
 
         self._priv_show_avatar = QCheckBox(
@@ -13293,7 +13292,7 @@ class SettingsDialog(QDialog):
         self._priv_save_history.setChecked(
             S().get("priv_save_history", True, t=bool))
         self._priv_save_history.setToolTip(
-            "Если выключено — история не сохраняется и стирается при выходе")
+            "Если disabled — история не сохраняется и стирается при выходе")
         fl3.addWidget(self._priv_save_history)
 
         self._priv_encrypt_history = QCheckBox(
@@ -13311,7 +13310,7 @@ class SettingsDialog(QDialog):
         lay.addWidget(g3)
 
         # ── E2E / Crypto ─────────────────────────────────────────────────────
-        g4, fl4 = _grp("🔑  Шифрование (E2E)")
+        g4, fl4 = _grp("🔑  Encryption (E2E)")
 
         e2e_status = QLabel(
             "✅ End-to-End шифрование активно (X25519 + AES-256-GCM + Ed25519)"
@@ -13526,11 +13525,11 @@ class SettingsDialog(QDialog):
         cfl.addLayout(vault_btn_row)
 
         # Опциональные слои
-        # Все 20 слоёв — описание + ключ + tooltip + нужен vault или нет
+        # Все 20 слоёв — описание + ключ + tooltip + нужен vault или no
         ALL_LAYERS = [
             # key, label, tooltip, needs_vault
             ("crypto_layer2_history",
-             "Layer 2  — Шифрование истории чатов",
+             "Layer 2  — Encryption истории чатов",
              "История шифруется ключом SecureVault. Без пароля — не читается.",
              True),
             ("crypto_layer3_wipe",
@@ -13538,7 +13537,7 @@ class SettingsDialog(QDialog):
              "Обнуляет пароли и ключи в памяти перед завершением.",
              False),
             ("crypto_layer4_stealth",
-             "Layer 4  — Stealth Mode (нет в Alt+Tab)",
+             "Layer 4  — Stealth Mode (no в Alt+Tab)",
              "Окно исчезает из панели задач и Alt+Tab.",
              False),
             ("crypto_layer5_screenshot",
@@ -13694,7 +13693,7 @@ class SettingsDialog(QDialog):
                     "✅ Новые E2E-ключи сгенерированы.\n"
                     "Перезапустите GoidaPhone для применения.")
             except Exception as e:
-                QMessageBox.critical(self, "Ошибка", f"Не удалось сгенерировать ключи:\n{e}")
+                QMessageBox.critical(self, "Error", f"Не удалось сгенерировать ключи:\n{e}")
 
     def _tab_call_settings(self) -> QWidget:
         """📞 Звонки — проверка микрофона, камеры, демонстрации экрана, качества."""
@@ -13720,7 +13719,7 @@ class SettingsDialog(QDialog):
         g_mic, fl_mic = _grp("🎤  Микрофон")
 
         mic_row = QHBoxLayout()
-        mic_lbl = QLabel("Устройство ввода:")
+        mic_lbl = QLabel("Input device:")
         mic_lbl.setStyleSheet("font-size:11px;background:transparent;")
         mic_row.addWidget(mic_lbl)
         self._cs_mic_combo = QComboBox()
@@ -13763,7 +13762,7 @@ class SettingsDialog(QDialog):
         # ── Динамик / наушники ───────────────────────────────────────────
         g_spk, fl_spk = _grp("🔊  Динамик / наушники")
         spk_row = QHBoxLayout()
-        spk_lbl = QLabel("Устройство вывода:")
+        spk_lbl = QLabel("Output device:")
         spk_lbl.setStyleSheet("font-size:11px;background:transparent;")
         spk_row.addWidget(spk_lbl)
         self._cs_spk_combo = QComboBox()
@@ -13803,7 +13802,7 @@ class SettingsDialog(QDialog):
         qual_row.addWidget(self._cs_quality)
         fl_q.addLayout(qual_row)
 
-        vad_cb = QCheckBox("VAD — шумоподавление (не передавать тишину)")
+        vad_cb = QCheckBox("VAD — noise gate (не передавать тишину)")
         vad_cb.setChecked(S().get("vad_enabled", True, t=bool))
         vad_cb.toggled.connect(lambda v: S().set("vad_enabled", v))
         fl_q.addWidget(vad_cb)
@@ -13950,7 +13949,7 @@ class SettingsDialog(QDialog):
                         _echo_running[0] = False
                         echo_btn.setEnabled(True)
                         echo_btn.setText("🔁 Запустить эхо-тест (3 сек)")
-                        self._cs_echo_status.setText("✅ Эхо-тест завершён")
+                        self._cs_echo_status.setText("✅ Эхо-тест ended")
                     QTimer.singleShot(0, _done)
                 except Exception as e:
                     def _err(err=str(e)):
@@ -14123,7 +14122,7 @@ class SettingsDialog(QDialog):
         rfl = QFormLayout(relay_g)
 
         self._relay_enabled = QCheckBox(
-            "Использовать relay сервер (для подключения через интернет)")
+            "Использовать relay сервер (для подключения через интерno)")
         self._relay_enabled.setChecked(S().relay_enabled)
         rfl.addRow(self._relay_enabled)
 
@@ -14133,7 +14132,7 @@ class SettingsDialog(QDialog):
         rfl.addRow("Адрес relay:", self._relay_addr)
 
         relay_info = QLabel(
-            "Relay сервер позволяет подключаться через интернет без VPN.\n"
+            "Relay server позволяет подключаться через интерno без VPN.\n"
             "Relay только передаёт пакеты — не читает содержимое.\n"
             "Поддерживает: GoidaPhone Relay Server v1+")
         relay_info.setWordWrap(True)
@@ -14149,7 +14148,7 @@ class SettingsDialog(QDialog):
         lay.addWidget(relay_g)
 
         # Protocol settings
-        proto_g = QGroupBox("⚙ Протокол")
+        proto_g = QGroupBox("⚙ Protocol")
         pfl = QFormLayout(proto_g)
 
         pfl.addRow("Версия протокола:", QLabel(str(PROTOCOL_VERSION)))
@@ -14382,7 +14381,7 @@ class SettingsDialog(QDialog):
                 Path(fn).write_text("\n".join(log_lines), encoding="utf-8")
                 QMessageBox.information(self, "Экспорт", f"Лог сохранён:\n{fn}")
             except Exception as e:
-                QMessageBox.critical(self, "Ошибка", str(e))
+                QMessageBox.critical(self, "Error", str(e))
         cfg = S()
         # audio
         self._vol.setValue(cfg.volume)
@@ -14804,9 +14803,9 @@ def _show_peer_profile_overlay(peer: dict, parent=None):
     cl.addWidget(sep)
 
     for icon, label, value in [
-        ("🔒", "Шифрование:", "E2E ✓" if e2e else "Нет E2E"),
+        ("🔒", "Encryption:", "E2E ✓" if e2e else "Нет E2E"),
         ("🔑", "Отпечаток:", fp[:24]+"…" if len(fp)>24 else fp),
-        ("📱", "Версия:", version or "—"),
+        ("📱", "Version:", version or "—"),
     ]:
         cl.addWidget(_info_row(icon, label, value))
 
@@ -14972,7 +14971,7 @@ class PeerProfileDialog(QDialog):
             ("ℹ", id_str,           id_label),
             ("💻", peer.get("os","?"), "Система" if lang=="ru" else "System"),
             ("🔒", ("E2E ✓" if peer.get("e2e") else "E2E ✗"),
-                   "Шифрование" if lang=="ru" else "Encryption"),
+                   "Encryption" if lang=="ru" else "Encryption"),
             ("📡", peer.get("version","?"), "Версия" if lang=="ru" else "Version"),
         ]
         if peer.get("bio"):
@@ -15141,7 +15140,7 @@ WNS_HOME_HTML = """<!DOCTYPE html>
 <div class="logo-text">WNS</div>
 <div class="search-wrap">
   <span class="search-icon">&#128269;</span>
-  <input id="q" placeholder="Поиск в Google или введите адрес" autofocus
+  <input id="q" placeholder="Search Google or enter address" autofocus
          onkeydown="if(event.key==='Enter')doSearch()">
 </div>
 <div class="se-row" id="se-row">
@@ -15783,7 +15782,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
         act_row = QWidget()
         act_row.setStyleSheet(f"background:{t['bg3']};border-top:1px solid {t['border']};")
         ar_lay = QHBoxLayout(act_row); ar_lay.setContentsMargins(8,4,8,4); ar_lay.setSpacing(6)
-        self._sb_clear_btn = QPushButton("🗑 Очистить")
+        self._sb_clear_btn = QPushButton("🗑 Clear")
         self._sb_clear_btn.setStyleSheet(
             f"QPushButton{{background:{t['btn_bg']};color:{t['text_dim']};"
             f"border:1px solid {t['border']};border-radius:6px;padding:3px 10px;font-size:10px;}}"
@@ -15910,18 +15909,18 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
     def _sb_clear(self):
         key = self._sidebar_tab
         if key == "history":
-            if QMessageBox.question(self, "История", "Очистить историю?",
+            if QMessageBox.question(self, "History", "Очистить историю?",
                     QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No) \
                     == QMessageBox.StandardButton.Yes:
                 self._history.clear(); self._save_history(); self._sb_populate()
         elif key == "bookmarks":
-            if QMessageBox.question(self, "Закладки", "Удалить все закладки?",
+            if QMessageBox.question(self, "Bookmarks", "Удалить все закладки?",
                     QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No) \
                     == QMessageBox.StandardButton.Yes:
                 self._bookmarks.clear(); self._save_bookmarks()
                 self._refresh_bmarks(); self._sb_populate()
         elif key == "downloads":
-            if QMessageBox.question(self, "Загрузки",
+            if QMessageBox.question(self, "Downloads",
                     "Удалить все файлы из папки загрузок?",
                     QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No) \
                     == QMessageBox.StandardButton.Yes:
@@ -15941,7 +15940,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
     def _mk_statusbar(self) -> QWidget:
         bar = QWidget(); bar.setObjectName("wns_statusbar"); bar.setFixedHeight(20)
         hl  = QHBoxLayout(bar); hl.setContentsMargins(0,0,10,0); hl.setSpacing(0)
-        self._stat_lbl = QLabel("Готово"); self._stat_lbl.setObjectName("wns_stat")
+        self._stat_lbl = QLabel("Done"); self._stat_lbl.setObjectName("wns_stat")
         hl.addWidget(self._stat_lbl, stretch=1)
         brand = QLabel(f"Winora NetScape {self.WNS_VERSION}")
         brand.setObjectName("wns_stat"); hl.addWidget(brand)
@@ -15987,7 +15986,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
                 view.page().newWindowRequested.connect(self._on_new_window)
             except Exception: pass
 
-            idx = self._tabs.addTab(view, "Новая вкладка")
+            idx = self._tabs.addTab(view, "New tab")
             self._tabs.setCurrentIndex(idx)
 
             if url and url not in (self.HOME_URL, "wns://newtab"):
@@ -16038,7 +16037,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
             if w and hasattr(w, 'setHtml'):
                 from PyQt6.QtCore import QUrl
                 w.setHtml(self._themed_home_html(), QUrl("wns://newtab"))
-                self._tabs.setTabText(0, "Новая вкладка")
+                self._tabs.setTabText(0, "New tab")
                 if hasattr(self, '_urlbar'): self._urlbar.clear()
             return
         w = self._tabs.widget(idx)
@@ -16161,12 +16160,12 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
     def _on_load_start(self, view):
         self._prog.setValue(0); self._prog.setVisible(True)
         self._stat_lbl.setText("Загрузка…")
-        self._btn_reload.setText("✕"); self._btn_reload.setToolTip("Остановить")
+        self._btn_reload.setText("✕"); self._btn_reload.setToolTip("Stop")
 
     def _on_load_finish(self, view, ok: bool):
         self._prog.setVisible(False)
         self._btn_reload.setText("↻"); self._btn_reload.setToolTip("Обновить (F5)")
-        self._stat_lbl.setText("Готово" if ok else "⚠ Ошибка загрузки")
+        self._stat_lbl.setText("Done" if ok else "⚠ Ошибка загрузки")
         if hasattr(view,'history'):
             h = view.history()
             self._btn_back.setEnabled(h.canGoBack())
@@ -17068,9 +17067,9 @@ class OutgoingCallWindow(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cancel_btn = _call_round_btn("📵", "#E74C3C", 68, 28, "#C0392B")
-        cancel_btn.setToolTip("Отменить вызов")
+        cancel_btn.setToolTip("Cancel call")
         cancel_btn.clicked.connect(self._cancel)
-        cancel_lbl = QLabel("Отменить")
+        cancel_lbl = QLabel("Undo")
         cancel_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cancel_lbl.setStyleSheet("color:#888;font-size:10px;background:transparent;")
 
@@ -17879,7 +17878,7 @@ class GroupCallWindow(QWidget):
 
         bottom = QHBoxLayout()
         bottom.setContentsMargins(0, 0, 0, 0)
-        disp_name = "Вы" if is_self else name
+        disp_name = "You" if is_self else name
         name_lbl = QLabel(disp_name)
         name_lbl.setStyleSheet(
             "font-size:12px;font-weight:bold;color:white;"
@@ -18170,7 +18169,7 @@ class GroupCallWindow(QWidget):
         menu.addAction("❓  Справка",
                         lambda: QMessageBox.information(self, "Справка",
                             "Групповой звонок GoidaPhone\n\n"
-                            "M — мут/размут микрофона\n"
+                            "M — mute/unmute mic\n"
                             "V — включить/выключить камеру\n"
                             "Esc — свернуть окно\n\n"
                             "Демонстрация экрана: кнопка ⋯ → Демонстрация"))
@@ -18321,7 +18320,7 @@ class GroupCallWindow(QWidget):
 
     def _show_stats(self):
         dlg = QDialog(self)
-        dlg.setWindowTitle("Статистика")
+        dlg.setWindowTitle("Statistics")
         dlg.resize(340, 260)
         dlg.setStyleSheet("background:#1A1A2E;color:white;")
         vl = QVBoxLayout(dlg)
@@ -18343,7 +18342,7 @@ class GroupCallWindow(QWidget):
         dlg.exec()
 
     def _show_notif_settings(self):
-        QMessageBox.information(self, "Уведомления",
+        QMessageBox.information(self, "Notifications",
             "Настройки уведомлений для звонка:\n\n"
             "• Звук входа участника — в Настройки → Звуки\n"
             "• Уведомления — в Настройки → Уведомления")
@@ -18433,7 +18432,7 @@ class StickerPackDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Стикеры")
+        self.setWindowTitle("Stickers")
         self.setModal(False)
         self.resize(540, 460)
         self._packs: dict = {}   # pack_name -> [b64, b64, ...]
@@ -18672,7 +18671,7 @@ class StickerPackDialog(QDialog):
             QMessageBox.information(self, "Импорт",
                 f"Пак «{name}» импортирован ({len(stickers)} стикеров).")
         except Exception as e:
-            QMessageBox.warning(self, "Ошибка", f"Не удалось импортировать пак:\n{e}")
+            QMessageBox.warning(self, "Error", f"Не удалось импортировать пак:\n{e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -19148,7 +19147,7 @@ class GoidaTerminal(QWidget):
         for label, cb in [
             ("▶ Запустить монитор", lambda: self._start_monitor()),
             ("■ Остановить",        lambda: self._stop_monitor()),
-            ("🗑 Очистить",         lambda: self._mon_output.clear()),
+            ("🗑 Clear",         lambda: self._mon_output.clear()),
         ]:
             b = QPushButton(label)
             b.setStyleSheet("""
@@ -19340,7 +19339,7 @@ class GoidaTerminal(QWidget):
             ("📋 Копировать всё", lambda: QApplication.clipboard().setText(
                 self._log_output.toPlainText())),
             ("💾 Экспорт в файл", self._export_log),
-            ("🗑 Очистить",       lambda: (self._log_entries.clear(),
+            ("🗑 Clear",       lambda: (self._log_entries.clear(),
                                            self._log_output.clear())),
         ]:
             b = QPushButton(label)
@@ -19502,7 +19501,7 @@ class GoidaTerminal(QWidget):
                 self._print("  ● Пароль сети активен", self.C_GREEN)
         else:
             self._print("  ⚠  Администратор не настроен.", self.C_ORANGE)
-            self._print("     /admin setup <имя> <пароль>", _dim)
+            self._print("     /admin setup <name> <пароль>", _dim)
         self._print("")
         self._print("  /help — список команд   Tab — автодополнение   ↑↓ — история", _dim)
         self._print("")
@@ -19559,8 +19558,8 @@ class GoidaTerminal(QWidget):
                     self._print(f"    └ {ip}", self.C_DIM)
             self._print(f"  GoidaID:    {display_id(get_local_ip())}", self.C_DIM)
             self._print(f"  Премиум:    {'✓' if cfg.premium else '✗'}", self.C_WHITE)
-            self._print(f"  Статус:     {cfg.user_status}", self.C_WHITE)
-            self._print(f"  Тема:       {cfg.theme}", self.C_WHITE)
+            self._print(f"  Status:     {cfg.user_status}", self.C_WHITE)
+            self._print(f"  Theme:       {cfg.theme}", self.C_WHITE)
             self._print(f"  Язык:       {cfg.language}", self.C_WHITE)
             self._print_sep()
 
@@ -19609,7 +19608,7 @@ class GoidaTerminal(QWidget):
                         fnames = ", ".join(fname_list)
                         self._print(f"  ▶ {ev:12s}  ✗  файл не найден ({fnames})", self.C_RED)
                 self._print_sep()
-                self._print("  Если звуков нет: /sounds install", self.C_DIM)
+                self._print("  Если звуков no: /sounds install", self.C_DIM)
             elif sub == "install":
                 self._print("  Поиск и копирование звуков...", self.C_CYAN)
                 install_sounds(force=True)
@@ -19628,7 +19627,7 @@ class GoidaTerminal(QWidget):
                     self._print(f"  или в ~/Desktop/gdfsound/", self.C_YELLOW)
             else:
                 self._print_sep()
-                self._print("  ЗВУКОВАЯ СИСТЕМА GoidaPhone", self.C_CYAN)
+                self._print("  ЗВУКОВАЯ SYSTEM GoidaPhone", self.C_CYAN)
                 self._print_sep()
                 # QMediaPlayer status
                 try:
@@ -19731,7 +19730,7 @@ class GoidaTerminal(QWidget):
             self._require_auth(self._cmd_restart)
 
         else:
-            self._print(f"  Неизвестная команда: {cmd}", self.C_RED)
+            self._print(f"  Unknown command: {cmd}", self.C_RED)
             self._print(f"  Введите /help или нажмите Tab для автодополнения.", self.C_DIM)
 
         self._print("")
@@ -19750,7 +19749,7 @@ class GoidaTerminal(QWidget):
                 ("/admin logout",         "Выйти из admin-режима"),
                 ("/admin status",         "Статус admin"),
                 ("/admin reset",          "Сброс (необратимо)"),
-                ("/users",                "Список онлайн + статусы"),
+                ("/users",                "Список online + статусы"),
                 ("/ban <ip>",             "Заблокировать"),
                 ("/unban <ip>",           "Разблокировать"),
                 ("/kick <ip>",            "Выгнать из сети"),
@@ -19763,7 +19762,7 @@ class GoidaTerminal(QWidget):
                 ("/netpw_off",            "Убрать пароль сети"),
                 ("/network block|allow",  "Блокировка/открытие сети"),
                 ("/group list|kick|info", "Управление группами"),
-                ("/msg <ip> <текст>",     "Личное сообщение"),
+                ("/msg <ip> <text>",     "Личное сообщение"),
                 ("/wipe",                 "Удалить все данные"),
                 ("/restart",              "Перезапустить приложение"),
             ]
@@ -19781,7 +19780,7 @@ class GoidaTerminal(QWidget):
         self._print("")
 
         sections = [
-            ("ОСНОВНЫЕ", _a, [
+            ("GENERAL", _a, [
                 ("/help [admin]",       "Справка"),
                 ("/version",            "Версия GoidaPhone"),
                 ("/sysinfo",            "Системная информация"),
@@ -19792,7 +19791,7 @@ class GoidaTerminal(QWidget):
                 ("/clear",              "Очистить экран"),
                 ("/quit",               "Закрыть терминал"),
             ]),
-            ("СЕТЬ", _a, [
+            ("NETWORK", _a, [
                 ("/peers",              "Онлайн пользователи"),
                 ("/who",                "Кто в сети сейчас"),
                 ("/whois <ip>",         "Подробно о пользователе"),
@@ -19803,15 +19802,15 @@ class GoidaTerminal(QWidget):
                 ("/monitor [on|off]",   "Live-мониторинг пакетов"),
                 ("/crypto",             "Статус шифрования"),
             ]),
-            ("ЧАТ", _a, [
-                ("/say <текст>",        "Написать в публичный чат"),
-                ("/broadcast <текст>",  "Широковещательное сообщение"),
+            ("CHAT", _a, [
+                ("/say <text>",        "Написать в публичный чат"),
+                ("/broadcast <text>",  "Широковещательное сообщение"),
                 ("/me <действие>",      "Эмоция"),
                 ("/nick [имя]",         "Показать / изменить ник"),
                 ("/history",            "История команд терминала"),
                 ("/history clear",      "Очистить историю"),
             ]),
-            ("ПРОФИЛЬ И ВИД", _a, [
+            ("PROFILE И ВИД", _a, [
                 ("/theme [имя]",        "Текущая / сменить тему"),
                 ("/themes",             "Список всех тем"),
                 ("/font <размер>",      "Размер шрифта (8–18)"),
@@ -19839,7 +19838,7 @@ class GoidaTerminal(QWidget):
     def _cmd_version(self):
         self._print_sep()
         self._print(f"  GoidaPhone  v{APP_VERSION}  |  {COMPANY_NAME}", self.C_CYAN)
-        self._print(f"  Протокол:   v{PROTOCOL_VERSION}  (совместимость с v{PROTOCOL_COMPAT}+)", self.C_WHITE)
+        self._print(f"  Protocol:   v{PROTOCOL_VERSION}  (совместимость с v{PROTOCOL_COMPAT}+)", self.C_WHITE)
         self._print(f"  Python:     {platform.python_version()}", self.C_WHITE)
         self._print(f"  Qt:         PyQt6", self.C_WHITE)
         self._print(f"  ОС:         {get_os_name()}", self.C_WHITE)
@@ -19891,7 +19890,7 @@ class GoidaTerminal(QWidget):
     def _cmd_peers(self):
         peers = getattr(self._net, 'peers', {})
         if not peers:
-            self._print("  Нет пользователей онлайн.", self.C_DIM); return
+            self._print("  No users online.", self.C_DIM); return
         self._print_sep()
         self._print(f"  {'НИК':<20} {'IP':<16} {'ВЕРСИЯ':<8} {'E2E':<6} {'ОС'}", self.C_CYAN)
         self._print_sep()
@@ -19909,7 +19908,7 @@ class GoidaTerminal(QWidget):
                 f"{info.get('os','?')}{flag}",
                 self.C_RED if "BAN" in flags else self.C_WHITE)
         self._print_sep()
-        self._print(f"  Всего онлайн: {len(peers)}", self.C_GREEN)
+        self._print(f"  Всего online: {len(peers)}", self.C_GREEN)
 
     def _cmd_whois(self, ip: str):
         if not ip:
@@ -19917,7 +19916,7 @@ class GoidaTerminal(QWidget):
         peers = getattr(self._net, 'peers', {})
         info  = peers.get(ip)
         if not info:
-            self._print(f"  Пользователь {ip} не онлайн.", self.C_DIM); return
+            self._print(f"  Пользователь {ip} не online.", self.C_DIM); return
         self._print_sep()
         self._print(f"  WHOIS: {ip}", self.C_CYAN)
         self._print_sep()
@@ -19925,7 +19924,7 @@ class GoidaTerminal(QWidget):
             ("Ник",        info.get("username","?")),
             ("IP",         ip),
             ("Версия",     info.get("version","?")),
-            ("Протокол",   info.get("protocol_version","?")),
+            ("Protocol",   info.get("protocol_version","?")),
             ("ОС",         info.get("os","?")),
             ("Тип связи",  info.get("conn_type","?")),
             ("Premium",    "Да" if info.get("premium") else "Нет"),
@@ -20000,9 +19999,9 @@ class GoidaTerminal(QWidget):
         self._print(f"    {CRYPTO.fingerprint()}", self.C_GREEN)
         peers = getattr(self._net, 'peers', {})
         e2e_count = sum(1 for ip in peers if CRYPTO.has_session(ip))
-        self._print(f"  E2E-сессий: {e2e_count} / {len(peers)}", self.C_WHITE)
+        self._print(f"  E2E sessions: {e2e_count} / {len(peers)}", self.C_WHITE)
         if peers:
-            self._print("  Сессии по пирам:", self.C_DIM)
+            self._print("  Sessions by peer:", self.C_DIM)
             for ip, info in peers.items():
                 has = CRYPTO.has_session(ip)
                 col = self.C_GREEN if has else self.C_RED
@@ -20015,9 +20014,9 @@ class GoidaTerminal(QWidget):
         self._print_sep()
         self._print("  GOIDAPHONE STATS", self.C_CYAN)
         self._print_sep()
-        self._print(f"  Онлайн:      {len(peers)} пользователей", self.C_WHITE)
-        self._print(f"  Бан-лист:    {len(AdminManager.get_banned())} IP", self.C_WHITE)
-        self._print(f"  Мут-лист:    {len(AdminManager.get_muted())} IP", self.C_WHITE)
+        self._print(f"  Online:      {len(peers)} users", self.C_WHITE)
+        self._print(f"  Banned:      {len(AdminManager.get_banned())} IP", self.C_WHITE)
+        self._print(f"  Muted:       {len(AdminManager.get_muted())} IP", self.C_WHITE)
         self._print(f"  E2E-сессий:  {sum(1 for ip in peers if CRYPTO.has_session(ip))}", self.C_WHITE)
         # Groups
         try:
@@ -20033,9 +20032,9 @@ class GoidaTerminal(QWidget):
             self._print(f"  История:     {len(hist)} диалогов / {hist_kb} КБ", self.C_WHITE)
         except Exception:
             pass
-        self._print(f"  Шифрование:  {'AES-256-GCM' if CRYPTO_AVAILABLE else 'XOR'}", self.C_WHITE)
+        self._print(f"  Encryption:  {'AES-256-GCM' if CRYPTO_AVAILABLE else 'XOR'}", self.C_WHITE)
         self._print(f"  Admin:       {'активен' if AdminManager.is_admin() else 'не настроен'}", self.C_WHITE)
-        self._print(f"  Пароль сети: {'● да' if AdminManager.network_password_enabled() else '○ нет'}", self.C_WHITE)
+        self._print(f"  Пароль сети: {'● да' if AdminManager.network_password_enabled() else '○ no'}", self.C_WHITE)
         self._print_sep()
 
     def _cmd_netstat(self):
@@ -20068,8 +20067,8 @@ class GoidaTerminal(QWidget):
         self._print("  P2P LAN/VPN мессенджер с шифрованием, группами,", self.C_WHITE)
         self._print("  голосовыми звонками, медиаплеером Mewa 1-2-3.", self.C_WHITE)
         self._print("", self.C_WHITE)
-        self._print("  Шифрование: AES-256-GCM + X25519 ECDH + Ed25519", self.C_WHITE)
-        self._print("  Протокол:   UDP + TCP (п2п, без сервера)", self.C_WHITE)
+        self._print("  Encryption: AES-256-GCM + X25519 ECDH + Ed25519", self.C_WHITE)
+        self._print("  Protocol:   UDP + TCP (п2п, без сервера)", self.C_WHITE)
         self._print_sep()
 
     def _cmd_goida(self, flag1: str = "", flag2: str = ""):
@@ -20252,7 +20251,7 @@ class GoidaTerminal(QWidget):
     def _cmd_broadcast(self, text: str):
         text = text.strip()
         if not text:
-            self._print("  Использование: /broadcast <текст>", self.C_ORANGE); return
+            self._print("  Использование: /broadcast <text>", self.C_ORANGE); return
         if hasattr(self._net, 'send_chat'):
             self._net.send_chat(f"[ADMIN] {text}")
             self._print(f"  Отправлено в публичный чат: {text}", self.C_GREEN)
@@ -20262,10 +20261,10 @@ class GoidaTerminal(QWidget):
     def _cmd_msg(self, ip: str, text: str):
         text = text.strip()
         if not ip or not text:
-            self._print("  Использование: /msg <ip> <текст>", self.C_ORANGE); return
+            self._print("  Использование: /msg <ip> <text>", self.C_ORANGE); return
         peers = getattr(self._net, 'peers', {})
         if ip not in peers:
-            self._print(f"  Пользователь {ip} не онлайн.", self.C_RED); return
+            self._print(f"  Пользователь {ip} не online.", self.C_RED); return
         if hasattr(self._net, 'send_private'):
             self._net.send_private(f"[Терминал] {text}", ip)
             name = peers[ip].get("username","?")
@@ -20277,7 +20276,7 @@ class GoidaTerminal(QWidget):
         if sub == "setup":
             parts = raw.split(maxsplit=3)
             if len(parts) < 4:
-                self._print("  Использование: /admin setup <имя> <пароль>", self.C_ORANGE)
+                self._print("  Использование: /admin setup <name> <пароль>", self.C_ORANGE)
                 return
             aname, apw = parts[2], parts[3]
             if AdminManager.is_admin():
@@ -20308,12 +20307,12 @@ class GoidaTerminal(QWidget):
             self._require_auth(self._admin_reset)
 
         elif sub == "status":
-            self._print(f"  Admin настроен:    {'да' if AdminManager.is_admin() else 'нет'}", self.C_WHITE)
-            self._print(f"  Аутентифицирован:  {'да' if self._admin_authed else 'нет'}", self.C_WHITE)
+            self._print(f"  Admin настроен:    {'да' if AdminManager.is_admin() else 'no'}", self.C_WHITE)
+            self._print(f"  Аутентифицирован:  {'да' if self._admin_authed else 'no'}", self.C_WHITE)
             if AdminManager.is_admin():
-                self._print(f"  Имя:               {AdminManager.get_admin_name()}", self.C_WHITE)
-            self._print(f"  Пароль сети:       {'● активен' if AdminManager.network_password_enabled() else '○ нет'}", self.C_WHITE)
-            self._print(f"  Сеть заблокирована:{'да' if S().get('network_blocked',False,t=bool) else 'нет'}", self.C_WHITE)
+                self._print(f"  Name:               {AdminManager.get_admin_name()}", self.C_WHITE)
+            self._print(f"  Пароль сети:       {'● активен' if AdminManager.network_password_enabled() else '○ no'}", self.C_WHITE)
+            self._print(f"  Сеть заблокирована:{'да' if S().get('network_blocked',False,t=bool) else 'no'}", self.C_WHITE)
         else:
             self._print("  Субкоманды: setup, login, logout, reset, status", self.C_ORANGE)
 
@@ -20375,7 +20374,7 @@ class GoidaTerminal(QWidget):
             self._print(f"  ↯ Кикнут: {name} ({arg})", self.C_ORANGE)
         elif cmd == "/mute":
             AdminManager.mute(arg)
-            self._print(f"  ⊗ Заглушён: {name} ({arg})", self.C_ORANGE)
+            self._print(f"  ⊗ Muted: {name} ({arg})", self.C_ORANGE)
         elif cmd == "/unmute":
             AdminManager.unmute(arg)
             self._print(f"  ✓ Звук восстановлен: {name} ({arg})", self.C_GREEN)
@@ -20389,7 +20388,7 @@ class GoidaTerminal(QWidget):
             self._print("    Новые пользователи должны знать пароль для входа.", self.C_DIM)
         elif cmd == "/netpw_off":
             AdminManager.set_network_password("")
-            self._print("  ○ Пароль сети отключён.", self.C_GREEN)
+            self._print("  ○ Пароль сети disabled.", self.C_GREEN)
         elif cmd == "/network":
             sub = arg.lower()
             if sub == "block":
@@ -20417,7 +20416,7 @@ class GoidaTerminal(QWidget):
                         members = g.get("members", [])
                         self._print(f"  [{gid[:8]}]  {g.get('name','?'):<24} {len(members)} участников", self.C_WHITE)
                 else:
-                    self._print("  Групп нет.", self.C_DIM)
+                    self._print("  Групп no.", self.C_DIM)
             except Exception as e:
                 self._print(f"  Ошибка: {e}", self.C_RED)
         elif sub == "info":
@@ -20484,7 +20483,7 @@ class GoidaTerminal(QWidget):
             plugins_dir.mkdir(parents=True, exist_ok=True)
         files = list(plugins_dir.glob("*.py"))
         if not files:
-            self._print("  Плагинов нет. Положите .py файлы в:", self.C_DIM)
+            self._print("  Плагинов no. Положите .py файлы в:", self.C_DIM)
             self._print(f"  {plugins_dir}", self.C_CYAN)
         else:
             self._print(f"  Плагины ({len(files)}):", self.C_CYAN)
@@ -20503,7 +20502,7 @@ class GoidaTerminal(QWidget):
     # ── Require auth helper ────────────────────────────────────────────
     def _require_auth(self, action):
         if not AdminManager.is_admin():
-            self._print("  ✗ Создайте администратора: /admin setup <имя> <пароль>", self.C_RED)
+            self._print("  ✗ Создайте администратора: /admin setup <name> <пароль>", self.C_RED)
             return
         if not self._admin_authed:
             self._print("  ✗ Требуется авторизация: /admin login <пароль>", self.C_RED)
@@ -20752,7 +20751,7 @@ class _BarVisualizer(QWidget):
                     continue
 
             if dev_idx is None:
-                return  # нет монитора — используем псевдо
+                return  # no монитора — используем псевдо
 
             self._stream = self._pa.open(
                 format=_pa.paFloat32,
@@ -20977,14 +20976,14 @@ class MewaPlayer(QWidget):
 
         self._section_btns: dict[str, QPushButton] = {}
         SECTIONS = [
-            ("queue",    "▶",  "Очередь"),
-            ("library",  "♫",  "Фонотека"),
-            ("files",    "▤",  "Файлы"),
-            ("playlists","≡",  "Списки"),
-            ("video",    "🎬", "Видео"),
-            ("radio",    "📻", "Радио"),
+            ("queue",    "▶",  "Queue"),
+            ("library",  "♫",  "Library"),
+            ("files",    "▤",  "Files"),
+            ("playlists","≡",  "Playlists"),
+            ("video",    "🎬", "Video"),
+            ("radio",    "📻", "Radio"),
             ("eq",       "🎚", "EQ"),
-            ("lyrics",   "📝", "Текст"),
+            ("lyrics",   "📝", "Lyrics"),
         ]
         for key, ico, label in SECTIONS:
             btn = QPushButton(f"{ico}\n{label}")
@@ -21041,9 +21040,9 @@ class MewaPlayer(QWidget):
             b.clicked.connect(cb)
             tbl.addWidget(b)
 
-        mk_tb("+", "Добавить файлы", self._add_files)
+        mk_tb("+", "Add files", self._add_files)
         mk_tb("▤", "Добавить папку", self._add_folder)
-        mk_tb("✕", "Очистить очередь", self._clear_queue)
+        mk_tb("✕", "Clear queue", self._clear_queue)
         tbl.addStretch()
         self._search_edit = QLineEdit()
         self._search_edit.setPlaceholderText(_L("🔍 Поиск...", "🔍 Search...", "🔍 検索..."))
@@ -21102,7 +21101,7 @@ class MewaPlayer(QWidget):
             f"border:2px solid {t['border']};}}")
         apl.addWidget(self._art_lbl)
 
-        self._np_title  = QLabel("Нет трека")
+        self._np_title  = QLabel("No track")
         self._np_title.setWordWrap(True)
         self._np_title.setStyleSheet(
             f"font-size:12px;font-weight:bold;color:{t['text']};background:transparent;")
@@ -21534,12 +21533,12 @@ class MewaPlayer(QWidget):
             b.clicked.connect(cb)
             return b
 
-        cr.addWidget(mk_c("|◀", "Предыдущий", self._prev))
+        cr.addWidget(mk_c("|◀", "Previous", self._prev))
         cr.addWidget(mk_c("◀◀", "−10 сек",    lambda: self._skip(-10)))
         self._play_btn = mk_c("▶", "Play/Pause", self._toggle_play, w=42, accent=True)
         cr.addWidget(self._play_btn)
         cr.addWidget(mk_c("▶▶", "+10 сек",    lambda: self._skip(10)))
-        cr.addWidget(mk_c("▶|", "Следующий",  self._next))
+        cr.addWidget(mk_c("▶|", "Next",  self._next))
         cr.addSpacing(10)
 
         self._shuf_btn = QPushButton("RND")
@@ -21557,7 +21556,7 @@ class MewaPlayer(QWidget):
         self._rep_btn = QPushButton("RPT")
         self._rep_btn.setFixedSize(30, 30)
         self._rep_btn.setCheckable(True)
-        self._rep_btn.setToolTip("Повтор")
+        self._rep_btn.setToolTip("Repeat")
         self._rep_btn.toggled.connect(self._cycle_repeat)
         self._rep_btn.setStyleSheet(self._shuf_btn.styleSheet())
         cr.addWidget(self._rep_btn)
@@ -21568,7 +21567,7 @@ class MewaPlayer(QWidget):
         np_box_lay = QVBoxLayout(np_box)
         np_box_lay.setContentsMargins(0,0,0,0)
         np_box_lay.setSpacing(0)
-        self._np_bar = QLabel("Нет трека")
+        self._np_bar = QLabel("No track")
         self._np_bar.setStyleSheet(
             f"font-size:12px;font-weight:bold;color:{t['text']};background:transparent;")
         self._np_bar.setMaximumWidth(340)
@@ -22054,11 +22053,11 @@ class MewaPlayer(QWidget):
         if hasattr(self, '_radio_now'):
             self._radio_now.setText("Нет трансляции")
         if hasattr(self, '_np_bar'):
-            try: self._np_bar.setText("Нет трека")
+            try: self._np_bar.setText("No track")
             except Exception: pass
 
     def _clear_queue(self):
-        if QMessageBox.question(self, "Очистить очередь", "Очистить весь список?",
+        if QMessageBox.question(self, "Clear queue", "Очистить весь список?",
                 QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No) \
                 != QMessageBox.StandardButton.Yes:
             return
@@ -22066,8 +22065,8 @@ class MewaPlayer(QWidget):
         self._queue_tbl.setRowCount(0)
         self._lib_tbl.setRowCount(0)
         self._queue_idx = -1
-        self._np_bar.setText("Нет трека")
-        self._np_title.setText("Нет трека")
+        self._np_bar.setText("No track")
+        self._np_title.setText("No track")
         self._np_artist.setText("")
         self._np_album.setText("")
         self._art_lbl.setText("♫")
@@ -22511,7 +22510,7 @@ class PinLockScreen(QWidget):
             HISTORY._cache.clear()
         except Exception:
             pass
-        QMessageBox.information(self, "Сброс", "Данные удалены. Приложение закроется.")
+        QMessageBox.information(self, "Reset", "Данные удалены. Приложение закроется.")
         QApplication.quit()
 
     def resizeEvent(self, event):
@@ -22562,7 +22561,7 @@ class QuickSetupWizard(QDialog):
         ("show_splash",     "Показывать заставку при запуске?",
          "Экран загрузки с логотипом GoidaPhone",
          "yesno", None, True),
-        ("_summary",        "Всё готово!",
+        ("_summary",        "Всё ready!",
          "Настройки применены. Для полноценной работы рекомендуем перезапустить GoidaPhone.",
          "summary", None, None),
     ]
@@ -22709,7 +22708,7 @@ class QuickSetupWizard(QDialog):
         nl = QHBoxLayout(nav)
         nl.setContentsMargins(24, 0, 24, 0)
 
-        self._back_btn = QPushButton("← Назад")
+        self._back_btn = QPushButton("← Back")
         self._back_btn.setStyleSheet(
             f"QPushButton{{background:transparent;color:{t['text_dim']};"
             f"border:none;font-size:10pt;padding:6px 12px;}}"
@@ -22719,7 +22718,7 @@ class QuickSetupWizard(QDialog):
         nl.addWidget(self._back_btn)
         nl.addStretch()
 
-        self._next_btn = QPushButton("Далее →")
+        self._next_btn = QPushButton("Next →")
         self._next_btn.setFixedSize(120, 36)
         self._next_btn.setStyleSheet(
             f"QPushButton{{background:{t['accent']};color:white;"
@@ -22763,7 +22762,7 @@ class QuickSetupWizard(QDialog):
         self._prog_bar.setValue(idx + 1)
         self._back_btn.setVisible(idx > 0)
         last = idx == total - 1
-        self._next_btn.setText("Готово ✓" if last else "Далее →")
+        self._next_btn.setText("Готово ✓" if last else "Next →")
 
         self._q_title.setText(question)
         self._q_hint.setText(hint)
@@ -22931,8 +22930,8 @@ class QuickSetupWizard(QDialog):
             "nickname_color": "Цвет ника",
             "theme": "Тема",
             "notification_sounds": "Звуки",
-            "save_history": "История",
-            "show_splash": "Заставка",
+            "save_history": "History",
+            "show_splash": "Splash screen",
         }
         for key, val in self._answers.items():
             lbl = label_map.get(key, key)
@@ -23031,22 +23030,22 @@ class TutorialOverlay(QWidget):
     finished = pyqtSignal()
 
     STEPS_RU = [
-        ("👋 Добро пожаловать в GoidaPhone!",
+        ("👋 Welcome to GoidaPhone!",
          "GoidaPhone — мессенджер для общения в локальной сети (LAN) и через VPN.\n\n"
-         "Здесь нет серверов — всё P2P. Твои сообщения не покидают сеть.\n"
-         "Нажми → чтобы начать обучение.",
+         "Здесь no серверов — всё P2P. Твои сообщения не покидают сеть.\n"
+         "Press → to start the tutorial.",
          None),
-        ("🌐 Как это работает",
+        ("🌐 How it works",
          "GoidaPhone находит других пользователей автоматически через broadcast.\n\n"
          "• Одна сеть (Wi-Fi/LAN) → все видят друг друга сразу\n"
          "• Разные сети → нужен VPN (Radmin, Hamachi, ZeroTier)\n"
-         "• Нет интернета → всё равно работает внутри LAN",
+         "• Нет интерnoа → всё равно работает внутри LAN",
          None),
         ("👤 Список пользователей",
-         "Слева — все онлайн-пользователи в твоей сети.\n\n"
+         "Слева — все online-пользователи в твоей сети.\n\n"
          "• Двойной клик → открыть личный чат\n"
          "• Правый клик → позвонить, посмотреть профиль, закрепить\n"
-         "• Зелёный кружок — онлайн, серый — недавно был в сети",
+         "• Зелёный кружок — online, серый — недавно был в сети",
          "peer_list"),
         ("💬 Публичный чат",
          "Вкладка «Чат» — общий канал для всех в сети.\n\n"
@@ -23072,11 +23071,11 @@ class TutorialOverlay(QWidget):
         ("👥 Группы",
          "Вкладка «Группы» — создавай чаты для нескольких человек.\n\n"
          "• Правый клик на пользователя → пригласить в группу\n"
-         "• Групповые голосовые звонки с несколькими участниками\n"
+         "• Групповые voice calls с несколькими участниками\n"
          "• Иконка, описание, права участников",
          "groups_tab"),
         ("🎵 Mewa — музыкальный плеер",
-         "Вкладка «Mewa» → плеер с плейлистом, эквалайзером и онлайн-радио.\n\n"
+         "Вкладка «Mewa» → плеер с плейлистом, эквалайзером и online-радио.\n\n"
          "• Добавляй файлы или папки\n"
          "• 10-полосный эквалайзер с пресетами\n"
          "• Онлайн-радио — список станций встроен\n"
@@ -23090,7 +23089,7 @@ class TutorialOverlay(QWidget):
          None),
         ("🔐 Безопасность",
          "GoidaPhone поддерживает несколько уровней защиты.\n\n"
-         "• Шифрование сообщений: Настройки → Сеть → включить\n"
+         "• Encryption сообщений: Настройки → Сеть → включить\n"
          "• PIN-блокировка: Настройки → Блокировка\n"
          "• GoidaCRYPTO SecureVault: Настройки → Приватность\n"
          "• Все данные хранятся локально, без облака",
@@ -23214,7 +23213,7 @@ class TutorialOverlay(QWidget):
         self._skip_btn.clicked.connect(self._finish)
         btn_row.addWidget(self._skip_btn)
         btn_row.addStretch()
-        self._next_btn = QPushButton(("Далее →" if lang=="ru" else "Next →"))
+        self._next_btn = QPushButton(("Next →" if lang=="ru" else "Next →"))
         self._next_btn.setObjectName("accent_btn")
         self._next_btn.setFixedHeight(32)
         self._next_btn.clicked.connect(self._next)
@@ -23233,7 +23232,7 @@ class TutorialOverlay(QWidget):
         self._body_lbl.setText(body)
         last = idx == total - 1
         self._next_btn.setText((TR("tutorial_finish") if lang=="ru" else "Finish ✓") if last
-                                else ("Далее →" if lang=="ru" else "Next →"))
+                                else ("Next →" if lang=="ru" else "Next →"))
 
         # Find target widget for arrow highlight
         self._target_rect = None
@@ -24387,7 +24386,7 @@ class MainWindow(QMainWindow):
         lay.addWidget(desc)
 
         # Feature list
-        feat_gb = QGroupBox("Возможности")
+        feat_gb = QGroupBox("Features")
         feat_lay = QVBoxLayout(feat_gb)
         for feat in [
             "💬  Текстовые чаты, группы, @упоминания, форматирование",
@@ -24408,7 +24407,7 @@ class MainWindow(QMainWindow):
         # Tech info
         tech_lbl = QLabel(
             f"Технологии: PyQt6 • UDP/TCP • PyAudio • WebRTC VAD<br>"
-            f"Протокол: v{PROTOCOL_VERSION}  •  Python {platform.python_version()}"
+            f"Protocol: v{PROTOCOL_VERSION}  •  Python {platform.python_version()}"
         )
         tech_lbl.setTextFormat(Qt.TextFormat.RichText)
         tech_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -24421,7 +24420,7 @@ class MainWindow(QMainWindow):
         lay.addWidget(sep2)
 
         # ── Благодарности ─────────────────────────────────────────────────
-        credits_gb = QGroupBox("💙 Благодарности")
+        credits_gb = QGroupBox("💙 Credits")
         cred_lay = QVBoxLayout(credits_gb)
         cred_lay.setSpacing(10)
 
@@ -24505,7 +24504,7 @@ class MainWindow(QMainWindow):
                 f"✅ У вас актуальная версия {APP_VERSION}.\nОбновлений не найдено."))
         self._upd_checker.check_failed.connect(
             lambda e: QMessageBox.information(self, "Обновления",
-                f"ℹ GitHub не настроен или нет соединения.\n\n"
+                f"ℹ GitHub не настроен или no соединения.\n\n"
                 f"Для настройки обновлений: вставьте ваш GitHub repo\n"
                 f"в константу GITHUB_REPO в начале файла.\n\n"
                 f"Детали: {e[:200]}"))
@@ -24621,7 +24620,7 @@ class GoidaDeathScreen(QWidget):
         lay.addWidget(sad)
         lay.addSpacing(14)
 
-        title = QLabel("GoidaPhone столкнулся с проблемой и перестал отвечать.")
+        title = QLabel("GoidaPhone encountered a problem and stopped responding.")
         title.setStyleSheet(
             "font-size:26px;font-weight:bold;color:white;background:transparent;")
         title.setWordWrap(True)
@@ -24629,10 +24628,10 @@ class GoidaDeathScreen(QWidget):
         lay.addSpacing(14)
 
         if manual:
-            desc_text = "Экран смерти вызван вручную (Ctrl+F12). Нажмите Вернуться."
+            desc_text = "Death screen triggered manually (Ctrl+F12). Press Return."
         else:
-            desc_text = ("Мы собираем информацию об ошибке. "
-                         "Отсканируйте QR-код чтобы отправить отчёт разработчику.")
+            desc_text = ("Collecting error information. "
+                         "Scan QR code to send the report to the developer.")
         # Always show QR (even manual) - useful for reporting test crashes
         desc = QLabel(desc_text)
         desc.setStyleSheet("font-size:14px;color:#CCE0FF;background:transparent;")
@@ -24647,9 +24646,9 @@ class GoidaDeathScreen(QWidget):
         left_col.setSpacing(6)
 
         for lbl_text, style in [
-            (f"Код ошибки: {error_code}",
+            (f"Error code: {error_code}",
              "font-size:13px;font-weight:bold;color:white;background:transparent;"),
-            (f"Время: {ts}",
+            (f"Time: {ts}",
              "font-size:11px;color:#A0C0FF;background:transparent;"),
             (f"GoidaPhone v{APP_VERSION}  |  Python {sys.version.split()[0]}  |  "
              f"{platform.system()} {platform.release()}",
@@ -24661,7 +24660,7 @@ class GoidaDeathScreen(QWidget):
             left_col.addWidget(lbl_w)
 
         left_col.addSpacing(10)
-        tb_hdr = QLabel("Трассировка стека:")
+        tb_hdr = QLabel("Stack trace:")
         tb_hdr.setStyleSheet(
             "font-size:11px;font-weight:bold;color:#A0C8FF;background:transparent;")
         left_col.addWidget(tb_hdr)
@@ -24681,7 +24680,7 @@ class GoidaDeathScreen(QWidget):
             right_col.setAlignment(
                 Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
             right_col.setSpacing(8)
-            qr_title = QLabel("📧 Отправить отчёт")
+            qr_title = QLabel("📧 Send report")
             qr_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
             qr_title.setStyleSheet(
                 "font-size:11px;font-weight:bold;color:#CCE0FF;background:transparent;")
@@ -24692,7 +24691,7 @@ class GoidaDeathScreen(QWidget):
             self._qr_img.setStyleSheet(
                 "background:white;border-radius:8px;border:3px solid #4060C0;"
                 "color:#0032A0;font-size:9px;")
-            self._qr_img.setText("Генерация...")
+            self._qr_img.setText("Generating...")
             right_col.addWidget(self._qr_img)
             qr_hint = QLabel(self.DEVELOPER_EMAIL)
             qr_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -24706,7 +24705,7 @@ class GoidaDeathScreen(QWidget):
 
         if not manual:
             self._countdown_lbl = QLabel(
-                f"⟳  Автоматический перезапуск через {self._countdown} сек.")
+                f"⟳  Auto-restart in {self._countdown} sec.")
             self._countdown_lbl.setStyleSheet(
                 "font-size:12px;color:#FFD080;background:transparent;font-weight:bold;")
             lay.addWidget(self._countdown_lbl)
@@ -24727,20 +24726,20 @@ class GoidaDeathScreen(QWidget):
 
         if not manual:
             btn_row.addWidget(
-                _make_btn("🔄 Перезапустить", "#005522", "#007733", self._do_restart))
+                _make_btn("🔄 Restart", "#005522", "#007733", self._do_restart))
         btn_row.addWidget(
-            _make_btn("💾 Сохранить отчёт", "#0050CC", "#0066EE",
+            _make_btn("💾 Save report", "#0050CC", "#0066EE",
                       lambda: self._save_report(tb_str, error_code, ts)))
         btn_row.addWidget(
-            _make_btn(_L("📋 Копировать", "📋 Copy", "📋 コピー"), "#0050CC", "#0066EE",
+            _make_btn(_L("📋 Copy", "📋 Copy", "📋 コピー"), "#0050CC", "#0066EE",
                       lambda: QApplication.clipboard().setText(
                           f"GoidaPhone Death Report\n{ts}\n{error_code}\n\n{tb_str}")))
         if manual:
             btn_row.addWidget(
-                _make_btn("↩ Вернуться", "#005522", "#007733", self.close))
+                _make_btn("↩ Return", "#005522", "#007733", self.close))
         else:
             btn_row.addWidget(
-                _make_btn("⏻ Закрыть", "#550000", "#880000", QApplication.quit))
+                _make_btn("⏻ Close", "#550000", "#880000", QApplication.quit))
         btn_row.addStretch()
         lay.addLayout(btn_row)
         lay.addStretch()
@@ -24771,7 +24770,7 @@ class GoidaDeathScreen(QWidget):
         else:
             color = "#FF6030" if self._countdown <= 10 else "#FFD080"
             self._countdown_lbl.setText(
-                f"⟳  Автоматический перезапуск через {self._countdown} сек.")
+                f"⟳  Auto-restart in {self._countdown} sec.")
             self._countdown_lbl.setStyleSheet(
                 f"font-size:12px;color:{color};"
                 "background:transparent;font-weight:bold;")
@@ -24849,7 +24848,7 @@ class GoidaDeathScreen(QWidget):
                     f"Python: {sys.version}\n\nTraceback:\n{tb}\n")
                 QMessageBox.information(None, "Сохранено", f"Отчёт: {fn}")
             except Exception as e:
-                QMessageBox.warning(None, "Ошибка", str(e))
+                QMessageBox.warning(None, "Error", str(e))
 
 
 def _install_death_screen_handler(window: "MainWindow"):
@@ -24892,10 +24891,10 @@ def main():
         # ── ALSA: глушим спам про неизвестные PCM устройства ─────────────────
         _os.environ["ALSA_IGNORE_UCM"]       = "1"
         _os.environ["LIBASOUND_THREAD_SAFE"] = "0"
-        # ALSA: подавляем спам через env vars и ~/.asoundrc
+        # ALSA: suppress via env vars and ~/.asoundrc
         _os.environ["ALSA_IGNORE_UCM"]       = "1"
         _os.environ["LIBASOUND_THREAD_SAFE"] = "0"
-        # Создаём minimal ~/.asoundrc если нет — глушит Unknown PCM спам
+        # Создаём minimal ~/.asoundrc если no — глушит Unknown PCM спам
         try:
             _asoundrc = Path.home() / ".asoundrc"
             if not _asoundrc.exists():
@@ -24907,11 +24906,11 @@ def main():
         _os.environ["FFREPORT"]              = ""
         _os.environ["AV_LOG_FORCE_NOCOLOR"]  = "1"
         _os.environ["LIBVA_MESSAGING_LEVEL"] = "0"
-        # Отключаем Vulkan HW decode — нет смысла на большинстве систем
+        # Отключаем Vulkan HW decode — no смысла на большинстве систем
         _os.environ.setdefault("LIBVA_DRIVER_NAME", "iHD")
 
         # ── Qt CSS warnings ("Could not parse stylesheet") ────────────────────
-        # В Qt6 правильные имена категорий:
+        # Qt6 correct category names:
         _os.environ["QT_LOGGING_RULES"] = (
             "*.debug=false;"
             "qt.qpa.stylesheet=false;"
@@ -24921,8 +24920,8 @@ def main():
             "qt.multimedia*=false;"
             "ffmpeg*=false;"
         )
-        # Дополнительно через QLoggingCategory после создания QApplication:
-        # вызывается ниже после app = QApplication(...)
+        # Also via QLoggingCategory after QApplication:
+        # called below after app = QApplication(...)
 
         # ── Auto-find QtWebEngineProcess (pip user-install) ───────────
         # Must be set BEFORE QApplication is created
@@ -24997,8 +24996,8 @@ def main():
         try:
             import ctypes as _ct2
             _libc2 = _ct2.CDLL("libc.so.6")
-            # Восстанавливаем оригинальный stderr (Python ошибки снова видны)
-            # ALSA уже инициализировалась и больше не будет спамить
+            # Restore original stderr (Python errors visible again)
+            # ALSA already initialized, no more spam
             if hasattr(_ct2, '_saved_stderr_fd'):
                 _libc2.dup2(_ct2._saved_stderr_fd, 2)
         except Exception:
@@ -25058,7 +25057,7 @@ def main():
             print(f"[FATAL] {e2}")
         sys.exit(1)
     sys.excepthook = _early_excepthook
-    # Иконка: сначала из настроек, потом icon.png рядом
+    # Icon: first from settings, then icon.png
     _icon_b64 = S().get("app_icon_b64", "", t=str)
     if _icon_b64:
         try:
@@ -25106,7 +25105,7 @@ def main():
             try:
                 import readline   # Linux/macOS — история команд в CMD
             except ImportError:
-                pass              # Windows — работает без него
+                pass              # Windows — works without it
             import shutil
             cols = shutil.get_terminal_size().columns
 
@@ -25136,7 +25135,7 @@ def main():
             print(f"{CYAN}   ╚═════╝  ╚═════╝ ╚═╝╚═════╝ ╚═╝  ╚═╝{RST}")
             print(f"{PURP}{'═'*62}{RST}")
             print(f"  {BOLD}GoidaPhone v{APP_VERSION} — CMD Mode{RST}  {DIM}Winora Company{RST}")
-            print(f"  {DIM}Введите /help для справки  •  /quit для выхода{RST}")
+            print(f"  {DIM}Type /help for commands  •  /quit to exit{RST}")
             print(f"{PURP}{'═'*62}{RST}\n")
 
             net = NetworkManager()
@@ -25161,7 +25160,7 @@ def main():
             net.sig_message.connect(_on_msg)
 
             def _on_call(caller, ip):
-                print(f"\r{YEL}📞 Входящий звонок от {BOLD}{caller}{RST}{YEL} ({ip}) — /answer {ip} или /reject {ip}{RST}")
+                print(f"\r{YEL}📞 Incoming call from {BOLD}{caller}{RST}{YEL} ({ip}) — /answer {ip} or /reject {ip}{RST}")
                 print(f"{CYAN}> {RST}", end="", flush=True)
 
             net.sig_call_request.connect(_on_call)
@@ -25169,64 +25168,64 @@ def main():
             def _on_online(peer):
                 uname = peer.get("username","?")
                 ip    = peer.get("ip","?")
-                print(f"\r{GRN}● {uname} ({ip}) онлайн{RST}")
+                print(f"\r{GRN}● {uname} ({ip}) online{RST}")
                 print(f"{CYAN}> {RST}", end="", flush=True)
 
             def _on_offline(ip):
                 peer = net.peers.get(ip, {})
-                print(f"\r{DIM}○ {peer.get('username', ip)} оффлайн{RST}")
+                print(f"\r{DIM}○ {peer.get('username', ip)} offline{RST}")
                 print(f"{CYAN}> {RST}", end="", flush=True)
 
             net.sig_user_online.connect(_on_online)
             net.sig_user_offline.connect(_on_offline)
 
             net.start()
-            print(f"{GRN}✓ Запущен на {BOLD}{get_local_ip()}{RST}")
-            print(f"{GRN}✓ Имя: {BOLD}{S().username}{RST}\n")
+            print(f"{GRN}✓ Started on {BOLD}{get_local_ip()}{RST}")
+            print(f"{GRN}✓ Name: {BOLD}{S().username}{RST}\n")
 
             _help_text = f"""
 {PURP}{'─'*56}{RST}
 {BOLD}  GoidaPhone CMD Mode v{APP_VERSION}{RST}  {DIM}Winora Company{RST}
 {PURP}{'─'*56}{RST}
 
-{BOLD}{CYAN}ОСНОВНЫЕ{RST}
-  {CYAN}/help{RST}                — эта справка
-  {CYAN}/quit{RST} · {CYAN}/exit{RST}       — выйти
-  {CYAN}/clear{RST}               — очистить экран
-  {CYAN}/me{RST}                  — информация о себе
+{BOLD}{CYAN}GENERAL{RST}
+  {CYAN}/help{RST}                — this help
+  {CYAN}/quit{RST} · {CYAN}/exit{RST}       — quit
+  {CYAN}/clear{RST}               — clear screen
+  {CYAN}/me{RST}                  — my info
 
-{BOLD}{CYAN}СЕТЬ{RST}
-  {CYAN}/peers{RST}               — онлайн-пользователи
-  {CYAN}/ping <ip>{RST}           — пинговать
-  {CYAN}/whois <ip>{RST}          — подробно о пользователе
-  {CYAN}/groups{RST}              — список групп
+{BOLD}{CYAN}NETWORK{RST}
+  {CYAN}/peers{RST}               — online users
+  {CYAN}/ping <ip>{RST}           — ping
+  {CYAN}/whois <ip>{RST}          — user details
+  {CYAN}/groups{RST}              — list groups
 
-{BOLD}{CYAN}ЧАТ{RST}
-  {CYAN}/pub <текст>{RST}         — публичный чат
-  {CYAN}/msg <ip> <текст>{RST}    — личное сообщение
-  {CYAN}/gmsg <gid> <текст>{RST}  — сообщение в группу
-  {CYAN}/history [ip]{RST}        — история (публичная или с ip)
+{BOLD}{CYAN}CHAT{RST}
+  {CYAN}/pub <text>{RST}         — public chat
+  {CYAN}/msg <ip> <text>{RST}    — private message
+  {CYAN}/gmsg <gid> <text>{RST}  — group message
+  {CYAN}/history [ip]{RST}        — history (public or with ip)
 
-{BOLD}{CYAN}ЗВОНКИ{RST}
-  {CYAN}/call <ip>{RST}           — позвонить
-  {CYAN}/hangup [ip]{RST}         — завершить звонок
-  {CYAN}/answer <ip>{RST}         — принять входящий
-  {CYAN}/reject <ip>{RST}         — отклонить входящий
-  {CYAN}/mute{RST}                — мут/размут микрофона
+{BOLD}{CYAN}CALLS{RST}
+  {CYAN}/call <ip>{RST}           — call
+  {CYAN}/hangup [ip]{RST}         — end call
+  {CYAN}/answer <ip>{RST}         — accept incoming
+  {CYAN}/reject <ip>{RST}         — reject incoming
+  {CYAN}/mute{RST}                — mute/unmute mic
 
-{BOLD}{CYAN}ПРОФИЛЬ{RST}
-  {CYAN}/status <текст>{RST}      — установить статус
-  {CYAN}/nick <имя>{RST}          — сменить ник
-  {CYAN}/theme <тема>{RST}        — сменить тему
-  {CYAN}/themes{RST}              — список тем
+{BOLD}{CYAN}PROFILE{RST}
+  {CYAN}/status <text>{RST}      — set status
+  {CYAN}/nick <name>{RST}          — change nick
+  {CYAN}/theme <theme>{RST}        — change theme
+  {CYAN}/themes{RST}              — list themes
 
-{BOLD}{CYAN}СИСТЕМА{RST}
-  {CYAN}/stats{RST}               — статистика сети
-  {CYAN}/crypto{RST}              — статус шифрования
-  {CYAN}/uptime{RST}              — время работы
-  {CYAN}/log [N]{RST}             — последние N строк лога
+{BOLD}{CYAN}SYSTEM{RST}
+  {CYAN}/stats{RST}               — network stats
+  {CYAN}/crypto{RST}              — encryption status
+  {CYAN}/uptime{RST}              — uptime
+  {CYAN}/log [N]{RST}             — last N log lines
 
-{DIM}Просто текст без / → публичный чат{RST}
+{DIM}Plain text → public chat{RST}
 {PURP}{'─'*56}{RST}"""
 
             voice = VoiceCallManager(net)
@@ -25252,28 +25251,28 @@ def main():
                         print("\033[2J\033[H", end="")
 
                     elif cmd == "/me":
-                        print(f"  {BOLD}Имя:{RST}     {S().username}")
+                        print(f"  {BOLD}Name:{RST}     {S().username}")
                         print(f"  {BOLD}IP:{RST}      {get_local_ip()}")
-                        print(f"  {BOLD}Версия:{RST}  {APP_VERSION}")
-                        print(f"  {BOLD}Тема:{RST}    {S().theme}")
+                        print(f"  {BOLD}Version:{RST}  {APP_VERSION}")
+                        print(f"  {BOLD}Theme:{RST}    {S().theme}")
 
                     elif cmd == "/peers":
                         if net.peers:
-                            print(f"  {DIM}Пользователи онлайн ({len(net.peers)}):{RST}")
+                            print(f"  {DIM}Пользователи online ({len(net.peers)}):{RST}")
                             for ip, p in net.peers.items():
                                 e2e = f"  {GRN}[E2E]{RST}" if p.get("e2e") else ""
                                 print(f"  {GRN}●{RST} {BOLD}{p.get('username','?')}{RST} @ {ip}{e2e}")
                         else:
-                            print(f"  {DIM}Нет пользователей онлайн{RST}")
+                            print(f"  {DIM}No users online{RST}")
 
                     elif cmd == "/groups":
                         groups = GROUPS.groups
                         if groups:
                             for gid, g in groups.items():
                                 print(f"  {PURP}📂{RST} {g.get('name','?')}  {DIM}({gid}){RST}  "
-                                      f"участников: {len(g.get('members',[]))}")
+                                      f"members: {len(g.get('members',[]))}")
                         else:
-                            print(f"  {DIM}Нет групп{RST}")
+                            print(f"  {DIM}No groups{RST}")
 
                     elif cmd == "/msg" and len(parts) >= 3:
                         ip_arg = parts[1]; text = parts[2]
@@ -25283,7 +25282,7 @@ def main():
                     elif cmd == "/pub" and len(parts) >= 2:
                         text = raw[5:].strip()
                         net.send_chat(text)
-                        print(f"  {DIM}→ публичный чат: {text}{RST}")
+                        print(f"  {DIM}→ public chat: {text}{RST}")
 
                     elif cmd == "/ping" and len(parts) >= 2:
                         ip_arg = parts[1]
@@ -25295,56 +25294,56 @@ def main():
                         ip_arg = parts[1]
                         if voice.call(ip_arg):
                             net.send_call_request(ip_arg)
-                            print(f"  {YEL}📞 Звоним {ip_arg}…{RST}")
+                            print(f"  {YEL}📞 Calling {ip_arg}…{RST}")
                         else:
-                            print(f"  {RED}✗ Не удалось запустить аудио{RST}")
+                            print(f"  {RED}✗ Failed to start audio{RST}")
 
                     elif cmd == "/hangup" and len(parts) >= 2:
                         ip_arg = parts[1]
                         voice.hangup(ip_arg)
-                        print(f"  {DIM}Звонок с {ip_arg} завершён{RST}")
+                        print(f"  {DIM}Call with {ip_arg} ended{RST}")
 
                     elif cmd == "/answer" and len(parts) >= 2:
                         ip_arg = parts[1]
                         net.send_call_accept(ip_arg)
                         voice.call(ip_arg)
-                        print(f"  {GRN}✓ Принят звонок от {ip_arg}{RST}")
+                        print(f"  {GRN}✓ Call accepted from {ip_arg}{RST}")
 
                     elif cmd == "/reject" and len(parts) >= 2:
                         ip_arg = parts[1]
                         net.send_call_reject(ip_arg)
-                        print(f"  {DIM}Отклонён звонок от {ip_arg}{RST}")
+                        print(f"  {DIM}Call rejected from {ip_arg}{RST}")
 
                     elif cmd == "/whois" and len(parts) >= 2:
                         ip_arg = parts[1]
                         p = net.peers.get(ip_arg, {})
                         if p:
                             print(f"  {BOLD}{p.get('username','?')}{RST} @ {ip_arg}")
-                            print(f"  Статус:   {p.get('status','онлайн')}")
-                            print(f"  Premium:  {'✦ да' if p.get('premium') else 'нет'}")
-                            print(f"  Версия:   {p.get('version','?')}")
+                            print(f"  Status:   {p.get('status','online')}")
+                            print(f"  Premium:  {'✦ yes' if p.get('premium') else 'no'}")
+                            print(f"  Version:   {p.get('version','?')}")
                             print(f"  E2E:      {'✓' if p.get('e2e') else '✗'}")
                         else:
-                            print(f"  {RED}Пользователь {ip_arg} не найден{RST}")
+                            print(f"  {RED}User {ip_arg} not found{RST}")
 
                     elif cmd == "/nick" and len(parts) >= 2:
                         new_nick = parts[1]
                         S().username = new_nick
                         net._broadcast()
-                        print(f"  {GRN}✓ Ник изменён: {BOLD}{new_nick}{RST}")
+                        print(f"  {GRN}✓ Nick changed: {BOLD}{new_nick}{RST}")
 
                     elif cmd == "/theme" and len(parts) >= 2:
                         theme_name = parts[1]
                         if theme_name in THEMES:
                             S().set("theme", theme_name)
-                            print(f"  {GRN}✓ Тема: {theme_name}{RST}  {DIM}(перезапусти для GUI){RST}")
+                            print(f"  {GRN}✓ Theme: {theme_name}{RST}  {DIM}(restart for GUI){RST}")
                         else:
-                            print(f"  {RED}Тема не найдена. /themes — список{RST}")
+                            print(f"  {RED}Theme not found. /themes — list{RST}")
 
                     elif cmd == "/themes":
-                        print(f"  {CYAN}Доступные темы:{RST}")
+                        print(f"  {CYAN}Available themes:{RST}")
                         for name, td in THEMES.items():
-                            cur = " ◄ текущая" if name == S().theme else ""
+                            cur = " ◄ current" if name == S().theme else ""
                             print(f"  {DIM}•{RST} {name:<16} {td.get('label','')}{GRN}{cur}{RST}")
 
                     elif cmd == "/gmsg" and len(parts) >= 3:
@@ -25356,24 +25355,24 @@ def main():
                                     net.send_udp({"type": MSG_CHAT, "username": S().username,
                                                   "text": text, "gid": gid,
                                                   "ts": time.time()}, ip)
-                            print(f"  {DIM}→ группа {g.get('name','?')}: {text}{RST}")
+                            print(f"  {DIM}→ group {g.get('name','?')}: {text}{RST}")
                         else:
-                            print(f"  {RED}Группа {gid} не найдена{RST}")
+                            print(f"  {RED}Group {gid} not found{RST}")
 
                     elif cmd == "/stats":
                         print(f"  {CYAN}Статистика{RST}")
-                        print(f"  Пользователей онлайн:  {len(net.peers)}")
+                        print(f"  Users online:  {len(net.peers)}")
                         print(f"  IP:                    {get_local_ip()}")
-                        print(f"  Протокол:              v{PROTOCOL_VERSION}")
-                        print(f"  Тема:                  {S().theme}")
-                        print(f"  Премиум:               {'да' if S().premium else 'нет'}")
+                        print(f"  Protocol:              v{PROTOCOL_VERSION}")
+                        print(f"  Theme:                  {S().theme}")
+                        print(f"  Премиум:               {'да' if S().premium else 'no'}")
 
                     elif cmd == "/crypto":
-                        print(f"  {CYAN}Шифрование{RST}")
-                        print(f"  Алгоритм:   AES-256-GCM + X25519 ECDH + Ed25519")
-                        print(f"  Протокол:   v{PROTOCOL_VERSION}")
+                        print(f"  {CYAN}Encryption{RST}")
+                        print(f"  Algorithm:   AES-256-GCM + X25519 ECDH + Ed25519")
+                        print(f"  Protocol:   v{PROTOCOL_VERSION}")
                         enc = S().encryption_enabled
-                        print(f"  Статус:     {'✓ включено' if enc else '✗ выключено'}")
+                        print(f"  Status:     {'✓ enabled' if enc else '✗ disabled'}")
                         for ip, p in net.peers.items():
                             e2e = f"{GRN}[E2E]{RST}" if p.get('e2e') else f"{RED}[plain]{RST}"
                             print(f"  {p.get('username','?'):<16} {e2e}")
@@ -25397,12 +25396,12 @@ def main():
 
                     elif cmd == "/mute":
                         muted = voice.toggle_mute()
-                        print(f"  {'🔇 Заглушён' if muted else '🎤 Микрофон включён'}")
+                        print(f"  {'🔇 Muted' if muted else '🎤 Microphone on'}")
 
                     elif cmd == "/status" and len(parts) >= 2:
                         text = raw[8:].strip()
                         S().set("status_text", text)
-                        print(f"  {GRN}✓ Статус: {text}{RST}")
+                        print(f"  {GRN}✓ Status: {text}{RST}")
 
                     elif cmd == "/history":
                         ip_arg = parts[1] if len(parts) >= 2 else None
@@ -25424,7 +25423,7 @@ def main():
                         print(f"  {DIM}→ {raw}{RST}")
 
                     else:
-                        print(f"  {RED}Неизвестная команда: {cmd}  (введите /help){RST}")
+                        print(f"  {RED}Unknown command: {cmd}  (введите /help){RST}")
 
                     app.processEvents()
 
@@ -25434,7 +25433,7 @@ def main():
             voice.cleanup()
             net.stop()
             print(f"\n{PURP}{'═'*62}{RST}")
-            print(f"  {DIM}GoidaPhone завершён. До встречи! 👋{RST}")
+            print(f"  {DIM}GoidaPhone stopped. Goodbye! 👋{RST}")
             print(f"{PURP}{'═'*62}{RST}")
             app.quit()
             return
@@ -25467,7 +25466,7 @@ def main():
         # ── Braille spinner ─────────────────────────────────────────────
         _BRAILLE = ["⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"]
         _spin_stop = _thr.Event()
-        _spin_msg  = ["Инициализация..."]
+        _spin_msg  = ["Initializing..."]
 
         def _spinner():
             i = 0
@@ -25527,14 +25526,14 @@ def main():
         if S().encryption_enabled and S().encryption_passphrase:
             _ok("Passphrase enc:  [ENABLED]")
         else:
-            _warn("Passphrase enc:  [DISABLED]  — включить в Настройки → Безопасность")
+            _warn("Passphrase enc:  [DISABLED]  — enable in Settings → Security")
         _t.sleep(0.05)
         _ok(f"Protocol:        PROTOCOL_VERSION={PROTOCOL_VERSION}  COMPAT={PROTOCOL_COMPAT}")
 
         # ── Sound subsystem ──────────────────────────────────────────────
         print()
         _run("Loading sound subsystem...")
-        _spin_msg[0] = "Загрузка звуков..."
+        _spin_msg[0] = "Loading sounds..."
         _spin_stop = _thr.Event()
         _spin_thr = _thr.Thread(target=_spinner, daemon=True)
         _spin_thr.start()
@@ -25558,7 +25557,7 @@ def main():
                 _info(f"  \u21b3 {_sf.name}")
         else:
             _warn("Sound engine:    no sound files found")
-            _info("  \u21b3 положи .wav/.mp3 рядом с gdf.py")
+            _info("  \u21b3 place .wav/.mp3 next to gdf.py")
 
         # ── Network ──────────────────────────────────────────────────────
         print()
@@ -25593,7 +25592,7 @@ def main():
             if _sp:
                 _ok(f"Static peers:    {', '.join(_sp)}")
             else:
-                _info("Static peers:    none  —  добавить в Настройки → Специалист")
+                _info("Static peers:    none  —  add in Settings → Advanced")
         except Exception:
             pass
 
@@ -25640,7 +25639,7 @@ def main():
         if _uname:
             _ok(f"Username:        {_uname}")
         else:
-            _warn("Username:        не задан  —  задайте в профиле")
+            _warn("Username:        not set  —  set in profile")
         _ok(f"Theme:           {S().theme}")
         _ok(f"Premium:         {'YES ✦' if S().premium else 'no'}")
         _ok(f"Language:        {S().language}")
@@ -25666,14 +25665,14 @@ def main():
 
         # ── Final spinner before window ──────────────────────────────────
         print()
-        _spin_msg = ["Запуск главного окна..."]
+        _spin_msg = ["Starting main window..."]
         _spin_stop2 = _thr.Event()
 
         def _spinner2():
             i = 0
             while not _spin_stop2.is_set():
                 frame = _BRAILLE[i % len(_BRAILLE)]
-                _sys.stdout.write(f"\r  {_C}{frame}{_R}  {_D}Запуск главного окна...{_R}")
+                _sys.stdout.write(f"\r  {_C}{frame}{_R}  {_D}Starting main window...{_R}")
                 _sys.stdout.flush()
                 _t.sleep(0.07)
                 i += 1
@@ -25695,7 +25694,7 @@ def main():
             _ok(f"Main window:     ready")
             print()
             print("  \033[1;32m" + "─"*62 + "\033[0m")
-            print(f"  \033[1;32m  Добро пожаловать, {S().username or "пользователь"}!\033[0m")
+            print(f"  \033[1;32m  Welcome, {S().username or "пользователь"}!\033[0m")
             print("  \033[1;32m" + "─"*62 + "\033[0m")
             print()
             window.show()
