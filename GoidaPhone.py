@@ -3184,6 +3184,15 @@ _STRINGS_RU = {
     "_auto_084": "💬 Чат",
     "_auto_085": "📷 Выбрать баннер",
     "_auto_086": "🗑 Убрать",
+    "tab_main_chat":           "💬 Чат",
+    "tab_main_notes":          "📝 Заметки",
+    "tab_main_calls":          "📋 Звонки",
+    "tab_peer_list":           "👥 Пользователи",
+    "tab_group_list":          "📂 Группы",
+    "sidebar_settings":        "⚙ Настройки",
+    "sidebar_chat_btn":        "💬 Чат",
+    "drag_file_hint":          "Перетащи файл сюда или Ctrl+V",
+    "notif_settings":          "Настройки уведомлений",
 
 }
 
@@ -3491,6 +3500,15 @@ _STRINGS_EN = {
     "_auto_084": "💬 Chat",
     "_auto_085": "📷 Choose banner",
     "_auto_086": "🗑 Remove",
+    "tab_main_chat":           "💬 Chat",
+    "tab_main_notes":          "📝 Notes",
+    "tab_main_calls":          "📋 Calls",
+    "tab_peer_list":           "👥 Users",
+    "tab_group_list":          "📂 Groups",
+    "sidebar_settings":        "⚙ Settings",
+    "sidebar_chat_btn":        "💬 Chat",
+    "drag_file_hint":          "Drop file here or Ctrl+V",
+    "notif_settings":          "Notification settings",
 
 }
 
@@ -3798,6 +3816,15 @@ _STRINGS_JA = {
     "_auto_084": "💬 チャット",
     "_auto_085": "📷 バナー選択",
     "_auto_086": "🗑 削除",
+    "tab_main_chat":           "💬 チャット",
+    "tab_main_notes":          "📝 メモ",
+    "tab_main_calls":          "📋 通話",
+    "tab_peer_list":           "👥 ユーザー",
+    "tab_group_list":          "📂 グループ",
+    "sidebar_settings":        "⚙ 設定",
+    "sidebar_chat_btn":        "💬 チャット",
+    "drag_file_hint":          "ファイルをここにドロップ",
+    "notif_settings":          "通知設定",
 
 }
 
@@ -7964,7 +7991,7 @@ class PeerPanel(QWidget):
         self._status_lbl.setStyleSheet(f"color:{t['text_dim']}; font-size:9px; padding:2px 6px;")
         ul.addWidget(self._status_lbl)
 
-        tabs.addTab(users_w, "👥 Пользователи")
+        tabs.addTab(users_w, TR("tab_peer_list"))
 
         # ── Groups tab ──
         groups_w = QWidget()
@@ -7987,7 +8014,7 @@ class PeerPanel(QWidget):
         grp_btns.addWidget(fav_btn)
         gl.addLayout(grp_btns)
 
-        tabs.addTab(groups_w, "📂 Группы")
+        tabs.addTab(groups_w, TR("tab_group_list"))
 
         lay.addWidget(tabs)
         self._refresh_groups()
@@ -18806,6 +18833,8 @@ class GoidaTerminal(QWidget):
         "/goida", "/goida --time-1", "/goida --time-5", "/goida --time-10",
         "/goida --color-cyan", "/goida --color-green", "/goida --color-magenta",
         "/sounds", "/sounds test", "/sounds install",
+        "/cmatrix", "/cmatrix --color-green", "/cmatrix --speed-5",
+        "/mc", "/mc --color-cyan",
     ]
 
     def __init__(self, net, parent=None):
@@ -19514,9 +19543,19 @@ class GoidaTerminal(QWidget):
         self._input.clear()
         self._tab_cmp_idx = -1
         self._tab_cmp_matches = []
-        # Останавливаем goida анимацию если она идёт
+        # Останавливаем любую анимацию если она идёт
         if getattr(self, '_goida_running', False):
             self._goida_running = False
+            return
+        if getattr(self, '_matrix_running', False):
+            self._matrix_running = False
+            if hasattr(self, '_matrix_timer'): self._matrix_timer.stop()
+            self._print("  ✓ cmatrix stopped", self.C_GREEN)
+            return
+        if getattr(self, '_mc_running', False):
+            self._mc_running = False
+            if hasattr(self, '_mc_timer'): self._mc_timer.stop()
+            self._print("  ✓ mc stopped", self.C_GREEN)
             return
         if not raw:
             return
@@ -19691,6 +19730,10 @@ class GoidaTerminal(QWidget):
             self._cmd_about()
         elif cmd == "/goida":
             self._cmd_goida(arg1, arg2)
+        elif cmd == "/cmatrix":
+            self._cmd_cmatrix(arg1, arg2)
+        elif cmd == "/mc":
+            self._cmd_mc(arg1, arg2)
         elif cmd == "/history":
             self._cmd_history_cmd(arg1)
         elif cmd in ("/log",):
@@ -19818,10 +19861,12 @@ class GoidaTerminal(QWidget):
                 ("/colors",             "Палитра цветов терминала"),
             ]),
             ("ЛОГ", _a, [
-                ("/log tail",           "Последние 20 строк лога"),
-                ("/log clear",          "Очистить лог"),
-                ("/log export",         "Экспорт лога в файл"),
-                ("/sounds test",        "Тест звуков"),
+                ("/log tail",           "Last 20 log lines"),
+                ("/log clear",          "Clear log"),
+                ("/log export",         "Export log to file"),
+                ("/sounds test",        "Test sounds"),
+                ("/cmatrix",            "Matrix rain animation"),
+                ("/mc",                 "Minecraft-style world"),
             ]),
         ]
 
@@ -20151,7 +20196,7 @@ class GoidaTerminal(QWidget):
         self._print(f"  speed={speed}  delay={delay_ms}ms  Enter — стоп", self.C_DIM)
 
     def _goida_tick(self):
-        """Один тик анимации goida — вызывается QTimer в главном потоке."""
+        """Тик анимации goida — стираем предыдущий кадр и рисуем новый."""
         if not getattr(self, '_goida_running', False):
             if hasattr(self, '_goida_timer') and self._goida_timer:
                 self._goida_timer.stop()
@@ -20162,14 +20207,28 @@ class GoidaTerminal(QWidget):
         frame_n = self._goida_frame
         tag_n   = self._goida_tag
         color   = self._goida_color
+        FRAME_H = len(frames[0]) + 2  # строк на кадр
 
         frame = frames[frame_n % len(frames)]
         tag   = tags[tag_n % len(tags)]
 
-        # Рисуем кадр
+        # Стираем предыдущий кадр — удаляем последние FRAME_H блоков из QTextEdit
+        if self._goida_frame > 0:
+            doc    = self._output.document()
+            cursor = self._output.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            for _ in range(FRAME_H):
+                cursor.movePosition(cursor.MoveOperation.StartOfBlock,
+                                    cursor.MoveMode.KeepAnchor)
+                cursor.movePosition(cursor.MoveOperation.PreviousBlock,
+                                    cursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+            self._output.setTextCursor(cursor)
+
+        # Рисуем новый кадр
         for line in frame:
             self._print(f"  {line}", color)
-        self._print(tag, self.C_DIM)
+        self._print(f"  {tag}", self.C_DIM)
         self._print("")
 
         self._goida_frame += 1
@@ -20182,6 +20241,220 @@ class GoidaTerminal(QWidget):
             self._goida_timer.stop()
             self._print("  ✓ goida", self.C_GREEN)
             self._print_sep("═", 42)
+
+
+    def _cmd_cmatrix(self, flag1: str = "", flag2: str = ""):
+        """
+        /cmatrix [--color-COLOR] [--speed-N]
+        Matrix digital rain animation. Enter to stop.
+        """
+        import random as _r, string as _s
+
+        flags = [f for f in [flag1, flag2] if f.startswith("--")]
+        color = self.C_GREEN
+        speed = 5
+        color_map = {
+            "green": self.C_GREEN, "cyan": self.C_CYAN,
+            "white": self.C_WHITE, "yellow": self.C_YELLOW,
+            "magenta": self.C_MAGENTA,
+        }
+        for f in flags:
+            if f.startswith("--color-"):
+                color = color_map.get(f[8:].lower(), self.C_GREEN)
+            elif f.startswith("--speed-"):
+                try: speed = max(1, min(10, int(f[8:])))
+                except ValueError: pass
+
+        delay_ms = int(300 - (speed - 1) * (260 / 9))
+        COLS = 60
+        ROWS = 14
+        CHARS = "ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ01"
+        CHARS += "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&"
+
+        # Инициализация колонок
+        self._matrix_cols = []
+        for c in range(COLS):
+            head = _r.randint(0, ROWS - 1)
+            speed_c = _r.randint(1, 3)
+            self._matrix_cols.append({'head': head, 'trail': [], 'speed': speed_c, 'tick': 0})
+
+        self._matrix_grid = [[' '] * COLS for _ in range(ROWS)]
+        self._matrix_color = color
+        self._matrix_frame = 0
+        self._matrix_running = True
+
+        self._print(f"  cmatrix  speed={speed}  Enter — stop", self.C_DIM)
+        self._print("")
+
+        if hasattr(self, '_matrix_timer') and self._matrix_timer:
+            self._matrix_timer.stop()
+        self._matrix_timer = QTimer(self)
+        self._matrix_timer.setInterval(delay_ms)
+        self._matrix_timer.timeout.connect(self._matrix_tick)
+        self._matrix_timer.start()
+
+    def _matrix_tick(self):
+        import random as _r
+        if not getattr(self, '_matrix_running', False):
+            if hasattr(self, '_matrix_timer'): self._matrix_timer.stop()
+            return
+
+        COLS = 60
+        ROWS = 14
+        CHARS = "ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789"
+        color = self._matrix_color
+        dim   = self.C_DIM
+
+        grid = self._matrix_grid
+        cols = self._matrix_cols
+
+        # Обновляем каждую колонку
+        for c, col in enumerate(cols):
+            col['tick'] += 1
+            if col['tick'] < col['speed']:
+                continue
+            col['tick'] = 0
+            # Сдвигаем символы вниз
+            for r in range(ROWS - 1, 0, -1):
+                grid[r][c] = grid[r-1][c]
+            # Новый символ сверху
+            if _r.random() < 0.7:
+                grid[0][c] = _r.choice(CHARS)
+            else:
+                grid[0][c] = ' '
+            # Голова движется вниз
+            col['head'] = (col['head'] + 1) % ROWS
+
+        # Стираем предыдущий кадр
+        if self._matrix_frame > 0:
+            doc    = self._output.document()
+            cursor = self._output.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            for _ in range(ROWS + 1):
+                cursor.movePosition(cursor.MoveOperation.StartOfBlock,
+                                    cursor.MoveMode.KeepAnchor)
+                cursor.movePosition(cursor.MoveOperation.PreviousBlock,
+                                    cursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+            self._output.setTextCursor(cursor)
+
+        # Рисуем кадр
+        for r in range(ROWS):
+            row_str = ""
+            for c in range(COLS):
+                ch = grid[r][c]
+                row_str += ch if ch != ' ' else '　'
+            self._print(f"  {row_str}", color)
+        self._print("")
+        self._matrix_frame += 1
+
+    def _cmd_mc(self, flag1: str = "", flag2: str = ""):
+        """
+        /mc [--color-COLOR]
+        Minecraft-style ASCII world. Enter to stop.
+        """
+        import random as _r
+
+        flags = [f for f in [flag1, flag2] if f.startswith("--")]
+        color = self.C_GREEN
+        color_map = {"green": self.C_GREEN, "cyan": self.C_CYAN, "yellow": self.C_YELLOW}
+        for f in flags:
+            if f.startswith("--color-"): color = color_map.get(f[8:].lower(), color)
+
+        WORLD_W = 60
+        WORLD_H = 12
+        SEA_LEVEL = 8
+
+        # Генерируем ландшафт (Перлин-шум эмуляция)
+        heights = []
+        h = SEA_LEVEL
+        for x in range(WORLD_W):
+            h += _r.randint(-1, 1)
+            h = max(SEA_LEVEL - 4, min(SEA_LEVEL + 2, h))
+            heights.append(h)
+
+        BLOCKS = {
+            'sky': '  ', 'grass': '██', 'dirt': '▓▓',
+            'stone': '░░', 'water': '≈≈', 'tree': '🌲',
+            'cloud': '☁ ', 'sun': '☀ ',
+        }
+
+        self._mc_world_w = WORLD_W
+        self._mc_world_h = WORLD_H
+        self._mc_heights = heights
+        self._mc_scroll  = 0
+        self._mc_frame   = 0
+        self._mc_running = True
+        self._mc_color   = color
+
+        self._print("  /mc — Goida World  Enter — stop", self.C_DIM)
+        self._print("")
+
+        if hasattr(self, '_mc_timer') and self._mc_timer:
+            self._mc_timer.stop()
+        self._mc_timer = QTimer(self)
+        self._mc_timer.setInterval(120)
+        self._mc_timer.timeout.connect(self._mc_tick)
+        self._mc_timer.start()
+
+    def _mc_tick(self):
+        import random as _r
+        if not getattr(self, '_mc_running', False):
+            if hasattr(self, '_mc_timer'): self._mc_timer.stop()
+            return
+
+        W = self._mc_world_w
+        H = self._mc_world_h
+        heights = self._mc_heights
+        scroll  = self._mc_scroll
+        color   = self._mc_color
+
+        # Стираем предыдущий кадр
+        if self._mc_frame > 0:
+            cursor = self._output.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            for _ in range(H + 2):
+                cursor.movePosition(cursor.MoveOperation.StartOfBlock,
+                                    cursor.MoveMode.KeepAnchor)
+                cursor.movePosition(cursor.MoveOperation.PreviousBlock,
+                                    cursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+            self._output.setTextCursor(cursor)
+
+        VIEW_W = 30  # видимых колонок
+        VIEW_X = scroll % W
+
+        rows = []
+        for y in range(H):
+            row = "  "
+            for vx in range(VIEW_W):
+                x = (VIEW_X + vx) % W
+                gh = heights[x]  # высота земли
+                world_y = y  # 0 = небо
+
+                if world_y == 0 and vx == 2:
+                    row += "☀ "
+                elif world_y == 1 and (vx == 8 or vx == 14):
+                    row += "☁ "
+                elif world_y < gh:
+                    row += "  "  # небо
+                elif world_y == gh:
+                    row += "██"  # трава
+                elif world_y < gh + 2:
+                    row += "▓▓"  # земля
+                elif world_y < gh + 4:
+                    row += "░░"  # камень
+                else:
+                    row += "▒▒"  # глубокий камень
+            rows.append(row)
+
+        for row in rows:
+            self._print(row, color)
+        self._print(f"  x={scroll:4d}  ← автопрокрутка →", self.C_DIM)
+        self._print("")
+
+        self._mc_scroll += 1
+        self._mc_frame  += 1
 
 
     def _cmd_history_cmd(self, sub: str):
@@ -23695,13 +23968,13 @@ class MainWindow(QMainWindow):
 
         # Permanent tabs
         self.chat_panel = ChatPanel(self.net, self.voice)
-        self._tabs.addTab(self.chat_panel, "💬 Чат")
+        self._tabs.addTab(self.chat_panel, TR("tab_main_chat"))
 
         self.notes_widget = NotesWidget()
-        self._tabs.addTab(self.notes_widget, "📝 Заметки")
+        self._tabs.addTab(self.notes_widget, TR("tab_main_notes"))
 
         self._call_log_widget = CallLogWidget()
-        self._tabs.addTab(self._call_log_widget, "📋 Звонки")
+        self._tabs.addTab(self._call_log_widget, TR("tab_main_calls"))
 
         self._mewa_player = MewaPlayer()
         self._tabs.addTab(self._mewa_player, "♫ Mewa")
@@ -23802,21 +24075,9 @@ class MainWindow(QMainWindow):
         if S().language == lang:
             return
         S().language = lang
-        msg_text = {
-            "ru": "Язык изменён на Русский.",
-            "en": "Language changed to English.",
-            "ja": "言語を日本語に変更しました。",
-        }.get(lang, "Language changed.")
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Язык / Language / 言語")
-        dlg.setText(msg_text + "\n\nДля полного применения нужен перезапуск.\nПерезапустить сейчас?")
-        restart_btn = dlg.addButton(TR("theme_restart"), QMessageBox.ButtonRole.AcceptRole)
-        later_btn   = dlg.addButton(TR("btn_later"),           QMessageBox.ButtonRole.RejectRole)
-        dlg.setDefaultButton(restart_btn)
-        dlg.exec()
-        if dlg.clickedButton() == restart_btn:
-            import os, sys
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+        # Немедленный перезапуск — единственный способ полного применения
+        import os, sys
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # ── Statusbar ──────────────────────────────────────────────────────
     def _setup_statusbar(self):
