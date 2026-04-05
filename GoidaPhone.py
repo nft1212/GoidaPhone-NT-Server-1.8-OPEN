@@ -2892,7 +2892,7 @@ _STRINGS_RU = {
     "type_message":         "Введите сообщение...",
     "send":                 "Отправить",
     "call":                 "Call",
-    "hangup":               "Завершить",
+    "hangup":               "End Call",
     "attach":               "Файл",
     "emoji":                "Эмодзи",
     "stickers":             "Stickers",
@@ -2996,7 +2996,7 @@ _STRINGS_RU = {
     "no_calls":             "📞 通話なし",
     "mic_on":               "🎤 オン",
     "mic_off":              "🔇 オフ",
-    "premium_label":        "👑 Премиум",
+    "premium_label":        "👑 Premium",
     # Меню
     "menu_file":            "Файл",
     "menu_view":            "Вид",
@@ -3044,9 +3044,9 @@ _STRINGS_RU = {
     "history_empty":               "История пуста",
     "no_messages":                 "No messages",
     "quicksetup_title":            "⚡ クイック設定",
-    "quicksetup_q1":               "Как тебя зовут?",
-    "quicksetup_q2":               "Выбери цвет ника",
-    "quicksetup_q3":               "Выбери тему оформления",
+    "quicksetup_q1":               "What's your name?",
+    "quicksetup_q2":               "Choose nick color",
+    "quicksetup_q3":               "Choose theme",
     "quicksetup_q4":               "Включить звуки?",
     "quicksetup_q5":               "Сохранять историю?",
     "quicksetup_q6":               "Показывать сплеш при запуске?",
@@ -3095,7 +3095,7 @@ _STRINGS_RU = {
     "forwarded_label":             "Переслано",
     "update_available_h":          "🚀 Доступно обновление!",
     "launcher_arrows":             "← → стрелки  •  Enter запуск",
-    "premium_user_lbl":            "👑 Премиум пользователь",
+    "premium_user_lbl":            "👑 Premium",
     "goidaid_active":              "GoidaID режим активен",
     "_auto_000": "Remember choice (change in Settings → Privacy)",
     "_auto_001": "Remember my choice (changeable in Settings)",
@@ -3142,7 +3142,7 @@ _STRINGS_RU = {
     "_auto_042": "Notes, links, files for yourself",
     "_auto_043": "🔵 СИНИЙ ЭКРАН СМЕРТИ",
     "_auto_044": "Критическая ошибка",
-    "_auto_045": "Перезапустить",
+    "_auto_045": "Restart",
     "_auto_046": "Сохранить отчёт",
     "_auto_047": "Копировать",
     "_auto_048": "Скопировано",
@@ -3193,6 +3193,34 @@ _STRINGS_RU = {
     "sidebar_chat_btn":        "💬 Чат",
     "drag_file_hint":          "Перетащи файл сюда или Ctrl+V",
     "notif_settings":          "Настройки уведомлений",
+    "menu_my_profile":     "👤 Мой профиль",
+    "menu_settings":       "⚙ Настройки",
+    "menu_check_updates":  "🔄 Проверить обновления",
+    "menu_quit":           "❌ Выход",
+    "menu_public_chat":    "💬 Общий чат",
+    "menu_fullscreen":     "⛶ Полный экран  F11",
+    "menu_mute_toggle":    "🎤 Вкл/Выкл микрофон",
+    "menu_hangup_all":     "📵 Завершить все звонки",
+    "menu_about":          "О программе",
+    "menu_terminal":       "⌨ ZLink Terminal",
+    "menu_wns":            "🌐 Winora NetScape (WNS)",
+    "menu_tutorial":       "❓ Учебник / Tutorial",
+    "menu_lang_ru":        "🇷🇺 Русский",
+    "menu_lang_en":        "🇬🇧 English",
+    "menu_lang_ja":        "🇯🇵 日本語",
+    "settings_audio_tab":  "🎵 Аудио",
+    "settings_net_tab":    "🌐 Сеть",
+    "settings_theme_tab":  "🎨 Темы",
+    "settings_appear_tab": "🖼 Внешний вид",
+    "settings_lic_tab":    "👑 Лицензия",
+    "settings_data_tab":   "💾 Данные",
+    "settings_lang_tab":   "🌍 Язык",
+    "settings_adv_tab":    "🔧 Для специалистов",
+    "settings_lock_tab":   "🔒 Блокировка",
+    "settings_priv_tab":   "🛡 Приватность",
+    "settings_call_tab":   "📞 Звонки",
+    "settings_title":      "GoidaPhone — Настройки",
+    "my_profile_title":    "Мой профиль",
 
 }
 
@@ -3509,6 +3537,34 @@ _STRINGS_EN = {
     "sidebar_chat_btn":        "💬 Chat",
     "drag_file_hint":          "Drop file here or Ctrl+V",
     "notif_settings":          "Notification settings",
+    "menu_my_profile":     "👤 My Profile",
+    "menu_settings":       "⚙ Settings",
+    "menu_check_updates":  "🔄 Check for updates",
+    "menu_quit":           "❌ Quit",
+    "menu_public_chat":    "💬 Public Chat",
+    "menu_fullscreen":     "⛶ Fullscreen  F11",
+    "menu_mute_toggle":    "🎤 Toggle Microphone",
+    "menu_hangup_all":     "📵 End All Calls",
+    "menu_about":          "About GoidaPhone",
+    "menu_terminal":       "⌨ ZLink Terminal",
+    "menu_wns":            "🌐 Winora NetScape (WNS)",
+    "menu_tutorial":       "❓ Tutorial",
+    "menu_lang_ru":        "🇷🇺 Русский",
+    "menu_lang_en":        "🇬🇧 English",
+    "menu_lang_ja":        "🇯🇵 日本語",
+    "settings_audio_tab":  "🎵 Audio",
+    "settings_net_tab":    "🌐 Network",
+    "settings_theme_tab":  "🎨 Themes",
+    "settings_appear_tab": "🖼 Appearance",
+    "settings_lic_tab":    "👑 License",
+    "settings_data_tab":   "💾 Data",
+    "settings_lang_tab":   "🌍 Language",
+    "settings_adv_tab":    "🔧 Advanced",
+    "settings_lock_tab":   "🔒 Lock",
+    "settings_priv_tab":   "🛡 Privacy",
+    "settings_call_tab":   "📞 Calls",
+    "settings_title":      "GoidaPhone — Settings",
+    "my_profile_title":    "My Profile",
 
 }
 
@@ -3727,7 +3783,7 @@ _STRINGS_JA = {
     "forwarded_label":             "Переслано",
     "update_available_h":          "🚀 Доступно обновление!",
     "launcher_arrows":             "← → стрелки  •  Enter запуск",
-    "premium_user_lbl":            "👑 Премиум пользователь",
+    "premium_user_lbl":            "👑 Premium",
     "goidaid_active":              "GoidaID режим активен",
     "_auto_000": "選択を記憶",
     "_auto_001": "選択を記憶",
@@ -3825,6 +3881,34 @@ _STRINGS_JA = {
     "sidebar_chat_btn":        "💬 チャット",
     "drag_file_hint":          "ファイルをここにドロップ",
     "notif_settings":          "通知設定",
+    "menu_my_profile":     "👤 マイプロフィール",
+    "menu_settings":       "⚙ 設定",
+    "menu_check_updates":  "🔄 アップデート確認",
+    "menu_quit":           "❌ 終了",
+    "menu_public_chat":    "💬 パブリックチャット",
+    "menu_fullscreen":     "⛶ フルスクリーン  F11",
+    "menu_mute_toggle":    "🎤 マイク切り替え",
+    "menu_hangup_all":     "📵 全通話終了",
+    "menu_about":          "GoidaPhoneについて",
+    "menu_terminal":       "⌨ ZLink ターミナル",
+    "menu_wns":            "🌐 Winora NetScape (WNS)",
+    "menu_tutorial":       "❓ チュートリアル",
+    "menu_lang_ru":        "🇷🇺 Русский",
+    "menu_lang_en":        "🇬🇧 English",
+    "menu_lang_ja":        "🇯🇵 日本語",
+    "settings_audio_tab":  "🎵 オーディオ",
+    "settings_net_tab":    "🌐 ネットワーク",
+    "settings_theme_tab":  "🎨 テーマ",
+    "settings_appear_tab": "🖼 外観",
+    "settings_lic_tab":    "👑 ライセンス",
+    "settings_data_tab":   "💾 データ",
+    "settings_lang_tab":   "🌍 言語",
+    "settings_adv_tab":    "🔧 上級者向け",
+    "settings_lock_tab":   "🔒 ロック",
+    "settings_priv_tab":   "🛡 プライバシー",
+    "settings_call_tab":   "📞 通話",
+    "settings_title":      "GoidaPhone — 設定",
+    "my_profile_title":    "マイプロフィール",
 
 }
 
@@ -11468,7 +11552,7 @@ class ProfileDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Мой профиль")
+        self.setWindowTitle(TR("my_profile_title"))
         self.setModal(False)   # встраивается в вкладку — не модальный
         self._setup()
 
@@ -11824,7 +11908,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Настройки GoidaPhone")
+        self.setWindowTitle(TR("settings_title"))
         self.setModal(False)
         self.resize(860, 640)
         self.setMinimumSize(760, 540)
@@ -11841,17 +11925,17 @@ class SettingsDialog(QDialog):
         tabs.tabBar().setFixedHeight(26)
         tabs.tabBar().setExpanding(False)
 
-        tabs.addTab(self._tab_audio(),      TR("tab_audio"))
-        tabs.addTab(self._tab_network(),    TR("tab_network"))
-        tabs.addTab(self._tab_themes(),     TR("tab_themes"))
-        tabs.addTab(self._tab_appearance(), TR("tab_appearance"))
-        tabs.addTab(self._tab_license(),    TR("tab_license"))
-        tabs.addTab(self._tab_data(),       TR("tab_data"))
-        tabs.addTab(self._tab_language(),   TR("tab_language"))
-        tabs.addTab(self._mk_specialist_scroll(), TR("tab_specialist"))
-        tabs.addTab(self._tab_pin_security(), TR("tab_security"))
-        tabs.addTab(self._tab_privacy(),    TR("tab_privacy"))
-        tabs.addTab(self._tab_call_settings(), TR("tab_calls"))
+        tabs.addTab(self._tab_audio(),      TR("settings_audio_tab"))
+        tabs.addTab(self._tab_network(),    TR("settings_net_tab"))
+        tabs.addTab(self._tab_themes(),     TR("settings_theme_tab"))
+        tabs.addTab(self._tab_appearance(), TR("settings_appear_tab"))
+        tabs.addTab(self._tab_license(),    TR("settings_lic_tab"))
+        tabs.addTab(self._tab_data(),       TR("settings_data_tab"))
+        tabs.addTab(self._tab_language(),   TR("settings_lang_tab"))
+        tabs.addTab(self._mk_specialist_scroll(), TR("settings_adv_tab"))
+        tabs.addTab(self._tab_pin_security(), TR("settings_lock_tab"))
+        tabs.addTab(self._tab_privacy(),    TR("settings_priv_tab"))
+        tabs.addTab(self._tab_call_settings(), TR("settings_call_tab"))
 
         lay.addWidget(tabs)
 
@@ -15250,7 +15334,7 @@ class WinoraNetScape(QWidget):
 
     _SEARCH_ENGINES = {
         "Google":    "https://www.google.com/search?q={}",
-        "Яндекс":    "https://yandex.ru/search/?text={}",
+        "Yandex":    "https://yandex.ru/search/?text={}",
         "Bing":      "https://www.bing.com/search?q={}",
         "DuckDuckGo":"https://duckduckgo.com/?q={}",
         "GitHub":    "https://github.com/search?q={}",
@@ -15600,10 +15684,10 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
             b.setCheckable(checkable)
             return b
 
-        self._btn_back   = nb("←", "Назад  Alt+←")
-        self._btn_fwd    = nb("→", "Вперёд  Alt+→")
-        self._btn_reload = nb("↻", "Обновить  F5")
-        self._btn_home   = nb("⌂", "Домой  Ctrl+H")
+        self._btn_back   = nb("←", "Back  Alt+←")
+        self._btn_fwd    = nb("→", "Forward  Alt+→")
+        self._btn_reload = nb("↻", "Refresh  F5")
+        self._btn_home   = nb("⌂", "Home  Ctrl+H")
         self._btn_back.setEnabled(False); self._btn_fwd.setEnabled(False)
         self._btn_back.clicked.connect(self._go_back)
         self._btn_fwd.clicked.connect(self._go_forward)
@@ -15622,7 +15706,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
         # URL bar
         self._urlbar = QLineEdit()
         self._urlbar.setObjectName("wns_urlbar")
-        self._urlbar.setPlaceholderText("  Поиск в Google или введите URL")
+        self._urlbar.setPlaceholderText("  Search Google or enter URL")
         self._urlbar.returnPressed.connect(self._on_url_enter)
         self._urlbar.focusInEvent = lambda e: (
             super(QLineEdit, self._urlbar).focusInEvent(e),
@@ -15642,7 +15726,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
         hl.addSpacing(4)
 
         # Zoom controls: − 100% +
-        self._btn_zoom_out = nb("−", "Уменьшить  Ctrl+−")
+        self._btn_zoom_out = nb("−", "Zoom out  Ctrl+−")
         self._btn_zoom_out.clicked.connect(self._zoom_out)
         hl.addWidget(self._btn_zoom_out)
 
@@ -15650,22 +15734,22 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
         self._zoom_lbl.setObjectName("wns_zoom")
         self._zoom_lbl.setFixedWidth(40)
         self._zoom_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._zoom_lbl.setToolTip("Сброс масштаба  Ctrl+0")
+        self._zoom_lbl.setToolTip("Reset zoom  Ctrl+0")
         self._zoom_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
         self._zoom_lbl.mousePressEvent = lambda e: self._zoom_reset()
         hl.addWidget(self._zoom_lbl)
 
-        self._btn_zoom_in = nb("+", "Увеличить  Ctrl++")
+        self._btn_zoom_in = nb("+", "Zoom in  Ctrl++")
         self._btn_zoom_in.clicked.connect(self._zoom_in)
         hl.addWidget(self._btn_zoom_in)
 
         # Bookmark star
-        self._btn_star = nb("☆", "Закладка  Ctrl+D")
+        self._btn_star = nb("☆", "Bookmark  Ctrl+D")
         self._btn_star.clicked.connect(self._toggle_bookmark)
         hl.addWidget(self._btn_star)
 
         # Reader mode
-        self._btn_reader = nb("📖", "Режим чтения  Ctrl+Shift+R", checkable=True)
+        self._btn_reader = nb("📖", "Reader mode  Ctrl+Shift+R", checkable=True)
         self._btn_reader.clicked.connect(self._toggle_reader_mode)
         hl.addWidget(self._btn_reader)
 
@@ -15675,7 +15759,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
         hl.addWidget(self._btn_dark)
 
         # New tab
-        self._btn_new = nb("+", "Новая вкладка  Ctrl+T")
+        self._btn_new = nb("+", "New tab  Ctrl+T")
         self._btn_new.setFixedSize(28, 28)
         self._btn_new.setObjectName("wns_new_tab")  # different name to avoid conflict
         self._btn_new.setStyleSheet(
@@ -15688,7 +15772,7 @@ body {{ background: var(--bg) !important; color: var(--text) !important; }}
         hl.addWidget(self._btn_new)
 
         # Sidebar toggle
-        self._btn_sidebar = nb("▤", "Панель  Ctrl+B", checkable=True)
+        self._btn_sidebar = nb("▤", "Panel  Ctrl+B", checkable=True)
         self._btn_sidebar.clicked.connect(self._toggle_sidebar)
         hl.addWidget(self._btn_sidebar)
 
@@ -17399,7 +17483,7 @@ class ActiveCallWindow(QWidget):
         self._mute_col.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._mute_btn = _call_round_btn("🎤", _t["btn_bg"], 60, 24, _t["btn_hover"])
         self._mute_btn.clicked.connect(self._toggle_mute)
-        self._mute_sub = QLabel("Микрофон")
+        self._mute_sub = QLabel("Microphone")
         self._mute_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._mute_sub.setStyleSheet(f"color:{_t['text_dim']};font-size:9px;background:transparent;")
         self._mute_col.addWidget(self._mute_btn)
@@ -17412,7 +17496,7 @@ class ActiveCallWindow(QWidget):
         end_col.setAlignment(Qt.AlignmentFlag.AlignCenter)
         end_btn = _call_round_btn("📵", "#E74C3C", 72, 30, "#C0392B")
         end_btn.clicked.connect(self._hangup)
-        end_sub = QLabel("Завершить")
+        end_sub = QLabel("End Call")
         end_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         end_sub.setStyleSheet(f"color:{_t['text_dim']};font-size:9px;background:transparent;")
         end_col.addWidget(end_btn)
@@ -17425,7 +17509,7 @@ class ActiveCallWindow(QWidget):
         self._spk_col.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._spk_btn = _call_round_btn("🔊", _t["btn_bg"], 60, 24, _t["btn_hover"])
         self._spk_btn.clicked.connect(self._toggle_speaker)
-        self._spk_sub = QLabel("Динамик")
+        self._spk_sub = QLabel("Speaker")
         self._spk_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._spk_sub.setStyleSheet(f"color:{_t['text_dim']};font-size:9px;background:transparent;")
         self._spk_col.addWidget(self._spk_btn)
@@ -17441,9 +17525,9 @@ class ActiveCallWindow(QWidget):
         extra.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._share_btn = _call_round_btn("🖥", _t["btn_bg"], 48, 20, _t["btn_hover"])
-        self._share_btn.setToolTip("Демонстрация экрана")
+        self._share_btn.setToolTip("Screen Share")
         self._share_btn.clicked.connect(self._toggle_screen_share)
-        share_lbl = QLabel("Экран")
+        share_lbl = QLabel("Screen")
         share_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         share_lbl.setStyleSheet("color:#666;font-size:8px;background:transparent;")
         sc = QVBoxLayout(); sc.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -17451,9 +17535,9 @@ class ActiveCallWindow(QWidget):
         extra.addLayout(sc)
 
         self._cam_btn = _call_round_btn("📷", _t["btn_bg"], 48, 20, _t["btn_hover"])
-        self._cam_btn.setToolTip("Камера вкл/выкл  (V)")
+        self._cam_btn.setToolTip("Camera on/off  (V)")
         self._cam_btn.clicked.connect(self._toggle_camera)
-        cam_lbl = QLabel("Камера")
+        cam_lbl = QLabel("Camera")
         cam_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cam_lbl.setStyleSheet("color:#666;font-size:8px;background:transparent;")
         cc = QVBoxLayout(); cc.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -17484,7 +17568,7 @@ class ActiveCallWindow(QWidget):
         self.move((sg.width()-320)//2, (sg.height()-500)//2)
 
     def _on_speaking(self, active: bool):
-        """Голосовая активность — подсвечиваем аватар."""
+        """Voice activity — highlight avatar."""
         _t = get_theme(S().theme)
         if active:
             self._av_lbl.setStyleSheet(
@@ -17521,12 +17605,12 @@ class ActiveCallWindow(QWidget):
         if self._muted:
             self._mute_btn.setText("🔇")
             self._mute_btn.setStyleSheet(self._btn_style("#7A6000","#AA8800",60))
-            self._mute_sub.setText("Без звука")
+            self._mute_sub.setText("Muted")
             self._mute_sub.setStyleSheet(f"color:#AA8800;font-size:9px;background:transparent;")
         else:
             self._mute_btn.setText("🎤")
             self._mute_btn.setStyleSheet(self._btn_style(_t["btn_bg"],_t["btn_hover"],60))
-            self._mute_sub.setText("Микрофон")
+            self._mute_sub.setText("Microphone")
             self._mute_sub.setStyleSheet(f"color:{_t['text_dim']};font-size:9px;background:transparent;")
         self.sig_mute.emit(self._muted)
 
@@ -17782,7 +17866,7 @@ class GroupCallWindow(QWidget):
         self._mic_btn.clicked.connect(self._toggle_mute)
         cbl.addWidget(self._mic_btn)
 
-        self._cam_btn = _btn("📷", "Камера вкл/выкл  (V)")
+        self._cam_btn = _btn("📷", "Camera on/off  (V)")
         self._cam_btn.clicked.connect(self._toggle_camera)
         cbl.addWidget(self._cam_btn)
 
@@ -19830,7 +19914,7 @@ class GoidaTerminal(QWidget):
                 ("/uptime",             "Время работы"),
                 ("/date",               "Дата и время"),
                 ("/whoami",             "Информация о себе"),
-                ("/about",              "О программе"),
+                ("/about",              TR("menu_about")),
                 ("/clear",              "Очистить экран"),
                 ("/quit",               "Закрыть терминал"),
             ]),
@@ -20964,7 +21048,7 @@ class _BarVisualizer(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(64)
+        self.setFixedHeight(80)
         self.setMinimumWidth(100)
         self._playing  = False
         self._bars     = [1.0] * self.BAR_COUNT
@@ -21125,7 +21209,7 @@ class _BarVisualizer(QWidget):
 
     def paintEvent(self, event):
         from PyQt6.QtGui import (QPainter, QColor, QLinearGradient,
-                                  QBrush, QPen)
+                                  QBrush, QPen, QRadialGradient)
         from PyQt6.QtCore import QRectF, QPointF
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -21133,7 +21217,7 @@ class _BarVisualizer(QWidget):
         w  = self.width()
         h  = self.height()
         n  = self.BAR_COUNT
-        gap = 2
+        gap = 3
         bar_w = max(3, (w - gap * (n - 1)) // n)
 
         bc = QColor(self._color)
@@ -21143,28 +21227,51 @@ class _BarVisualizer(QWidget):
             bar_h  = max(2, int(self._bars[i]))
             y      = h - bar_h
 
-            # Цвет полоски: зелёный снизу → акцент сверху
-            top_c = QColor(bc)
-            bot_c = QColor(bc)
-            bot_c.setAlphaF(0.35)
+            # Многоуровневый градиент: яркий верх → тёмный низ
+            top_c  = QColor(bc); top_c.setAlphaF(1.0)
+            mid_c  = QColor(bc); mid_c.setAlphaF(0.6)
+            bot_c  = QColor(bc); bot_c.setAlphaF(0.2)
 
             grad = QLinearGradient(QPointF(x, y), QPointF(x, h))
             grad.setColorAt(0.0, top_c)
+            grad.setColorAt(0.5, mid_c)
             grad.setColorAt(1.0, bot_c)
 
             p.setBrush(QBrush(grad))
             p.setPen(Qt.PenStyle.NoPen)
-            r = min(bar_w // 2, 3)
+            r = min(bar_w // 2, 4)
             p.drawRoundedRect(QRectF(x, y, bar_w, bar_h), r, r)
+
+            # Подсветка — яркая полоска сверху полосы
+            if bar_h > 6:
+                glow = QColor(bc); glow.setAlphaF(0.9)
+                p.setBrush(QBrush(glow))
+                p.drawRoundedRect(QRectF(x, y, bar_w, min(3, bar_h)), r, r)
 
             # Пиковая метка
             pk = int(self._peaks[i])
             if pk > bar_h + 3:
-                pc = QColor(bc)
-                pc.setAlphaF(0.85)
-                p.setPen(QPen(pc, 1.5))
+                pc = QColor(bc); pc.setAlphaF(0.95)
+                pen = QPen(pc, 1.5)
+                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                p.setPen(pen)
+                p.setBrush(Qt.BrushStyle.NoBrush)
                 py = h - pk
                 p.drawLine(QPointF(x + 1, py), QPointF(x + bar_w - 1, py))
+
+        # Зеркальное отражение внизу (полупрозрачное)
+        p.setOpacity(0.15)
+        for i in range(n):
+            x     = i * (bar_w + gap)
+            bar_h = max(1, int(self._bars[i] * 0.3))
+            ref_c = QColor(bc); ref_c.setAlphaF(0.4)
+            grad2 = QLinearGradient(QPointF(x, h), QPointF(x, h + bar_h))
+            grad2.setColorAt(0.0, ref_c)
+            grad2.setColorAt(1.0, Qt.GlobalColor.transparent)
+            p.setBrush(QBrush(grad2))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRect(QRectF(x, h, bar_w, min(bar_h, 10)))
+        p.setOpacity(1.0)
 
         p.end()
 
@@ -22807,17 +22914,17 @@ class QuickSetupWizard(QDialog):
 
     # (ключ, вопрос, подсказка, тип, варианты/placeholder, дефолт)
     QUESTIONS = [
-        ("username",        "Как тебя зовут?",
-         "Это имя будут видеть все в сети",
-         "text", "Например: pixless", ""),
-        ("nickname_color",  "Выбери цвет ника",
-         "Твой цвет в списке пользователей и в чате",
+        ("username",        "What's your name?",
+         "This name will be visible to everyone",
+         "text", "Example: pixless", ""),
+        ("nickname_color",  "Choose nick color",
+         "Your color in user list and chat",
          "color", None, "#E0E0E0"),
-        ("theme",           "Выбери тему оформления",
-         "Можно сменить позже в Настройки → Темы",
+        ("theme",           "Choose theme",
+         "Can be changed later in Settings → Themes",
          "choice", [
-             ("🌑 Тёмная", "dark"),
-             ("☀️ Светлая", "light"),
+             ("🌑 Dark", "dark"),
+             ("☀️ Light", "light"),
              ("🌊 Ocean", "ocean"),
              ("🌌 Aurora", "aurora"),
              ("⚡ Neon", "neon"),
@@ -22825,17 +22932,17 @@ class QuickSetupWizard(QDialog):
              ("🌅 Sunset", "sunset"),
              ("🌲 Forest", "forest"),
          ], "dark"),
-        ("notification_sounds", "Включить звуки уведомлений?",
-         "Звук при новых сообщениях, звонках и событиях",
+        ("notification_sounds", "Enable notification sounds?",
+         "Sound for new messages, calls and events",
          "yesno", None, True),
-        ("save_history",    "Сохранять историю сообщений?",
-         "История хранится локально на твоём компьютере",
+        ("save_history",    "Save message history?",
+         "History is stored locally on your computer",
          "yesno", None, True),
-        ("show_splash",     "Показывать заставку при запуске?",
+        ("show_splash",     "Show splash screen on startup?",
          "Экран загрузки с логотипом GoidaPhone",
          "yesno", None, True),
         ("_summary",        "Всё ready!",
-         "Настройки применены. Для полноценной работы рекомендуем перезапустить GoidaPhone.",
+         "Settings applied. We recommend restarting GoidaPhone for best results.",
          "summary", None, None),
     ]
 
@@ -22896,9 +23003,10 @@ class QuickSetupWizard(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Быстрая настройка GoidaPhone")
-        self.setFixedSize(500, 400)
-        self.setModal(True)
+        self.setWindowTitle(_L("Быстрая настройка GoidaPhone",
+                               "GoidaPhone Quick Setup", "クイック設定"))
+        self.setModal(False)   # inline в вкладке — не модальный
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._t = get_theme(S().theme)
         self.setStyleSheet(
             f"QDialog{{background:{self._t['bg2']};}}"
@@ -23478,7 +23586,7 @@ class TutorialOverlay(QWidget):
 
         btn_row = QHBoxLayout()
         lang = S().language
-        self._skip_btn = QPushButton("✕ " + ("Пропустить" if lang=="ru" else "Skip"))
+        self._skip_btn = QPushButton("✕ " + ("Skip" if lang=="ru" else "Skip"))
         self._skip_btn.setStyleSheet(
             f"QPushButton{{background:transparent;color:{t['text_dim']};"
             "border:none;font-size:11px;}"
@@ -23722,29 +23830,117 @@ class MainWindow(QMainWindow):
             return
 
         self._tray = QSystemTrayIcon(self)
-        # Use a simple phone emoji as icon (in production: load actual .ico)
+        # Icon — accent coloured circle with phone emoji
+        t = get_theme(S().theme)
         pm = QPixmap(32, 32)
         pm.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pm)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QBrush(QColor("#0078D4")))
+        painter.setBrush(QBrush(QColor(t.get('accent', '#0078D4'))))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(0, 0, 32, 32)
         painter.setPen(QPen(QColor("white")))
-        painter.setFont(QFont("Arial", 16))
+        painter.setFont(QFont("Arial", 14))
         painter.drawText(QRect(0, 0, 32, 32), Qt.AlignmentFlag.AlignCenter, "📱")
         painter.end()
         self._tray.setIcon(QIcon(pm))
-        self._tray.setToolTip(f"{APP_NAME} v{APP_VERSION}")
+        self._tray.setToolTip(f"{APP_NAME} v{APP_VERSION} — {S().username or '?'}")
 
         tray_menu = QMenu()
-        tray_menu.addAction(QAction("📱 Открыть", self,
-                                    triggered=self._restore_from_tray))
+        tray_menu.setStyleSheet(f"""
+            QMenu {{
+                background: {t['bg2']};
+                color: {t['text']};
+                border: 1px solid {t['border']};
+                border-radius: 12px;
+                padding: 6px 4px;
+                font-size: 12px;
+            }}
+            QMenu::item {{
+                padding: 8px 20px 8px 14px;
+                border-radius: 6px;
+                margin: 1px 4px;
+            }}
+            QMenu::item:selected {{
+                background: {t['accent']};
+                color: white;
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: {t['border']};
+                margin: 4px 10px;
+            }}
+        """)
+
+        # Header — имя и статус
+        header = QWidgetAction(tray_menu)
+        hdr_w = QWidget()
+        hdr_w.setStyleSheet(f"background:transparent;")
+        hdr_lay = QHBoxLayout(hdr_w)
+        hdr_lay.setContentsMargins(14, 8, 14, 4)
+        hdr_lay.setSpacing(10)
+        # Avatar
+        av_lbl = QLabel()
+        av_lbl.setFixedSize(36, 36)
+        av_b64 = S().avatar_b64
+        if av_b64:
+            try:
+                pm2 = base64_to_pixmap(av_b64)
+                av_lbl.setPixmap(make_circle_pixmap(pm2, 36))
+            except Exception:
+                av_lbl.setPixmap(default_avatar(S().username or "?", 36))
+        else:
+            av_lbl.setPixmap(default_avatar(S().username or "?", 36))
+        av_lbl.setStyleSheet("background:transparent;")
+        hdr_lay.addWidget(av_lbl)
+        # Name + version
+        info_lay = QVBoxLayout()
+        info_lay.setSpacing(0)
+        name_lbl = QLabel(f"<b>{S().username or 'GoidaPhone'}</b>")
+        name_lbl.setStyleSheet(f"color:{t['text']};font-size:12px;background:transparent;")
+        ver_lbl = QLabel(f"v{APP_VERSION}")
+        ver_lbl.setStyleSheet(f"color:{t['text_dim']};font-size:10px;background:transparent;")
+        info_lay.addWidget(name_lbl)
+        info_lay.addWidget(ver_lbl)
+        hdr_lay.addLayout(info_lay)
+        hdr_lay.addStretch()
+        # Premium badge
+        if S().premium:
+            prem = QLabel("✦")
+            prem.setStyleSheet(f"color:#FFD700;font-size:14px;background:transparent;")
+            hdr_lay.addWidget(prem)
+        header.setDefaultWidget(hdr_w)
+        tray_menu.addAction(header)
         tray_menu.addSeparator()
+
+        # Actions
+        open_act = QAction("🖥  " + _L("Открыть", "Open", "開く"), self)
+        open_act.triggered.connect(self._restore_from_tray)
+        tray_menu.addAction(open_act)
+
+        settings_act = QAction("⚙  " + _L("Настройки", "Settings", "設定"), self)
+        settings_act.triggered.connect(self._show_settings)
+        tray_menu.addAction(settings_act)
+
+        mute_act = QAction("🎤  " + _L("Вкл/Выкл микрофон", "Toggle Mic", "マイク切替"), self)
+        mute_act.triggered.connect(self._toggle_mute)
+        tray_menu.addAction(mute_act)
+
+        tray_menu.addSeparator()
+
+        terminal_act = QAction("⌨  ZLink Terminal", self)
+        terminal_act.triggered.connect(self._open_terminal)
+        tray_menu.addAction(terminal_act)
+
+        tray_menu.addSeparator()
+
         def _quit():
             self._force_quit = True
             self.close()
-        tray_menu.addAction(QAction("❌ Выход", self, triggered=_quit))
+        quit_act = QAction("❌  " + _L("Выход", "Quit", "終了"), self)
+        quit_act.triggered.connect(_quit)
+        tray_menu.addAction(quit_act)
+
         self._tray.setContextMenu(tray_menu)
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
@@ -23859,11 +24055,38 @@ class MainWindow(QMainWindow):
         self._tabs.setCurrentIndex(idx)
 
     def _open_terminal(self):
-        """Show ZLink Terminal tab."""
-        if hasattr(self, '_terminal_panel'):
-            if hasattr(self, '_tabs'):
-                self._tabs.setCurrentWidget(self._terminal_panel)
-        self._toggle_terminal()
+        """Open a new ZLink Terminal tab — multiple terminals supported."""
+        t = get_theme(S().theme)
+        # Создаём новый терминал
+        term = GoidaTerminal(self.net, self)
+        term.setWindowFlags(Qt.WindowType.Widget)
+
+        # Считаем сколько уже открыто
+        term_count = sum(1 for i in range(self._tabs.count())
+                        if "Terminal" in self._tabs.tabText(i) or
+                           "ZLink" in self._tabs.tabText(i))
+        tab_label = f"⌨ Terminal" if term_count == 0 else f"⌨ Terminal {term_count + 1}"
+
+        idx = self._tabs.addTab(term, tab_label)
+        self._tabs.setCurrentIndex(idx)
+        self._add_tab_close_btn(idx)
+
+        # Плавный fade-in
+        from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        eff = QGraphicsOpacityEffect(term)
+        eff.setOpacity(0.0)
+        term.setGraphicsEffect(eff)
+        fade = QPropertyAnimation(eff, b"opacity", term)
+        fade.setDuration(300)
+        fade.setStartValue(0.0)
+        fade.setEndValue(1.0)
+        fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        def _fade_done():
+            term.setGraphicsEffect(None)
+        fade.finished.connect(_fade_done)
+        fade.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+
+        QTimer.singleShot(50, term._print_header)
 
     def _start_tutorial(self):
         """Start the interactive tutorial."""
@@ -24012,12 +24235,12 @@ class MainWindow(QMainWindow):
 
         # File
         fm = mb.addMenu(TR("menu_file"))
-        fm.addAction(act("👤 Мой профиль",          self._show_profile,       "Ctrl+P"))
-        fm.addAction(act("⚙ Настройки",             self._show_settings))
+        fm.addAction(act(TR("menu_my_profile"),          self._show_profile,       "Ctrl+P"))
+        fm.addAction(act(TR("menu_settings"),             self._show_settings))
         fm.addSeparator()
-        fm.addAction(act("🔄 Проверить обновления",  self._check_updates_quick))
+        fm.addAction(act(TR("menu_check_updates"),  self._check_updates_quick))
         fm.addSeparator()
-        fm.addAction(act("❌ Выход",                 self.close,               "Ctrl+Q"))
+        fm.addAction(act(TR("menu_quit"),                 self.close,               "Ctrl+Q"))
 
         # View
         vm = mb.addMenu(TR("menu_view"))
@@ -24025,27 +24248,27 @@ class MainWindow(QMainWindow):
         for key, td in THEMES.items():
             tm.addAction(act(td["label"], lambda _, k=key: self._switch_theme(k)))
         vm.addSeparator()
-        vm.addAction(act("💬 Общий чат", self._go_public))
+        vm.addAction(act(TR("menu_public_chat"), self._go_public))
         vm.addAction(act("♫ Mewa 1-2-3", lambda: self._tabs.setCurrentWidget(self._mewa_player)))
         vm.addSeparator()
-        vm.addAction(act("⛶ Полный экран  F11", self._toggle_fullscreen, "F11"))
-        vm.addAction(act("🌍 Русский",  lambda: self._switch_language("ru")))
-        vm.addAction(act("🌍 English",  lambda: self._switch_language("en")))
-        vm.addAction(act("🌍 日本語",   lambda: self._switch_language("ja")))
+        vm.addAction(act(TR("menu_fullscreen"), self._toggle_fullscreen, "F11"))
+        vm.addAction(act(TR("menu_lang_ru"),  lambda: self._switch_language("ru")))
+        vm.addAction(act(TR("menu_lang_en"),  lambda: self._switch_language("en")))
+        vm.addAction(act(TR("menu_lang_ja"),   lambda: self._switch_language("ja")))
 
         # Calls
         cm = mb.addMenu(TR("menu_calls"))
-        cm.addAction(act("🎤 Вкл/Выкл микрофон",    self._toggle_mute,        "Ctrl+M"))
-        cm.addAction(act("📵 Завершить все звонки",  self.voice.hangup_all))
+        cm.addAction(act(TR("menu_mute_toggle"),    self._toggle_mute,        "Ctrl+M"))
+        cm.addAction(act(TR("menu_hangup_all"),  self.voice.hangup_all))
 
         # Help
         hm = mb.addMenu(TR("menu_help"))
-        hm.addAction(act("О программе", self._about))
+        hm.addAction(act(TR("menu_about"), self._about))
         hm.addSeparator()
-        hm.addAction(act("⌨ ZLink Terminal", self._open_terminal, "Ctrl+`"))
-        hm.addAction(act("🌐 Winora NetScape (WNS)", self._open_wns, "Ctrl+B"))
+        hm.addAction(act(TR("menu_terminal"), self._open_terminal, "Ctrl+`"))
+        hm.addAction(act(TR("menu_wns"), self._open_wns, "Ctrl+B"))
         hm.addSeparator()
-        hm.addAction(act("❓ Учебник / Tutorial", self._start_tutorial))
+        hm.addAction(act(TR("menu_tutorial"), self._start_tutorial))
         hm.addAction(act(TR("quicksetup_title"), self._start_quicksetup))
 
     def _switch_theme(self, key: str):
@@ -24097,7 +24320,7 @@ class MainWindow(QMainWindow):
         self._status_call = StatusWidget(TR("no_calls"), "#A0A0A0")
         sb.addPermanentWidget(self._status_call)
 
-        self._status_prem = StatusWidget("👑 Премиум", "#FFD700")
+        self._status_prem = StatusWidget("👑 Premium", "#FFD700")
         self._status_prem.setVisible(S().premium)
         sb.addPermanentWidget(self._status_prem)
 
@@ -24608,7 +24831,7 @@ class MainWindow(QMainWindow):
     def _about(self):
         """Open about page as inline tab."""
         for i in range(self._tabs.count()):
-            if "О программе" in self._tabs.tabText(i):
+            if TR("menu_about") in self._tabs.tabText(i):
                 self._tabs.setCurrentIndex(i)
                 return
         t = get_theme(S().theme)
@@ -24636,9 +24859,9 @@ class MainWindow(QMainWindow):
         lay.addWidget(sep)
 
         desc = QLabel(
-            "🚀 <b>GoidaPhone</b> — P2P мессенджер для локальных сетей и VPN.<br>"
-            "Без серверов, без регистрации, без слежки.<br>"
-            "Работает в любой локалке: домашней, корпоративной, Hamachi, Radmin VPN."
+            "🚀 <b>GoidaPhone</b> — P2P messenger for LAN and VPN.<br>"
+            "No servers. No registration. No tracking.<br>"
+            "Works on any LAN: home, corporate, Hamachi, Radmin VPN."
         )
         desc.setTextFormat(Qt.TextFormat.RichText)
         desc.setWordWrap(True)
@@ -24650,15 +24873,15 @@ class MainWindow(QMainWindow):
         feat_gb = QGroupBox("Features")
         feat_lay = QVBoxLayout(feat_gb)
         for feat in [
-            "💬  Текстовые чаты, группы, @упоминания, форматирование",
-            "📞  Голосовые звонки P2P (низкая задержка, VAD, шумодав)",
-            "📎  Передача файлов, изображений, стикеров",
-            "😊  Реакции, пересылка, ответы на сообщения",
-            "📝  Заметки с автосохранением",
+            "💬  Text chats, groups, @mentions, formatting",
+            "📞  P2P voice calls (low latency, VAD, noise suppression)",
+            "📎  File transfer, images, stickers",
+            "😊  Reactions, forwarding, message replies",
+            "📝  Notes with auto-save",
             f"🎨  {len(THEMES)} тем оформления (Easter Egg: «1.7543»)",
-            "👑  Премиум: цвет ника, эмодзи, кастомные темы",
-            "🔒  PIN-блокировка, права администратора",
-            "💻  Windows & Linux  •  🌍 Русский / English / 日本語",
+            "👑  Premium: nick color, emoji, custom themes",
+            "🔒  PIN lock, admin rights",
+            "💻  Windows & Linux  •  🌍 RU / EN / JA",
         ]:
             lbl = QLabel(feat)
             lbl.setStyleSheet(f"font-size:11px;color:{t['text']};background:transparent;")
@@ -24667,7 +24890,7 @@ class MainWindow(QMainWindow):
 
         # Tech info
         tech_lbl = QLabel(
-            f"Технологии: PyQt6 • UDP/TCP • PyAudio • WebRTC VAD<br>"
+            f"Tech: PyQt6 • UDP/TCP • PyAudio • WebRTC VAD<br>"
             f"Protocol: v{PROTOCOL_VERSION}  •  Python {platform.python_version()}"
         )
         tech_lbl.setTextFormat(Qt.TextFormat.RichText)
@@ -24680,73 +24903,83 @@ class MainWindow(QMainWindow):
         sep2.setStyleSheet(f"background:{t['border']};max-height:1px;")
         lay.addWidget(sep2)
 
-        # ── Благодарности ─────────────────────────────────────────────────
+        # ── Credits ───────────────────────────────────────────────────────
         credits_gb = QGroupBox("💙 Credits")
+        t_cred = get_theme(S().theme)
+        credits_gb.setStyleSheet(
+            f"QGroupBox{{color:{t_cred['text']};border:1px solid {t_cred['border']};"
+            f"border-radius:10px;margin-top:8px;padding:12px;}}"
+            f"QGroupBox::title{{subcontrol-origin:margin;left:12px;"
+            f"color:{t_cred['accent']};}}")
         cred_lay = QVBoxLayout(credits_gb)
-        cred_lay.setSpacing(10)
+        cred_lay.setSpacing(8)
 
-        # Команда разработки
-        dev_lbl = QLabel("<b>Помощь в разработке GoidaPhone NT Server 1.8</b>")
-        dev_lbl.setTextFormat(Qt.TextFormat.RichText)
-        dev_lbl.setStyleSheet(
-            f"font-size:11px;color:{t['text']};background:transparent;")
-        cred_lay.addWidget(dev_lbl)
+        def _section(title, names, role_color=None):
+            """Добавляет секцию с заголовком и именами."""
+            sec_lbl = QLabel(f"<b>{title}</b>")
+            sec_lbl.setTextFormat(Qt.TextFormat.RichText)
+            sec_lbl.setStyleSheet(
+                f"font-size:11px;color:{role_color or t_cred['accent']};"
+                "background:transparent;margin-top:4px;")
+            cred_lay.addWidget(sec_lbl)
+            grid_w = QWidget(); grid_w.setStyleSheet("background:transparent;")
+            from PyQt6.QtWidgets import QGridLayout as _QGL
+            grid = _QGL(grid_w)
+            grid.setContentsMargins(0,0,0,0); grid.setSpacing(3)
+            for i, name in enumerate(names):
+                dot = QLabel("◆")
+                dot.setStyleSheet(
+                    f"color:{t_cred['accent']};background:transparent;font-size:9px;")
+                dot.setFixedWidth(16)
+                nl = QLabel(name)
+                nl.setStyleSheet(
+                    f"font-size:11px;color:{t_cred['text']};background:transparent;")
+                r, c = divmod(i, 2)
+                grid.addWidget(dot, r, c*2)
+                grid.addWidget(nl,  r, c*2+1)
+            cred_lay.addWidget(grid_w)
 
-        for name in ["Андрей Х.", "Демид Ч.", "Давид Ю."]:
-            row = QHBoxLayout()
-            dot = QLabel("◆")
-            dot.setStyleSheet(
-                f"color:{t['accent']};background:transparent;font-size:10px;")
-            dot.setFixedWidth(18)
-            row.addWidget(dot)
-            nl2 = QLabel(name)
-            nl2.setStyleSheet(
-                f"font-size:11px;color:{t['text']};background:transparent;")
-            row.addWidget(nl2)
-            row.addStretch()
-            cred_lay.addLayout(row)
+        _section("🛠 Developers", [
+            "Щербинин Матвей",
+            "Давид Юзефович",
+        ], t_cred['accent'])
 
-        sep3 = QFrame(); sep3.setFrameShape(QFrame.Shape.HLine)
-        sep3.setStyleSheet(
-            f"background:{t['border']};max-height:1px;margin:4px 0;")
-        cred_lay.addWidget(sep3)
+        _section("💜 Help developing", [
+            "Андрей Хромов",
+            "Демид Черепанов",
+            "Давид Юзефович",
+        ])
 
-        # Тестировщики
-        test_lbl = QLabel("<b>Тестировщики</b>")
-        test_lbl.setTextFormat(Qt.TextFormat.RichText)
-        test_lbl.setStyleSheet(
-            f"font-size:11px;color:{t['text']};background:transparent;")
-        cred_lay.addWidget(test_lbl)
+        _section("💰 Financial support", [
+            "Давид Юзефович",
+            "Демид Черепанов",
+            "Андрей Хромов",
+        ])
 
-        testers = [
-            ("1", "Давид Ю."),
-            ("2", "Матвей Щ."),
-            ("3", "Матвей Н."),
-            ("4", "Демид Ч."),
-            ("5", "Дима Ю."),
-            ("6", "Андрей Х."),
-            ("7", "Николай Х."),
-            ("8", "Михаил П."),
-            ("9", "Егор В."),
-            ("10", "Лёха В."),
-        ]
-        # Два столбца
-        grid_w = QWidget(); grid_w.setStyleSheet("background:transparent;")
-        grid = __import__('PyQt6.QtWidgets', fromlist=['QGridLayout']).QGridLayout(grid_w)
-        grid.setContentsMargins(0,0,0,0)
-        grid.setSpacing(4)
-        for i, (num, name) in enumerate(testers):
-            num_lbl = QLabel(f"{num}.")
-            num_lbl.setStyleSheet(
-                f"font-size:10px;color:{t['text_dim']};background:transparent;")
-            num_lbl.setFixedWidth(22)
-            name_lbl = QLabel(name)
-            name_lbl.setStyleSheet(
-                f"font-size:11px;color:{t['text']};background:transparent;")
-            row_i, col_i = i // 2, (i % 2) * 2
-            grid.addWidget(num_lbl,  row_i, col_i)
-            grid.addWidget(name_lbl, row_i, col_i + 1)
-        cred_lay.addWidget(grid_w)
+        _section("📢 Promotion", [
+            "Матвей Нечаев",
+            "Winora Racing Team",
+        ])
+
+        _section("🧪 Testers", [
+            "Давид Юзефович",
+            "Матвей Щербинин",
+            "Матвей Нечаев",
+            "Демид Черепанов",
+            "Дима Юзефович",
+            "Андрей Хромов",
+            "Николай Ходырев",
+            "Михаил Посланников",
+            "Егор Васёв",
+            "Алексей Васёв",
+        ])
+
+        _section("🙏 Special thanks", [
+            "Николай Ходырев",
+            "Егор Васёв",
+            "Михаил Посланников",
+            "Алексей Васёв",
+        ])
 
         lay.addWidget(credits_gb)
 
