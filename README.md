@@ -262,7 +262,7 @@ splashq.jpg         — splash screen image
 
 ### 📅 Release: April 12, 2026
 
-The official stable release of GoidaPhone NT Server 1.8 is scheduled for **April 11, 2026**.
+The official stable release of GoidaPhone NT Server 1.8 is scheduled for **April 12, 2026**.
 
 ---
 
