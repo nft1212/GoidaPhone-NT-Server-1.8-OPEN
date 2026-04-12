@@ -9,8 +9,8 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-yellow.svg)](https://python.org)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.7%2B-green.svg)](https://pypi.org/project/PyQt6/)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey.svg)]()
-[![Status](https://img.shields.io/badge/Status-In%20Development-orange.svg)]()
-[![Release](https://img.shields.io/badge/Release-April%2011%202026-red.svg)]()
+[![Status](https://img.shields.io/badge/Status-%20Released-orange.svg)]()
+[![Release](https://img.shields.io/badge/Release-April%2012%202026-red.svg)]()
 
 *No servers. No cloud. No surveillance. Just your network.*
 
@@ -261,7 +261,7 @@ splashq.jpg         — splash screen image
 - [x] Disappearing messages
 - [x] BSOD crash reporter
 
-### 📅 Release: April 11, 2026
+### 📅 Release: April 12, 2026
 
 The official stable release of GoidaPhone NT Server 1.8 is scheduled for **April 11, 2026**.
 
