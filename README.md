@@ -10,7 +10,6 @@
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.7%2B-green.svg)](https://pypi.org/project/PyQt6/)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey.svg)]()
 [![Status](https://img.shields.io/badge/Status-%20Released-orange.svg)]()
-[![Release](https://img.shields.io/badge/Release-April%2012%202026-red.svg)]()
 
 *No servers. No cloud. No surveillance. Just your network.*
 
