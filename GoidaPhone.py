@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+from cryptography.hazmat.primitives import serialization # PIP
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey # PIP
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey # PIP
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey # PIP
+
 # Suppress pkg_resources deprecation warning from webrtcvad before any imports
 import warnings as _w
 _w.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 _w.filterwarnings("ignore", message=".*pkg_resources.*")
 
-# ── Подавляем Qt CSS/logging спам ─────────────────────────────────────────────
+# ── killing Qt CSS/logging spam ─────────────────────────────────────────────
 import os as _os_early, sys as _sys_early
 
 class _QtStderrFilter:
@@ -6232,7 +6238,7 @@ class UserHoverCard(QFrame):
         ts = p.get("last_seen", 0)
         if ts:
             dt = datetime.fromtimestamp(ts).strftime("%H:%M:%S")
-            lay.addWidget(QLabel(f"{TR("online_since_lbl")} {dt}"))
+            lay.addWidget(QLabel(f"{TR('online_since_lbl')} {dt}"))
         if p.get("premium"):
             lay.addWidget(QLabel(TR("premium_user")))
 
@@ -26188,7 +26194,7 @@ def main():
             _ok(f"Main window:     ready")
             print()
             print("  \033[1;32m" + "─"*62 + "\033[0m")
-            print(f"  \033[1;32m  Welcome, {S().username or "пользователь"}!\033[0m")
+            print(f"  \033[1;32m  Welcome, {S().username or 'пользователь'}!\033[0m")
             print("  \033[1;32m" + "─"*62 + "\033[0m")
             print()
             window.show()
